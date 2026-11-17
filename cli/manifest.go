@@ -81,8 +81,11 @@ func decodeManifest(data []byte) (Manifest, error) {
 		return m, fmt.Errorf("trailing manifest data")
 	}
 	// Each engine is one target. Adding an engine adds its own case here.
-	if m.Engine != "mlx" || m.OS != "darwin" || m.Arch != "arm64" || m.Backend != "metal" {
-		return m, fmt.Errorf("unsupported engine or target: rec runs the MLX engine on Apple Silicon")
+	metal := m.Engine == "mlx" && m.OS == "darwin" && m.Arch == "arm64" && m.Backend == "metal"
+	linuxCPU := m.Engine == "mlx" && m.OS == "linux" && m.Arch == "amd64" && m.Backend == "cpu"
+	linuxROCm := m.Engine == "mlx" && m.OS == "linux" && m.Arch == "amd64" && m.Backend == "rocm"
+	if !metal && !linuxCPU && !linuxROCm {
+		return m, fmt.Errorf("unsupported engine or target: rec supports mlx on darwin/arm64 (metal) and linux/amd64 (cpu, rocm)")
 	}
 	if m.MaxContext < 0 || (m.MaxContext > 0 && m.Context > m.MaxContext) {
 		return m, fmt.Errorf("invalid maximum context")

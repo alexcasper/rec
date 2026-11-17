@@ -1,18 +1,19 @@
 import hashlib
 import json
-import platform
+import logging
 import resource
-import subprocess
 import threading
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 
+from .backends import METAL_MIN_MEMORY_BYTES, BackendError, detect_backend
 from .chat import load_tokenizer, normalize_messages
 from .checkpoint import validate
 from .detokenize import StreamingText
-from .kernels.device import profile_for_device
+
+logger = logging.getLogger(__name__)
 
 
 class ContextLimitError(ValueError):
@@ -53,21 +54,37 @@ class Engine:
         *,
         context_limit: int,
         enforce_tool_schemas: bool = False,
+        backend: str | None = None,
     ):
-        if platform.system() != "Darwin" or platform.machine() != "arm64":
-            raise RuntimeError("Flint requires an Apple Silicon Mac")
-        memory = int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True))
-        if memory < 48 * 1024**3:
-            raise RuntimeError("This build targets Macs with at least 48 GiB of memory")
         import mlx.core as mx
 
+        if backend is None:
+            self.backend = detect_backend()
+        else:
+            from .backends import SUPPORTED_BACKENDS
+
+            if backend not in SUPPORTED_BACKENDS:
+                raise BackendError(
+                    f"backend must be one of {', '.join(SUPPORTED_BACKENDS)}, got {backend!r}"
+                )
+            self.backend = detect_backend()
+            if self.backend.name != backend:
+                raise BackendError(f"The {backend} backend is not available on this machine (detected {self.backend.name})")
+        is_metal = self.backend.name == "metal"
+        if is_metal and self.backend.physical_memory_bytes < METAL_MIN_MEMORY_BYTES:
+            raise RuntimeError("This build targets Macs with at least 48 GiB of memory")
+        if not is_metal:
+            logger.warning(
+                "Running on the %s backend: resident-kernel decode, grammar-constrained "
+                "sampling and prompt-prefix preparation are disabled.",
+                self.backend.name,
+            )
+        memory = self.backend.physical_memory_bytes
         device = mx.device_info()
-        profile = profile_for_device(device)
+        profile = None
         self.identity = validate(directory, manifest_path)
         config = json.loads((directory / "config.json").read_text())
-        from .kernels import build_decoder
         from .quantized import QATModel
-
         if self.identity["max_context"] != QATModel.context_limit:
             raise ValueError("Manifest context limit does not match the engine capacity")
         if not 1 <= context_limit <= QATModel.context_limit:
@@ -87,13 +104,26 @@ class Engine:
         mx.set_cache_limit(0)
         mx.clear_cache()
         mx.reset_peak_memory()
-        self.runtime, self.resident_sampler = build_decoder(QATModel(directory), optimized=True)
-        # Packing replaces native weights with lazy views. Materialize them on their creation
-        # stream before HTTP threads use the native prefill model.
-        mx.eval(self.runtime.model.native.parameters())
-        # Retain enough allocator cache to reuse the first 1.78-GiB KV block.
-        cache_limit = 2 * 1024**3
-        mx.set_cache_limit(cache_limit)
+        if is_metal:
+            from .kernels import build_decoder
+
+            self.runtime, self.resident_sampler = build_decoder(QATModel(directory), optimized=True)
+            # Packing replaces native weights with lazy views. Materialize them on their creation
+            # stream before HTTP threads use the native prefill model.
+            mx.eval(self.runtime.model.native.parameters())
+            # Retain enough allocator cache to reuse the first 1.78-GiB KV block.
+            cache_limit = 2 * 1024**3
+            mx.set_cache_limit(cache_limit)
+        elif self.backend.name == "cpu":
+            from .native_runtime import NativeRuntime
+
+            self.resident_sampler = None
+            self.runtime = NativeRuntime(QATModel(directory), context_limit=context_limit)
+            cache_limit = 0
+        else:
+            raise BackendError(
+                f"The {self.backend.name} backend is not implemented yet; see docs/amd-port-assessment.md"
+            )
         self.startup = {
             "device": device,
             "chat_template": "flint",
@@ -105,7 +135,8 @@ class Engine:
             "load_peak_mlx_bytes": mx.get_peak_memory(),
             "process_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
             "physical_memory_bytes": memory,
-            "device_profile": profile.chip,
+            "device_profile": profile.chip if profile is not None else "CPU",
+            "backend": self.backend.name,
             "weight_format": self.identity["weight_format"],
             "kv_format": self.identity["kv_format"],
         }
@@ -151,7 +182,12 @@ class Engine:
         return_logprobs=False,
     ):
         # Metal streams are thread-local; HTTP handlers run outside the model-loading thread.
-        with self.mx.stream(self.mx.new_stream(self.mx.gpu)):
+        # The CPU backend has no streams: run directly on the default device.
+        if self.backend.name == "metal":
+            stream_context = self.mx.stream(self.mx.new_stream(self.mx.gpu))
+        else:
+            stream_context = nullcontext()
+        with stream_context:
             from .prefix import PrefillCancelled
 
             try:
@@ -164,10 +200,12 @@ class Engine:
                         return_logprobs=return_logprobs,
                     )
             except PrefillCancelled:
-                self.mx.synchronize()
+                self._sync()
                 self.mx.clear_cache()
 
     def prepare_prefix(self, *, should_stop=lambda: False):
+        if self.backend.name != "metal":
+            return None  # prompt-prefix preparation is a resident-kernel feature
         from .prefix import PrefillCancelled
 
         pending = self._prefix_preparation
@@ -203,6 +241,8 @@ class Engine:
         return {"prepared_tokens": prepared, "preparation_seconds": time.perf_counter() - start}
 
     def _schedule_prefix(self, ids, generated):
+        if self.backend.name != "metal":
+            return
         from .prefix import PrefixPreparation
 
         if len(generated) >= self.runtime.prefill_chunk_size:
@@ -221,11 +261,20 @@ class Engine:
                 prefix = prepared
         return prefix
 
+    def _sync(self):
+        if self.backend.name == "metal":
+            self.mx.synchronize()
+
     def _generate_tokens(self, ids, sampling, *, should_stop, grammar=None, return_logprobs=False):
         if len(ids) + sampling.max_tokens > self.context_limit:
             raise ContextLimitError(
                 "Prompt plus output allowance exceeds the configured context limit"
             )
+        if self.backend.name != "metal":
+            yield from self._generate_tokens_native(
+                ids, sampling, should_stop=should_stop, grammar=grammar, return_logprobs=return_logprobs
+            )
+            return
         mx = self.mx
         from mlx_lm.sample_utils import make_sampler
 
@@ -392,6 +441,117 @@ class Engine:
         finally:
             if generated:
                 self._schedule_prefix(ids, generated)
-            mx.synchronize()
+            self._sync()
+            del session
+            mx.clear_cache()
+
+    def _generate_tokens_native(self, ids, sampling, *, should_stop, grammar=None, return_logprobs=False):
+        """Pure-MLX generation used by the cpu backend (no resident kernel)."""
+        if grammar is not None:
+            raise NotImplementedError(
+                "Grammar-constrained decoding requires the resident sampler (metal backend)"
+            )
+        mx = self.mx
+        from mlx_lm.sample_utils import make_sampler
+
+        sampler = make_sampler(
+            temp=sampling.temperature,
+            top_p=sampling.top_p,
+            top_k=sampling.top_k,
+        )
+        mx.reset_peak_memory()
+        session = self.runtime.make_session(max_new_tokens=sampling.max_tokens)
+        mx.random.seed(sampling.seed)
+        stops = self.eos
+        generated = []
+        token_logprobs = []
+        seen = set()
+        start = time.perf_counter()
+        reason = "length"
+        try:
+            logits = session.prefill(ids, prefix=None, should_stop=should_stop)
+            mx.eval(logits)
+            text_stream = StreamingText(self.tokenizer)
+            prefill_end = time.perf_counter()
+            prefill_peak = mx.get_peak_memory()
+            first = None
+            for index in range(sampling.max_tokens):
+                if should_stop():
+                    reason = "stop"
+                    break
+                if not bool(mx.all(mx.isfinite(logits)).item()):
+                    raise FloatingPointError("The inference engine produced nonfinite logits")
+                flat = logits.reshape(-1).astype(mx.float32)
+                if sampling.presence_penalty and seen:
+                    for token_id in seen:
+                        flat[token_id] -= sampling.presence_penalty
+                if sampling.temperature == 0:
+                    token = int(mx.argmax(flat).item())
+                else:
+                    token = int(sampler(flat - mx.logsumexp(flat)).item())
+                if return_logprobs:
+                    report = flat / sampling.temperature if sampling.temperature else flat
+                    token_logprobs.append(float((report[token] - mx.logsumexp(report)).item()))
+                if first is None:
+                    first = time.perf_counter()
+                generated.append(token)
+                seen.add(token)
+                details = {"logprob": token_logprobs[index]} if return_logprobs else {}
+                if token in stops:
+                    reason = "stop"
+                    delta = text_stream.finish(generated[:-1])
+                    yield {"token": token, "text": delta, "finish_reason": reason, **details}
+                    break
+                delta = text_stream.add_token(token)
+                if index + 1 == sampling.max_tokens:
+                    delta += text_stream.finish(generated)
+                yield {
+                    "token": token,
+                    "text": delta,
+                    "finish_reason": "length" if index + 1 == sampling.max_tokens else None,
+                    **details,
+                }
+                logits = session.decode_step(token)
+                mx.eval(logits)
+            self._sync()
+            end = time.perf_counter()
+            decode_seconds = end - first if first is not None else 0.0
+            yield {
+                "finish_reason": reason,
+                "metrics": {
+                    "prompt_tokens": len(ids),
+                    "cached_prompt_tokens": session.cached_tokens,
+                    "common_prefix_tokens": session.common_prefix_tokens,
+                    "prefix_checkpoint_bytes": 0,
+                    "prefilled_tokens": len(ids) - session.cached_tokens,
+                    "prompt_cache_bytes": session._state["kv"].nbytes,
+                    "native_sliding_cache_bytes": 0,
+                    "shared_kv_bytes": session._state["kv"].nbytes,
+                    "decode_kv_capacity_tokens": session._state["capacity"],
+                    "decode_kv_growth_count": 0,
+                    "decode_kv_growth_seconds": 0.0,
+                    "generated_tokens": len(generated),
+                    "token_ids": generated,
+                    **(
+                        {"token_logprobs": token_logprobs[: len(generated)]}
+                        if return_logprobs
+                        else {}
+                    ),
+                    "ttft_seconds": first - start if first is not None else None,
+                    "prefill_seconds": prefill_end - start,
+                    "decode_seconds": decode_seconds,
+                    "request_seconds": end - start,
+                    "decode_tokens_per_second": max(0, len(generated) - 1) / decode_seconds
+                    if decode_seconds
+                    else 0.0,
+                    "prefill_peak_mlx_bytes": prefill_peak,
+                    "peak_mlx_bytes": mx.get_peak_memory(),
+                    "process_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                    "computed_tokens": len(generated),
+                    "decode_strategy": "native_mlx",
+                },
+            }
+        finally:
+            self._sync()
             del session
             mx.clear_cache()

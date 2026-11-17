@@ -1,0 +1,52 @@
+# rec benchmark run definitions (cross-GPU comparable)
+
+Shared spec for the ops_rec dusk ROCm arm and the AUP other-vendor reference
+arm (env_aup, w14:p4). Keep all numbers comparable to these definitions.
+
+## Metric definitions
+
+- **prefill tok/s** = prefill_tokens / wall-clock seconds, where
+  prefill_tokens = 512 and wall-clock = time from kernel start to
+  device-synchronize completion, averaged over 3 runs after 3 warmup runs on
+  the same process/weights.
+- **decode tok/s** = generated_tokens / wall-clock seconds, single stream,
+  greedy (temperature 0), after the same 512-token prefill; measured over 32
+  generated tokens after 4 warmup decode steps; device-synchronize before
+  starting and after ending the timing window.
+- No batching, single request, no speculative decoding, no prefix-cache reuse
+  within the timed window.
+
+## Model configs
+
+Both are synthetic random-weight checkpoints (seed 0) matching the Flint
+architecture family — identical shapes on every arm:
+
+| Config | Layers | hidden | heads/kv | head_dim | experts (top-k) | moe_inter | shared_inter | dense_inter | vocab | weights |
+|--------|--------|--------|----------|----------|-----------------|-----------|--------------|-------------|-------|---------|
+| tiny-2L | 2 | 128 | 4/2 | 64 | 8 (2) | 64 | 64 | 256 | 512 | fp32 (~1 MiB) |
+| mid-8L | 8 | 2048 | 32/4 | 128 | 32 (2) | 512 | 1024 | 2048 | 150144 | bf16 (2.85 GiB) |
+
+Common details: sliding_window=513 (alternating sliding/full layers in mid-8L:
+sliding on even layers), rope_theta=10000, RMSNorm eps=1e-6, attention sinks
+per query head (random ±0.01), sigmoid router + shared expert on MoE layers,
+layer 0 dense. Weight layout: same in-memory pinned/resident weights for the
+whole run; no host→device copies inside timed regions.
+
+## Environment matrix to report
+
+gpu_model, gpu_arch, driver/runtime stack + version, torch/llama.cpp version,
+weight dtype, kv dtype, context used, host RAM, any HSA/arch overrides.
+
+## Reference numbers (dusk, Radeon 890M gfx1150, 2026-11-17)
+
+- Stack: NixOS, ROCm toolchain 7.2 (nix), torch 2.9.1+rocm6.4,
+  HSA_OVERRIDE_GFX_VERSION=11.0.0, bf16 weights pinned on device.
+- tiny-2L: prefill512 117,563 tok/s; decode32 1,068.9 tok/s; peak 0.04 GiB.
+- mid-8L: prefill512 2,462.8 tok/s; decode32 37.2 tok/s; peak 3.31 GiB.
+- Incumbent on the same GPU (flint llama.cpp, Vulkan/RADV, Q3_K_XL, 131k ctx):
+  decode ≈ 28.5 tok/s (cumulative), prefill gauge ≈ 404 tok/s.
+
+Scripts: `engine/.build/torch_conformance.py` (conformance + tiny bench),
+`engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0).
+AUP arm: replicate the mid-8L shapes exactly; report both configs if compute
+allows, mid-8L minimum.

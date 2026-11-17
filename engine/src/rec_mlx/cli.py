@@ -150,6 +150,13 @@ def main():
 
 
 def chat(engine, settings, metrics_path, *, grammar_mode="flint"):
+    non_metal = getattr(engine, "backend", None) is not None and engine.backend.name != "metal"
+    if grammar_mode == "flint" and non_metal:
+        print(
+            f"Note: grammar-constrained sampling is unavailable on the {engine.backend.name} "
+            "backend; running unconstrained."
+        )
+        grammar_mode = "none"
     constraint = engine.constraints.tools() if grammar_mode == "flint" else None
     messages = []
     while True:

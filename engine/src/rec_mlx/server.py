@@ -292,6 +292,14 @@ def make_server(
                 process_message_content(request.messages)
                 mode = self.body["grammar"] if "grammar" in self.body else grammar_mode
                 request.constraint = None
+                non_metal = getattr(engine, "backend", None) is not None and engine.backend.name != "metal"
+                if mode == "flint" and non_metal:
+                    if "grammar" in self.body:
+                        raise ValueError(
+                            "grammar=flint requires the metal backend; this engine is "
+                            f"{engine.backend.name} (grammar-constrained decoding is disabled)"
+                        )
+                    mode = "none"  # server default only: constrained decoding is metal-only
                 if mode == "flint":
                     try:
                         request.constraint = engine.constraints.tools(request.tools)

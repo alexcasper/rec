@@ -101,6 +101,31 @@ does not fit the 48-GiB check and is not worth it pre-port; defer.
 
 ## Recommended port order
 
+> **Update (2026-11-17, rec-rfp bring-up):** dusk is live on ROCm. GPU = AMD
+> Radeon 890M iGPU (Strix Point, **gfx1150**, RDNA3.5), ROCm toolchain 7.2
+> (NixOS, no /opt/rocm — rocminfo/hipcc from nix). torch 2.9.1+**rocm6.4**
+> pip wheel works with `HSA_OVERRIDE_GFX_VERSION=11.0.0` (gfx1150 → gfx110x
+> path) plus NixOS `LD_LIBRARY_PATH` for libstdc++/libzstd/libz from the nix
+> store. Dev loop: dawn edits → `rsync -a` to `dusk@dusk:~/rec-ve/engine` →
+> run in `~/rec-ve/.venv`.
+>
+> **Tiny-2L torch-ROCm conformance: PASS** — torch GPU vs torch CPU
+> max|Δ|=2e-6, argmax match; and torch matches the MLX portable core on
+> identical fp32 weights to max|Δ|=1.2e-6 across all intermediates (the
+> torch port of model.py's math — RMSNorm, NeoX RoPE, attention sinks,
+> sliding-window mask, sigmoid-router MoE + shared expert — is faithful).
+>
+> **Mid-model benchmark (Flint-shaped: 8L, hidden 2048, 32 experts top-2,
+> vocab 150144, bf16 weights 2.85 GiB pinned on GPU, unfused eager torch):**
+> prefill 512 tok = **2,463 tok/s**; decode = **37.2 tok/s** single stream;
+> peak 3.31 GiB. Incumbent flint llama.cpp (Vulkan/RADV, Q3_K_XL GGUF) on
+> the same 890M: decode ≈ **28.5 tok/s** (304,768 tok / 10,705 s cumulative),
+> prefill gauge ≈ 404 tok/s. The unfused torch floor already beats the
+> incumbent on the same silicon — before any INT4 quantization or kernel
+> fusion. Caveats: synthetic random weights (not real Flint), 8L vs 49L,
+> bf16 vs Q3_K, short context.
+
+
 1. **Linux/CPU lift (cheap, days).** Remove the darwin/arm64 gates (items 2,
    11, 12), fix `build.py` linker flags, add `mlx[cpu]` handling, fix the
    `keys_and_values` bug. Deliverable: engine boots and serves on dawn CPU;

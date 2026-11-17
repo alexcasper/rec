@@ -5,7 +5,10 @@ import mlx.core as mx
 import numpy as np
 import xgrammar as xgr
 
-from . import _grammar_native as native
+try:
+    from . import _grammar_native as native
+except ImportError:  # the native grammar module is optional (built by native/build.py)
+    native = None
 from .grammar_builder import build_flint_glm_grammar
 
 VOCAB = 150144
@@ -23,6 +26,11 @@ class Constraint:
 
 class ConstraintCompiler:
     def __init__(self, tokenizer, *, enforce_tool_schemas=False):
+        if native is None:
+            raise RuntimeError(
+                "rec_mlx._grammar_native is not built on this platform; "
+                "grammar-constrained decoding is unavailable (build it with engine/native/build.py)"
+            )
         self.tokenizer = tokenizer
         self.enforce_tool_schemas = enforce_tool_schemas
         info = xgr.TokenizerInfo.from_huggingface(
