@@ -233,6 +233,11 @@ class Model:
         self.embed = embed
         self.device = device
         self.dtype = dtype
+        # Validation knob: round K/V to this dtype at the KV-cache storage points
+        # (K after k_norm + RoPE, V after projection) while computing in `dtype`.
+        # None = store in `dtype`. Used by engine/validation/megakernel_mid to
+        # build an exact fp32-compute / bf16-KV reference (layout contract s4).
+        self.kv_store_dtype: torch.dtype | None = None
 
     # -- helpers -----------------------------------------------------------
     def _lin(self, name: str, x: torch.Tensor) -> torch.Tensor:
@@ -255,6 +260,9 @@ class Model:
         if i not in cfg.no_rope:
             q = rope_neox(q, offset, cfg.theta)
             k = rope_neox(k, offset, cfg.theta)
+        if self.kv_store_dtype is not None and self.kv_store_dtype != k.dtype:
+            k = k.to(self.kv_store_dtype).to(k.dtype)
+            v = v.to(self.kv_store_dtype).to(v.dtype)
         sliding = cfg.layer_types[i] == "sliding_attention"
         entry = cache.layers[i] if cache is not None else None
         if sliding and cache is not None:
