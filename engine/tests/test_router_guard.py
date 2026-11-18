@@ -38,6 +38,7 @@ def test_qat_model_refuses_zero_router_checkpoint(tiny_checkpoint):
     weights = mx.load(str(shard))
     name = NAME.format(1)
     weights[name] = mx.zeros_like(weights[name])
+    mx.eval(weights)  # mx.load is lazy: materialize before overwriting the same file
     mx.save_safetensors(str(shard), weights)
     with pytest.raises(ValueError, match="rec-9as"):
         QATModel(tiny_checkpoint)
