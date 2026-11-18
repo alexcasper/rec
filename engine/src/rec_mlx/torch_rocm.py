@@ -144,6 +144,10 @@ class QLinear:
     def dense(self, dtype: torch.dtype) -> torch.Tensor:
         return dequant(self.packed, self.scales, self.biases, self.bits, dtype)
 
+    def expert(self, e: int, dtype: torch.dtype) -> torch.Tensor:
+        """Dequantize one expert of a stacked [E, out, ...] switch linear."""
+        return dequant(self.packed[e], self.scales[e], self.biases[e], self.bits, dtype)
+
     def rows(self, ids: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
         """Dequantize only the rows named by ``ids`` (embedding lookup)."""
         return dequant(self.packed[ids], self.scales[ids], self.biases[ids], self.bits, dtype)
@@ -231,16 +235,17 @@ class Model:
         flat_idx = idx.reshape(-1, cfg.topk)
         flat_w = w_sel.reshape(-1, cfg.topk)
         out = torch.zeros_like(flat_x, dtype=torch.float32)
-        wg = self.q[f"{pre}.switch_mlp.gate_proj"].dense(self.dtype)  # [E, I, H]
-        wu = self.q[f"{pre}.switch_mlp.up_proj"].dense(self.dtype)
-        wd = self.q[f"{pre}.switch_mlp.down_proj"].dense(self.dtype)  # [E, H, I]
-        for e in range(cfg.num_experts):
+        wg = self.q[f"{pre}.switch_mlp.gate_proj"]  # [E, I, H]
+        wu = self.q[f"{pre}.switch_mlp.up_proj"]
+        wd = self.q[f"{pre}.switch_mlp.down_proj"]  # [E, H, I]
+        # Dequantize only routed experts (decode touches top-k of E; one host
+        # sync for the expert set per MoE layer).
+        for e in torch.unique(flat_idx).tolist():
             hit = flat_idx == e  # [N, topk]
             rows = hit.any(-1).nonzero(as_tuple=True)[0]
-            if rows.numel() == 0:
-                continue
             h = flat_x[rows]
-            d = F.linear(F.silu(F.linear(h, wg[e])) * F.linear(h, wu[e]), wd[e])
+            d = F.linear(F.silu(F.linear(h, wg.expert(e, self.dtype))) * F.linear(h, wu.expert(e, self.dtype)),
+                         wd.expert(e, self.dtype))
             wght = (flat_w[rows] * hit[rows]).sum(-1, keepdim=True)
             out.index_add_(0, rows, d.float() * wght)
         out = out.to(self.dtype).view(B, L, cfg.hidden)
