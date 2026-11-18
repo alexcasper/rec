@@ -95,6 +95,11 @@ template <int K, int TAG = 0>
 __device__ inline void q4(const uint8_t* w, const bf16* s, const bf16* b,
                           const float* x, float* out, int n) {
     int lane = threadIdx.x & 31;
+#ifdef DEBUG_TINY
+    if (TAG == 9 && lane == 0)
+        printf("MK q4ptr t9 w %llu s %llu b %llu\n",
+               (unsigned long long)w, (unsigned long long)s, (unsigned long long)b);
+#endif
     constexpr int PER = K / 32;
     constexpr int NU = PER / 4;
     int scalar = lane * PER;
@@ -390,6 +395,10 @@ extern "C" __global__ void tiny_generate(
                             }
                     }
                     for (int t = 0; t < TOPK; ++t) sh_sel[t] = top[t];
+#ifdef DEBUG_TINY
+                    if (pos == 0)
+                        printf("MK router top %d %d tv %.6f %.6f\n", top[0], top[1], tv[0], tv[1]);
+#endif
                 }
                 __syncthreads();
                 if (lane == 0) {
@@ -404,22 +413,29 @@ extern "C" __global__ void tiny_generate(
                 if (pos == 0 && lane == 0)
                     printf("MK moeptr off25 %ld wptr %ld sptr %ld\n",
                            (long)OFF(Q4_FIRST + SW_GATE),
-                           (long)(QW(SW_GATE) - bank), (long)(QS(SW_GATE) - bank));
+                           (long)((const uint8_t*)QW(SW_GATE) - bank),
+                           (long)((const uint8_t*)QS(SW_GATE) - bank));
 #endif
                 for (int t = 0; t < TOPK; ++t) {
                     int e = sh_sel[t];
+#ifdef DEBUG_TINY
+                    if (pos == 0 && lane == 0)
+                        printf("MK tloop t%d e %d sel %d %d\n", t, e, sh_sel[0], sh_sel[1]);
+#endif
                     __shared__ float sh_mi[MOE_I], sh_u2[MOE_I], sh_dyn[HID];
                     for (int i = lane; i < MOE_I; i += 32) { sh_mi[i] = 0.0f; sh_u2[i] = 0.0f; }
                     for (int i = lane; i < HID; i += 32) sh_dyn[i] = 0.0f;
                     __syncthreads();
                     // per-expert q4: gate/up rows [MOE_I, HID], down rows [HID, MOE_I]
+                    // NB: QS/QB return bf16* — per-expert strides are in ELEMENTS
+                    // (byte stride / 2), not bytes (rec-hjr).
                     q4<HID, 9>(QW(SW_GATE) + (size_t)e * (MOE_I * HID / 2),
-                            QS(SW_GATE) + (size_t)e * (MOE_I * (HID / 64) * 2),
-                            QB(SW_GATE) + (size_t)e * (MOE_I * (HID / 64) * 2),
+                            QS(SW_GATE) + (size_t)e * (MOE_I * (HID / 64)),
+                            QB(SW_GATE) + (size_t)e * (MOE_I * (HID / 64)),
                             sh_xn, sh_mi, MOE_I);
                     q4<HID>(QW(SW_UP) + (size_t)e * (MOE_I * HID / 2),
-                            QS(SW_UP) + (size_t)e * (MOE_I * (HID / 64) * 2),
-                            QB(SW_UP) + (size_t)e * (MOE_I * (HID / 64) * 2),
+                            QS(SW_UP) + (size_t)e * (MOE_I * (HID / 64)),
+                            QB(SW_UP) + (size_t)e * (MOE_I * (HID / 64)),
                             sh_xn, sh_u2, MOE_I);
                     __syncthreads();
                     for (int i = lane; i < MOE_I; i += 32)
@@ -430,8 +446,8 @@ extern "C" __global__ void tiny_generate(
                         printf("MK exp gate/up t%d mi %.6f %.6f u2 %.6f %.6f\n", t, sh_mi[0], sh_mi[1], sh_u2[0], sh_u2[1]);
 #endif
                     q4<MOE_I>(QW(SW_DOWN) + (size_t)e * (HID * MOE_I / 2),
-                              QS(SW_DOWN) + (size_t)e * (HID * (MOE_I / 64) * 2),
-                              QB(SW_DOWN) + (size_t)e * (HID * (MOE_I / 64) * 2),
+                              QS(SW_DOWN) + (size_t)e * (HID * (MOE_I / 64)),
+                              QB(SW_DOWN) + (size_t)e * (HID * (MOE_I / 64)),
                               sh_mi, sh_dyn, HID);
                     __syncthreads();
 #ifdef DEBUG_TINY

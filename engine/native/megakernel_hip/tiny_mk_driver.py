@@ -77,7 +77,7 @@ kv = np.zeros(2 * NKV * 2 * total * HDIM, dtype=np.uint16)
 out_tokens = np.zeros(n_out, dtype=np.int32)
 out_logits = np.zeros(VOCAB, dtype=np.float32)
 
-lib = ctypes.CDLL("/home/albion/rec-ve/flint_tiny.so")
+lib = ctypes.CDLL(str(HERE / "flint_tiny.so"))
 lib.tiny_launch.restype = None
 lib.tiny_launch.argtypes = [ctypes.c_void_p]*4 + [ctypes.c_int] + [ctypes.c_void_p] + [ctypes.c_int] + [ctypes.c_void_p]
 prompt_arr = np.array(prompt, dtype=np.int32)

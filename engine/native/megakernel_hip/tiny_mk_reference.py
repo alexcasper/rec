@@ -91,4 +91,6 @@ for pos in range(total):
 kernel_tokens = d["tokens"].tolist()
 print("kernel tokens:", kernel_tokens)
 print("torch  tokens:", tokens)
-print("MATCH" if kernel_tokens == tokens else "MISMATCH")
+# tokens[] has one argmax per position including the prompt positions; the
+# kernel only emits the generated ones, so compare against tokens[prompt_len:]
+print("MATCH" if kernel_tokens == tokens[len(prompt):] else "MISMATCH")
