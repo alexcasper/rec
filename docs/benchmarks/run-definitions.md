@@ -150,6 +150,23 @@ step (see the rec-9na rows). This is a functional end-to-end validation, not
 a speed result. The first rocm engine pays about 5 s of HIP init in
 `load_seconds`.
 
+**Served path** (`python -m rec_mlx.cli serve flint --model-dir D --manifest
+D/manifest.json --grammar none --port 18099 --metrics m.jsonl`, with
+`REC_BACKEND=rocm REC_TORCH_DEVICE=cuda`). Use `--grammar none`, because the
+flint grammar is Metal-only, and a non-default port, because 8080 is the
+shared flint llama-server. A `/v1/chat/completions` request with 16 tokens
+at temperature 0 returns 200 on tiny and mid. The server log reports engine
+decode of 386.4 tok/s on tiny and 2.12 tok/s on mid. The tiny completion
+text is identical to the dawn cpu-backend server.
+
+The first served attempt returned 200 with an empty body and then died with
+`HSA_STATUS_ERROR_EXCEPTION`. The synthetic tokenizer had placed
+specials and chat tokens at ids ≥ vocab_size, so the chat template fed the GPU
+an out-of-bounds embedding gather. That is fixed in `rec_mlx.synthetic`, and
+Engine now rejects such tokenizers at load and such ids per request
+(commit 92f9bc2). Checkpoints built before that commit have bad tokenizers
+and must be rebuilt; the weights are unchanged.
+
 Scripts: `engine/.build/torch_conformance.py` (conformance + tiny bench),
 `engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0).
 AUP arm: replicate the mid-8L shapes exactly; report both configs if compute
