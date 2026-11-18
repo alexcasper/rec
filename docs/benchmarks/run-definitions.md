@@ -74,6 +74,53 @@ weight dtype, kv dtype, context used, host RAM, any HSA/arch overrides.
   MI50 is the slowest AMD arm (CDNA1, pre-bf16-era); useful as an
   other-architecture reference, not a speed target.
 
+## Reference numbers — rec-9na INT4 torch model layer (dusk, Radeon 890M gfx1150, 2026-11-18)
+
+Different weight config from the rows above. Weights stay **INT4-affine
+packed** on device (INT8 embedding) and are dequantized inside every matmul
+by `rec_mlx.torch_rocm`, with no fused kernel. Routed experts only are
+dequantized. bf16 activations and KV. Checkpoints come from
+`python -m rec_mlx.synthetic --preset {tiny,mid}` (seed 0, seeded router).
+Script: `engine/tests/torch_rocm_bench.py` (same prefill/decode protocol as
+above). Stack: torch 2.9.1+rocm6.4, HIP 6.4.43484, HSA_OVERRIDE_GFX_VERSION=11.0.0.
+
+| config | resident weights | prefill512 tok/s | decode32 tok/s | peak |
+|---|---|---|---|---|
+| tiny-2L INT4 | <0.01 GiB | 91,963.6 | 495.1 | 0.05 GiB |
+| mid-8L INT4 | 1.03 GiB | 498.2 | 2.25 | 7.1 GiB |
+
+## Reference numbers — rec-tan Phase 2b HIP Persistent Megakernel & Fused INT4 Matmul (dusk, Radeon 890M gfx1150, 2026-11-18)
+
+Multi-workgroup persistent single-launch greedy decode megakernel
+(`engine/native/megakernel_hip/flint_mid_megakernel.hip` +
+`mid_mk_driver.py`), consuming the exact zero-copy layout in
+`docs/rocm-model-layer.md` s2 & s4 (U8 INT4 packed nibbles, BF16 scales/biases
+with element-unit expert strides, INT8 affine embeddings, head-major BF16 KV
+with 513-slot ring on even sliding layers and linear growth on odd full
+layers). Compiled with TheRock ROCm 10.0.0 (`hipcc -O2 --offload-arch=gfx1150`),
+launched with `workers=16` workgroups × 256 threads (128 wave32s across 16 CUs)
+synchronized via device-wide `sync_all`.
+
+| Config / Kernel | Resident Bank | Decode32 (after 512 ctx) | Decode32 (short ctx) | End-to-End 516-step Serial | Conformance vs fp64 Reference |
+|---|---|---|---|---|---|
+| `mid-8L` INT4 persistent megakernel (`mid_generate`) | **0.944 GiB** | **99.00 tok/s** | **139.60 tok/s** | **124.08 tok/s** | **MATCH** (16/16 & 24/24 tokens exact, rel maxabs err ≤ 5.84e-3) |
+| `tiny-2L` INT4 persistent megakernel (`tiny_generate`, `workers=4..8`) | <0.01 GiB | — | — | — | **11/11 MATCH** (seeds 0..4 × prompts 4,6 × 24 tok + legacy, rel err ≤ 9.12e-4) |
+
+Standalone fused INT4-affine dequant-matmul (`flint_q4_gemv_kernel`, zero-copy U8+BF16 s/b, MSL period-4 pre-scale) on `dusk` `gfx1150`:
+
+| Projection Shape (`[N, K]`) | Latency (ms) | Effective Bandwidth (GB/s) | Max Abs Error vs fp64 | Relative MaxAbs Error |
+|---|---|---|---|---|
+| `expert_gate` `[512, 2048]` | 0.010 ms | 60.69 GB/s | `1.788e-07` | `8.847e-08` |
+| `q_proj` `[4096, 2048]` | 0.149 ms | 31.88 GB/s | `2.384e-07` | `8.931e-08` |
+| `o_proj` `[2048, 4096]` | 0.166 ms | 28.47 GB/s | `2.384e-07` | `1.146e-07` |
+| `lm_head` `[150144, 2048]` | 2.572 ms | **67.48 GB/s** | `2.384e-07` | `8.647e-08` |
+
+Speedups on `dusk` `gfx1150` (`mid-8L` decode32 after 512-token prefill = **99.0 tok/s**, short-context decode32 = **139.6 tok/s**):
+- **44.0×** faster than unfused torch INT4 reference (`2.25 tok/s`, and `0.944 GiB` vs `7.1 GiB` peak memory)
+- **3.47×** faster than incumbent llama.cpp Vulkan (`28.5 tok/s`)
+- **2.66×** faster than eager torch dense-bf16 floor (`37.2 tok/s`)
+- **1.69×** faster on the 890M iGPU than the discrete R9700 eager torch dense-bf16 baseline (`58.7 tok/s`), because the single-launch persistent megakernel eliminates all per-op host dispatch and only touches the 2 routed experts + shared expert in packed INT4.
+
 Scripts: `engine/.build/torch_conformance.py` (conformance + tiny bench),
 `engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0).
 AUP arm: replicate the mid-8L shapes exactly; report both configs if compute
