@@ -94,6 +94,12 @@ class Engine:
         self._prefix_preparation = None
         self.mx = mx
         self.tokenizer = load_tokenizer(directory)
+        self.vocab_size = config["vocab_size"]
+        if len(self.tokenizer) > self.vocab_size:
+            raise ValueError(
+                f"Tokenizer has {len(self.tokenizer)} ids but the model vocab is {self.vocab_size}; "
+                "ids past the vocab would index outside the embedding"
+            )
         self._constraints = None
         self.enforce_tool_schemas = enforce_tool_schemas
         self._constraints_lock = threading.Lock()
@@ -278,6 +284,11 @@ class Engine:
             raise ContextLimitError(
                 "Prompt plus output allowance exceeds the configured context limit"
             )
+        # Shared precondition for every backend: an id >= vocab_size is an
+        # out-of-bounds embedding gather -- a GPU hardware fault on rocm that
+        # kills the process, silent garbage on MLX.
+        if ids and not (0 <= min(ids) and max(ids) < self.vocab_size):
+            raise ValueError(f"Token ids must be in [0, {self.vocab_size}); got {min(ids)}..{max(ids)}")
         if self.backend.name != "metal":
             yield from self._generate_tokens_native(
                 ids, sampling, should_stop=should_stop, grammar=grammar, return_logprobs=return_logprobs

@@ -163,12 +163,20 @@ def build_checkpoint(directory: Path, preset: str | dict = "tiny", seed: int = 0
 
 
 def _write_tokenizer(directory: Path, vocab_size: int) -> None:
+    """WordLevel tokenizer whose every id (incl. specials) is < vocab_size.
+
+    Specials and chat tokens own ids 0..5 outright. An earlier version also
+    mapped tok0..tok2 to 0..2: the duplicate ids made PreTrainedTokenizerFast
+    re-register specials past the vocab (512, 513, ...) in a hash-order-
+    dependent way, and the server's chat template then fed out-of-range ids
+    to the model (a GPU hardware fault on rocm).
+    """
     from tokenizers import Tokenizer, models, pre_tokenizers
     from transformers import PreTrainedTokenizerFast
 
-    vocabulary = {f"tok{i}": i for i in range(vocab_size)}
-    for index, token in enumerate(SPECIAL_TOKENS):
-        vocabulary[token] = index
+    reserved = SPECIAL_TOKENS + CHAT_TOKENS
+    vocabulary = {token: index for index, token in enumerate(reserved)}
+    vocabulary.update({f"tok{i}": i for i in range(len(reserved), vocab_size)})
     backend = Tokenizer(models.WordLevel(vocabulary, unk_token="<pad>"))
     backend.pre_tokenizer = pre_tokenizers.Whitespace()
     tokenizer = PreTrainedTokenizerFast(
