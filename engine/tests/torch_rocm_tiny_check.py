@@ -6,7 +6,7 @@
 Checks, each printed as PASS/FAIL with the number:
   1. dequant parity: our INT4/INT8 unpack == mx.dequantize output in the fp32 npz
   2. KV-cache consistency: prefill+incremental decode logits == full recompute
-  3. device vs CPU fp32 reference: max |logit diff| and greedy-token match
+  3. device vs CPU: fp32-on-device drift, then bf16 teacher-forced near-tie check
 """
 from __future__ import annotations
 
@@ -79,20 +79,44 @@ def greedy(model, ids, n_new: int, device) -> tuple[list[int], torch.Tensor]:
     return toks, first
 
 
+# bf16 activations legitimately flip argmax near-ties (measured on dusk 890M:
+# bf16 logit rms err 2.3e-2 vs fp32, identical on CPU and GPU); a kernel bug
+# shows up as a flip with a large fp32 margin or as device-fp32 drift.
+BF16_TIE_TOL = 5e-2
+
+
 @torch.no_grad()
 def check_device_vs_cpu(ckpt: Path, device: str, n_new: int) -> bool:
+    """3a: device fp32 == cpu fp32 (isolates device bugs from dtype effects).
+    3b: device bf16 teacher-forced along the cpu-fp32 greedy trajectory; every
+    disagreement must be a near-tie (fp32 margin <= BF16_TIE_TOL)."""
     ref = load_model(ckpt, device="cpu", dtype=torch.float32)
-    dev = load_model(ckpt, device=device, dtype=torch.bfloat16)
     prompt = torch.arange(1, 33).unsqueeze(0)
-    rt, rl = greedy(ref, prompt, n_new, "cpu")
-    dt, dl = greedy(dev, prompt.to(device), n_new, device)
-    diff = float((rl - dl.cpu().float()).abs().max())
-    ok = rt == dt
-    print(f"3 device(bf16) vs cpu(fp32) greedy {n_new} tok: first-logit max|diff|={diff:.3e}"
-          f" tokens_match={ok} -> {'PASS' if ok else 'FAIL'}")
-    if not ok:
-        print(f"   cpu: {rt}\n   dev: {dt}")
-    return ok
+    toks, _ = greedy(ref, prompt, n_new, "cpu")
+    full = torch.cat([prompt, torch.tensor([toks])], 1)
+    truth = ref.forward(full)[0]
+    d32 = load_model(ckpt, device=device, dtype=torch.float32).forward(full.to(device))[0].cpu()
+    drift = float((d32 - truth).abs().max())
+    scale = max(1.0, float(truth.abs().max()))
+    ok32 = drift < 1e-4 * scale
+    print(f"3a device(fp32) vs cpu(fp32) {full.shape[1]} pos: max|diff|={drift:.3e} -> {'PASS' if ok32 else 'FAIL'}")
+    d16 = load_model(ckpt, device=device, dtype=torch.bfloat16).forward(full.to(device))[0].cpu()
+    base = prompt.shape[1] - 1
+    flips, bad = 0, []
+    for i, tok in enumerate(toks):
+        got = int(d16[base + i].argmax())
+        if got != tok:
+            margin = float(truth[base + i, tok] - truth[base + i, got])
+            flips += 1
+            if margin > BF16_TIE_TOL:
+                bad.append((i, tok, got, margin))
+    rms = float(((d16 - truth) ** 2).mean().sqrt())
+    ok16 = not bad
+    print(f"3b device(bf16) teacher-forced {n_new} tok: logit rms err {rms:.3e}, argmax flips {flips} "
+          f"(all near-ties <= {BF16_TIE_TOL}: {ok16}) -> {'PASS' if ok16 else 'FAIL'}")
+    for i, tok, got, margin in bad:
+        print(f"   step {i}: cpu {tok} dev {got} fp32 margin {margin:.3e}")
+    return ok32 and ok16
 
 
 def randomize_router(src: Path, dst: Path, seed: int = 0) -> Path:
