@@ -88,7 +88,8 @@ def make_bank(seed=0, data="signed"):
     for name, n, k in Q4_ORDER:
         offsets.append(len(bank))
         p, s, b, deq = quantize(n, k)
-        bank.extend(p.tobytes()); bank.extend(s.tobytes()); bank.extend(b.tobytes())
+        for part in (p, s, b):
+            bank.extend(part.tobytes())
         store["w_" + name] = deq  # fp32 [n, K]
     return np.frombuffer(bytes(bank), dtype=np.uint8).copy(), np.array(offsets, dtype=np.int64), store
 
@@ -97,12 +98,18 @@ def main(argv):
     data, seed, prompt, n_out, out = "signed", 0, [1, 5, 6, 7], 8, HERE / "tiny_mk_io.npz"
     for a in argv:
         key, _, val = a.partition("=")
-        if key == "--data": data = val
-        elif key == "--seed": seed = int(val)
-        elif key == "--prompt": prompt = [int(t) for t in val.split(",")]
-        elif key == "--n-out": n_out = int(val)
-        elif key == "--out": out = Path(val)
-        else: raise SystemExit(f"unknown arg {a}")
+        if key == "--data":
+            data = val
+        elif key == "--seed":
+            seed = int(val)
+        elif key == "--prompt":
+            prompt = [int(t) for t in val.split(",")]
+        elif key == "--n-out":
+            n_out = int(val)
+        elif key == "--out":
+            out = Path(val)
+        else:
+            raise SystemExit(f"unknown arg {a}")
     bank, off, store = make_bank(seed, data)
 
     total = len(prompt) + n_out

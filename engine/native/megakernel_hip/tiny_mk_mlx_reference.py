@@ -18,9 +18,9 @@ Exit code 0 = tokens match and logits within tolerance.
 import sys
 from pathlib import Path
 
-import numpy as np
 import mlx.core as mx
 import mlx.nn as nn
+import numpy as np
 
 from rec_mlx.model import Model, ModelArgs
 
@@ -39,7 +39,8 @@ CONFIG = {
 }
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from tiny_mk_driver import ORDER_BF16 as BF16_ORDER, Q4_ORDER  # noqa: E402  (single source of bank layout)
+from tiny_mk_driver import ORDER_BF16 as BF16_ORDER  # noqa: E402  (single source of bank layout)
+from tiny_mk_driver import Q4_ORDER  # noqa: E402
 
 
 def bf16_bits_to_f32(u16):
@@ -69,13 +70,13 @@ def build_model(bf, q4):
                 class_predicate=lambda p, m: hasattr(m, "to_quantized") and p != "model.embed_tokens")
     w = {"model.embed_tokens.weight": bf["embed"].reshape(VOCAB, HID),
          "model.norm.weight": bf["fn_norm"]}
-    for l in range(2):
-        p = f"model.layers.{l}"
-        w[f"{p}.input_layernorm.weight"] = bf[f"l{l}_ln"]
-        w[f"{p}.post_attention_layernorm.weight"] = bf[f"l{l}_post"]
-        w[f"{p}.self_attn.q_norm.weight"] = bf[f"l{l}_qn"]
-        w[f"{p}.self_attn.k_norm.weight"] = bf[f"l{l}_kn"]
-        w[f"{p}.self_attn.softmax_offset"] = bf[f"l{l}_sinks"]
+    for li in range(2):
+        p = f"model.layers.{li}"
+        w[f"{p}.input_layernorm.weight"] = bf[f"l{li}_ln"]
+        w[f"{p}.post_attention_layernorm.weight"] = bf[f"l{li}_post"]
+        w[f"{p}.self_attn.q_norm.weight"] = bf[f"l{li}_qn"]
+        w[f"{p}.self_attn.k_norm.weight"] = bf[f"l{li}_kn"]
+        w[f"{p}.self_attn.softmax_offset"] = bf[f"l{li}_sinks"]
     w["model.layers.1.mlp.gate.weight"] = bf["router_w"].reshape(NEXP, HID)
     w["model.layers.1.mlp.gate.expert_bias"] = bf["router_b"]
 
@@ -85,9 +86,9 @@ def build_model(bf, q4):
             qw, s, b = (a.reshape(experts, a.shape[0] // experts, a.shape[1]) for a in (qw, s, b))
         w[prefix + ".weight"], w[prefix + ".scales"], w[prefix + ".biases"] = qw, s, b
 
-    for l in range(2):
+    for li in range(2):
         for proj in "qkvo":
-            put(f"model.layers.{l}.self_attn.{proj}_proj", f"l{l}_{proj}")
+            put(f"model.layers.{li}.self_attn.{proj}_proj", f"l{li}_{proj}")
     for proj in ("gate", "up", "down"):
         put(f"model.layers.0.mlp.{proj}_proj", f"l0_{proj}")
         put(f"model.layers.1.mlp.switch_mlp.{proj}_proj", f"l1_sw_{proj}", experts=NEXP)
