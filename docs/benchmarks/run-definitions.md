@@ -74,6 +74,33 @@ weight dtype, kv dtype, context used, host RAM, any HSA/arch overrides.
   MI50 is the slowest AMD arm (CDNA1, pre-bf16-era); useful as an
   other-architecture reference, not a speed target.
 
+## Reference numbers — rec-9na INT4 torch model layer (dusk, Radeon 890M gfx1150, 2026-11-18)
+
+Different weight config from the rows above. Weights stay **INT4-affine
+packed** on device (INT8 embedding) and are dequantized inside every matmul
+by `rec_mlx.torch_rocm`, with no fused kernel. Routed experts only are
+dequantized. bf16 activations and KV. Checkpoints come from
+`python -m rec_mlx.synthetic --preset {tiny,mid}` (seed 0, seeded router).
+Script: `engine/tests/torch_rocm_bench.py` (same prefill/decode protocol as
+above). Stack: torch 2.9.1+rocm6.4, HIP 6.4.43484, HSA_OVERRIDE_GFX_VERSION=11.0.0.
+
+| config | resident weights | prefill512 tok/s | decode32 tok/s | peak |
+|---|---|---|---|---|
+| tiny-2L INT4 | <0.01 GiB | 91,963.6 | 495.1 | 0.05 GiB |
+| mid-8L INT4 | 1.03 GiB | 498.2 | 2.25 | 7.1 GiB |
+
+Conformance on the same run: `torch_rocm_tiny_check.py` PASS (dequant
+bit-exact, device fp32 drift 2.1e-6, bf16 teacher-forced with 1 near-tie flip).
+
+This is a correctness reference path, **not a speed claim**. Mid decode is
+bound by dequantizing the full 150144×2048 lm_head plus the dense
+projections every step, which is also why peak memory is 7.1 GiB. The first
+version, which dequantized all 32 experts, measured 1.06 tok/s. Do not
+compare these numbers with the dense-bf16 rows above (58.7 / 37.2 / 12.2) as
+like-for-like. The fused dequant-matmul (rec-aip) and the megakernel
+(rec-tan) are the speed paths. Albion (R9700 / MI50) was unreachable for this
+run.
+
 Scripts: `engine/.build/torch_conformance.py` (conformance + tiny bench),
 `engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0).
 AUP arm: replicate the mid-8L shapes exactly; report both configs if compute
