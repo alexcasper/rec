@@ -93,11 +93,14 @@ values raw. The kernel contract **matches the Metal production layout**
 - **Sliding layers:** a ring of 513 positions per head
   (`FixedSlidingKVCache`: K and V `[1, kv_heads, 513, head_dim]`),
   `slot = pos % 513`.
-- The torch reference (`torch_rocm.Model`) uses the same head-major order,
-  `(k, v)` each `[B, kv_heads, T, head_dim]`. It applies the sliding window
-  by mask, not by ring: semantically identical, but memory grows past 513 on
-  sliding layers. That's fine for the reference path; a ring is a perf
-  follow-up.
+- The torch reference (`torch_rocm.Model`, `KVCache`) uses the same
+  head-major order. Full layers keep growing `(k, v)` tensors
+  `[B, kv_heads, T, head_dim]`. Sliding layers use `SlidingKV`, a
+  preallocated 513-slot ring with `slot = pos % 513` and a per-slot absolute
+  position, which builds the attention mask (so prefill chunks longer than
+  513 are handled). Sliding-layer KV memory is constant in context length
+  (rec-1h9). A fresh ring (offset 0) is skipped, so prefill attends only to
+  the chunk.
 - The tiny validation megakernel uses `[layer][kv_head][K|V][t][head_dim]`,
   which nests K|V *inside* the head. That is fine for the tiny phase. The
   mid/full kernel should move to `[K|V][kv_head][t][head_dim]` per layer
