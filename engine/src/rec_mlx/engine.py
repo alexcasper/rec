@@ -120,6 +120,12 @@ class Engine:
             self.resident_sampler = None
             self.runtime = NativeRuntime(QATModel(directory), context_limit=context_limit)
             cache_limit = 0
+        elif self.backend.name == "rocm":
+            from .torch_runtime import TorchRuntime
+
+            self.resident_sampler = None
+            self.runtime = TorchRuntime(directory, context_limit=context_limit)
+            cache_limit = 0
         else:
             raise BackendError(
                 f"The {self.backend.name} backend is not implemented yet; see docs/amd-port-assessment.md"
@@ -135,7 +141,9 @@ class Engine:
             "load_peak_mlx_bytes": mx.get_peak_memory(),
             "process_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
             "physical_memory_bytes": memory,
-            "device_profile": profile.chip if profile is not None else "CPU",
+            "device_profile": profile.chip if profile is not None else (
+                self.runtime.device_profile.chip if self.backend.name == "rocm" else "CPU"
+            ),
             "backend": self.backend.name,
             "weight_format": self.identity["weight_format"],
             "kv_format": self.identity["kv_format"],
@@ -548,7 +556,7 @@ class Engine:
                     "peak_mlx_bytes": mx.get_peak_memory(),
                     "process_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
                     "computed_tokens": len(generated),
-                    "decode_strategy": "native_mlx",
+                    "decode_strategy": "torch" if self.backend.name == "rocm" else "native_mlx",
                 },
             }
         finally:
