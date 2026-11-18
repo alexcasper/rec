@@ -69,7 +69,7 @@ def detect_backend() -> Backend:
         return Backend("metal", system, machine, memory)
     import mlx.core as mx
 
-    if mx.default_device().device_type == mx.DeviceType.gpu:
+    if mx.default_device().type == mx.DeviceType.gpu:
         # Linux MLX GPU builds are CUDA today; a ROCm backend would surface here.
         return Backend("rocm", system, machine, memory)
     return Backend("cpu", system, machine, memory)
