@@ -139,3 +139,32 @@ def test_engine_rocm_backend_on_torch_cpu_matches_cpu_backend(tiny_checkpoint, m
     # only after a common prefix of >= 8 tokens
     common = next((i for i, (a, b) in enumerate(zip(cpu["token_ids"], rocm["token_ids"])) if a != b), 12)
     assert common >= 8, (cpu["token_ids"], rocm["token_ids"])
+
+
+@pytest.mark.skipif(platform.system() == "Darwin" and platform.machine() == "arm64",
+                    reason="metal auto-detection wins on Apple Silicon")
+def test_engine_rocm_fp32_is_token_identical_to_cpu_backend(tiny_checkpoint, monkeypatch):
+    """REC_TORCH_DTYPE=fp32 removes bf16 rounding: any token difference is a bug."""
+    prompt = [1] + [int(t) for t in np.random.default_rng(0).integers(3, 512, size=63)]
+
+    def tokens(engine):
+        events = list(engine.generate_tokens(prompt, Sampling(temperature=0, max_tokens=16)))
+        return events[-1]["metrics"]["token_ids"]
+
+    cpu = tokens(Engine(tiny_checkpoint, tiny_checkpoint / "manifest.json", context_limit=4096))
+    monkeypatch.setenv("REC_BACKEND", "rocm")
+    monkeypatch.setenv("REC_TORCH_DEVICE", "cpu")
+    monkeypatch.setenv("REC_TORCH_DTYPE", "fp32")
+    assert tokens(Engine(tiny_checkpoint, tiny_checkpoint / "manifest.json", context_limit=4096)) == cpu
+    assert len(set(cpu)) > 4
+
+
+def test_torch_dtype_env_is_validated(monkeypatch):
+    from rec_mlx.backends import BackendError
+    from rec_mlx.torch_runtime import resolve_dtype
+
+    monkeypatch.setenv("REC_TORCH_DTYPE", "fp8")
+    with pytest.raises(BackendError, match="REC_TORCH_DTYPE"):
+        resolve_dtype()
+    monkeypatch.setenv("REC_TORCH_DTYPE", "fp32")
+    assert resolve_dtype() == torch.float32

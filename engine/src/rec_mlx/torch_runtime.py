@@ -10,6 +10,8 @@ same as the cpu backend.
 
 Device selection: ``REC_TORCH_DEVICE`` (default ``cuda``). ``cpu`` is
 accepted so the full engine path is testable on any Linux box.
+Activation/KV dtype: ``REC_TORCH_DTYPE`` = ``bf16`` (default) or ``fp32``
+(conformance: isolates engine/device bugs from bf16 rounding).
 """
 
 from __future__ import annotations
@@ -50,6 +52,16 @@ def resolve_device(requested: str | None = None) -> torch.device:
             "none is available. Set REC_TORCH_DEVICE=cpu to run the torch path on CPU."
         )
     return device
+
+
+_DTYPES = {"bf16": torch.bfloat16, "fp32": torch.float32}
+
+
+def resolve_dtype(requested: str | None = None) -> torch.dtype:
+    name = requested or os.environ.get("REC_TORCH_DTYPE", "bf16")
+    if name not in _DTYPES:
+        raise BackendError(f"REC_TORCH_DTYPE must be one of {', '.join(_DTYPES)}, got {name!r}")
+    return _DTYPES[name]
 
 
 class _KVBytes:
@@ -109,9 +121,10 @@ class TorchRuntime:
     """Engine-facing runtime for the rocm backend."""
 
     def __init__(self, directory, *, context_limit: int, device: str | None = None,
-                 dtype: torch.dtype = torch.bfloat16):
+                 dtype: str | None = None):
         self.device = resolve_device(device)
-        self.model = load_model(directory, device=str(self.device), dtype=dtype)
+        self.dtype = resolve_dtype(dtype)
+        self.model = load_model(directory, device=str(self.device), dtype=self.dtype)
         self.context_limit = context_limit
         self.device_profile = TorchDeviceProfile(self.device)
         self.prefill_chunk_size = TorchDeviceProfile.prefill_chunk_size
