@@ -77,6 +77,11 @@ form.
   The output adds the shared expert unconditionally. Expert MLP is
   `down(silu(gate(x)) * up(x))`. Do not drop the SiLU (rec-qib).
 - Logits are returned to the engine as fp32.
+- Validation exception (rec-pp2): a kernel's **validation build** must keep
+  fp32 intermediates. bf16 inter-op activations measure 1.5e-2 to 2.2e-1 logit
+  error on mid-8L, which cannot meet the megakernel gate. Production builds
+  may use bf16 activations only if a fp32-intermediate validation build of the
+  same kernel passes `engine/validation/megakernel_mid`.
 
 ## 4. KV cache (decision)
 
@@ -114,6 +119,7 @@ values raw. The kernel contract **matches the Metal production layout**
 | GPU vs CPU conformance of the torch layer | `engine/tests/torch_rocm_tiny_check.py --ckpt DIR --device cuda` | ROCm host |
 | HIP tiny megakernel == MLX model on the exact bank | `native/megakernel_hip/tiny_mk_driver.py` → `tiny_mk_np_reference.py` (any host) / `tiny_mk_mlx_reference.py` (ground truth) | ROCm host |
 | numpy reference pinned to MLX | `engine/tests/test_tiny_mk_reference.py` | any |
+| **mid-8L megakernel validation target** (production-format ckpt, cases, `rec-mk-out/1` schema, two-tier gate) | `engine/validation/megakernel_mid/` (README) | ROCm host (dusk) |
 | degenerate MoE router rejected at load | `rec_mlx.checkpoint.assert_router_nondegenerate` (QATModel + torch loader) | any |
 
 Synthetic test data must be **non-degenerate**: zero-centred weights and
