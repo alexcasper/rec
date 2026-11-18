@@ -98,10 +98,9 @@ values raw. The kernel contract **matches the Metal production layout**
   by mask, not by ring: semantically identical, but memory grows past 513 on
   sliding layers. That's fine for the reference path; a ring is a perf
   follow-up.
-- The tiny validation megakernel uses `[layer][kv_head][K|V][t][head_dim]`,
-  which nests K|V *inside* the head. That is fine for the tiny phase. The
-  mid/full kernel should move to `[K|V][kv_head][t][head_dim]` per layer
-  (rec-tan).
+- Both the tiny validation megakernel (`tiny_megakernel.hip`) and the mid/full
+  kernel use `[layer][2 (K|V)][kv_head][t][head_dim]` (Metal `KVStorage`
+  head-major order, rec-tan).
 
 ## 5. Validation hooks
 

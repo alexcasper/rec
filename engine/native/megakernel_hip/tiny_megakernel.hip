@@ -40,7 +40,7 @@ constexpr int IDX_EMBED = 0, IDX_L0LN = 1, IDX_L0POST = 2, IDX_L0QN = 3, IDX_L0K
     IDX_L0SINKS = 5, IDX_L1LN = 6, IDX_L1POST = 7, IDX_L1QN = 8, IDX_L1KN = 9,
     IDX_L1SINKS = 10, IDX_ROUTER_W = 11, IDX_ROUTER_B = 12, IDX_FNNORM = 13;
 constexpr int NBF16 = 14;
-constexpr int BF16_ELEMS[NBF16] = {
+[[maybe_unused]] constexpr int BF16_ELEMS[NBF16] = {
     VOCAB * HID, HID, HID, HDIM, HDIM, HEADS,
     HID, HID, HDIM, HDIM, HEADS,
     NEXP * HID, NEXP, HID,
@@ -190,7 +190,7 @@ __device__ inline void head_norm_rope(float* qk, const bf16* nw, int heads,
 
 extern "C" __global__ void tiny_generate(
     const uint8_t* bank, const int64_t* off,
-    bf16* kv,                                // [NL][NKV][2][total][HDIM]
+    bf16* kv,                                // [NL][2 (K|V)][NKV][total][HDIM]
     const int* prompt, int prompt_len,
     int* out_tokens, int n_out, float* out_last_logits) {
     const int lane = threadIdx.x & 31;
@@ -214,7 +214,7 @@ extern "C" __global__ void tiny_generate(
     __shared__ float sh_mid[DENSE_I]; // widest intermediate (L0 MLP)
     __shared__ float sh_up[DENSE_I];  // L0 up-proj output (256 wide)
     __shared__ float sh_score[NEXP], sh_wsel[TOPK], sh_logits[VOCAB];
-    __shared__ int sh_sel[TOPK], sh_next;
+    __shared__ int sh_sel[TOPK];
 
     for (int pos = 0; pos < total; ++pos) {
         int token = (pos < prompt_len) ? prompt[pos] : out_tokens[pos - prompt_len];
@@ -277,8 +277,9 @@ extern "C" __global__ void tiny_generate(
 #endif
             for (int h = 0; h < NKV; ++h)
                 for (int d = lane; d < HDIM; d += 32) {
-                    size_t kk = (((size_t)layer * NKV + h) * 2 + 0) * cap * HDIM + (size_t)pos * HDIM + d;
-                    size_t vv = (((size_t)layer * NKV + h) * 2 + 1) * cap * HDIM + (size_t)pos * HDIM + d;
+                    // Metal KVStorage head-major order: [NL][2 (K|V)][NKV][cap][HDIM]
+                    size_t kk = (((size_t)layer * 2 + 0) * NKV + h) * cap * HDIM + (size_t)pos * HDIM + d;
+                    size_t vv = (((size_t)layer * 2 + 1) * NKV + h) * cap * HDIM + (size_t)pos * HDIM + d;
                     kv[kk] = tobf(sh_k[h * HDIM + d]);
                     kv[vv] = tobf(sh_v[h * HDIM + d]);
                 }
@@ -286,7 +287,7 @@ extern "C" __global__ void tiny_generate(
 #ifdef DEBUG_TINY
             if (pos == 0 && layer == 0 && lane == 0)
                 printf("MK kvwrite sh_k0 %.6f sh_v0 %.6f kvk0 %.6f kvv0 %.6f\\n",
-                       sh_k[0], sh_v[0], tofloat(kv[0]), tofloat(kv[((size_t)NKV * 2) * cap * HDIM]));
+                       sh_k[0], sh_v[0], tofloat(kv[0]), tofloat(kv[(size_t)NKV * cap * HDIM]));
 #endif
 
             // ---- attention with sinks ----
@@ -296,8 +297,8 @@ extern "C" __global__ void tiny_generate(
             int nqh = HEADS / NKV;
             if (lane < nqh) {
                 int kvh = lane;
-                const bf16* kc = kv + (((size_t)layer * NKV + kvh) * 2 + 0) * cap * HDIM;
-                const bf16* vc = kv + (((size_t)layer * NKV + kvh) * 2 + 1) * cap * HDIM;
+                const bf16* kc = kv + (((size_t)layer * 2 + 0) * NKV + kvh) * cap * HDIM;
+                const bf16* vc = kv + (((size_t)layer * 2 + 1) * NKV + kvh) * cap * HDIM;
                 for (int g = 0; g < nqh; ++g) {
                     int h = kvh * nqh + g;
                     float hi = tofloat(sinkp[h]);
@@ -510,7 +511,6 @@ extern "C" __global__ void tiny_generate(
             if (out_last_logits) for (int i = 0; i < VOCAB; ++i) out_last_logits[i] = sh_logits[i];
             int slot = pos - prompt_len + 1;
             if (slot >= 0 && slot < n_out) out_tokens[slot] = best;
-            sh_next = best;
         }
         __syncthreads();
     }
@@ -525,24 +525,27 @@ extern "C" void tiny_launch(const uint8_t* h_bank, const int64_t* h_off, bf16* h
     size_t kv_sz = (size_t)NL * NKV * 2 * (size_t)total * HDIM * sizeof(bf16);
 
     uint8_t* d_bank; int64_t* d_off; bf16* d_kv; int* d_prompt; int* d_out; float* d_logits;
-    hipMalloc(&d_bank, bank_sz);
-    hipMalloc(&d_off, off_sz);
-    hipMalloc(&d_kv, kv_sz);
-    hipMalloc(&d_prompt, (size_t)prompt_len * sizeof(int));
-    hipMalloc(&d_out, (size_t)n_out * sizeof(int));
-    hipMalloc(&d_logits, h_out_last_logits ? (size_t)VOCAB * sizeof(float) : 0);
-    hipMemcpy(d_bank, h_bank, bank_sz, hipMemcpyHostToDevice);
-    hipMemcpy(d_off, h_off, off_sz, hipMemcpyHostToDevice);
-    hipMemcpy(d_kv, h_kv, kv_sz, hipMemcpyHostToDevice);
-    hipMemcpy(d_prompt, h_prompt, (size_t)prompt_len * sizeof(int), hipMemcpyHostToDevice);
-    hipMemcpy(d_out, h_out_tokens, (size_t)n_out * sizeof(int), hipMemcpyHostToDevice);
-    if (h_out_last_logits) hipMemcpy(d_logits, h_out_last_logits, VOCAB * sizeof(float), hipMemcpyHostToDevice);
+    auto chk = [](hipError_t e, const char* what) {
+        if (e != hipSuccess) fprintf(stderr, "tiny_launch %s: %s\n", what, hipGetErrorString(e));
+    };
+    chk(hipMalloc(&d_bank, bank_sz), "hipMalloc bank");
+    chk(hipMalloc(&d_off, off_sz), "hipMalloc off");
+    chk(hipMalloc(&d_kv, kv_sz), "hipMalloc kv");
+    chk(hipMalloc(&d_prompt, (size_t)prompt_len * sizeof(int)), "hipMalloc prompt");
+    chk(hipMalloc(&d_out, (size_t)n_out * sizeof(int)), "hipMalloc out");
+    chk(hipMalloc(&d_logits, h_out_last_logits ? (size_t)VOCAB * sizeof(float) : 0), "hipMalloc logits");
+    chk(hipMemcpy(d_bank, h_bank, bank_sz, hipMemcpyHostToDevice), "hipMemcpy bank");
+    chk(hipMemcpy(d_off, h_off, off_sz, hipMemcpyHostToDevice), "hipMemcpy off");
+    chk(hipMemcpy(d_kv, h_kv, kv_sz, hipMemcpyHostToDevice), "hipMemcpy kv");
+    chk(hipMemcpy(d_prompt, h_prompt, (size_t)prompt_len * sizeof(int), hipMemcpyHostToDevice), "hipMemcpy prompt");
+    chk(hipMemcpy(d_out, h_out_tokens, (size_t)n_out * sizeof(int), hipMemcpyHostToDevice), "hipMemcpy out");
+    if (h_out_last_logits) chk(hipMemcpy(d_logits, h_out_last_logits, VOCAB * sizeof(float), hipMemcpyHostToDevice), "hipMemcpy logits");
 
     hipLaunchKernelGGL(tiny_generate, dim3(1), dim3(32), 0, 0,
                        d_bank, d_off, d_kv, d_prompt, prompt_len, d_out, n_out, d_logits);
-    hipError_t err = hipDeviceSynchronize();
-    if (err != hipSuccess) fprintf(stderr, "tiny_launch sync error: %s\n", hipGetErrorString(err));
-    hipMemcpy(h_out_tokens, d_out, (size_t)n_out * sizeof(int), hipMemcpyDeviceToHost);
-    if (h_out_last_logits) hipMemcpy(h_out_last_logits, d_logits, VOCAB * sizeof(float), hipMemcpyDeviceToHost);
-    hipFree(d_bank); hipFree(d_off); hipFree(d_kv); hipFree(d_prompt); hipFree(d_out); hipFree(d_logits);
+    chk(hipDeviceSynchronize(), "sync");
+    chk(hipMemcpy(h_out_tokens, d_out, (size_t)n_out * sizeof(int), hipMemcpyDeviceToHost), "hipMemcpy out D2H");
+    if (h_out_last_logits) chk(hipMemcpy(h_out_last_logits, d_logits, VOCAB * sizeof(float), hipMemcpyDeviceToHost), "hipMemcpy logits D2H");
+    chk(hipFree(d_bank), "hipFree"); chk(hipFree(d_off), "hipFree"); chk(hipFree(d_kv), "hipFree");
+    chk(hipFree(d_prompt), "hipFree"); chk(hipFree(d_out), "hipFree"); chk(hipFree(d_logits), "hipFree");
 }

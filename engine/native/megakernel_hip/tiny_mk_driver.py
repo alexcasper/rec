@@ -113,7 +113,7 @@ def main(argv):
     bank, off, store = make_bank(seed, data)
 
     total = len(prompt) + n_out
-    kv = np.zeros(2 * NKV * 2 * total * HDIM, dtype=np.uint16)  # [NL][NKV][2][total][HDIM] bf16
+    kv = np.zeros(2 * 2 * NKV * total * HDIM, dtype=np.uint16)  # [NL][2 (K|V)][NKV][total][HDIM] bf16
     out_tokens = np.zeros(n_out, dtype=np.int32)
     out_logits = np.zeros(VOCAB, dtype=np.float32)
     prompt_arr = np.array(prompt, dtype=np.int32)
