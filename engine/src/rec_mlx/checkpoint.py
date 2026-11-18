@@ -1,5 +1,41 @@
 import json
+from collections.abc import Mapping
 from pathlib import Path
+
+import numpy as np
+
+
+def assert_router_nondegenerate(weights: Mapping[str, np.ndarray], config: dict) -> None:
+    """Reject MoE layers whose router cannot distinguish experts (rec-9as).
+
+    ``Router`` zero-initialises ``gate.weight``; an export that never writes a
+    trained (or seeded) router ships all-zero rows. Then every expert scores
+    sigmoid(0) = 0.5, top-k is decided by backend tie-breaking (MLX
+    argpartition vs torch topk vs a HIP kernel pick different experts) and
+    cross-backend outputs diverge at the first MoE layer. Identical rows are
+    the general case of the same failure. ``expert_bias`` alone is not
+    checked: zeros there are legitimate (sanitize() fills it in).
+
+    ``weights`` maps tensor names to float numpy arrays; only
+    ``*.mlp.gate.weight`` entries are read. Missing tensors are left to the
+    strict loader to report.
+    """
+    dense = set(config.get("mlp_only_layers", []))
+    for index in range(config["num_hidden_layers"]):
+        if index in dense:
+            continue
+        name = f"model.layers.{index}.mlp.gate.weight"
+        if name not in weights:
+            continue
+        w = np.asarray(weights[name], dtype=np.float32)
+        if w.ndim != 2 or w.shape[0] < 2:
+            continue
+        if not np.any(w != w[:1]):
+            kind = "all-zero" if not np.any(w) else "identical rows"
+            raise ValueError(
+                f"{name}: degenerate MoE router ({kind}); every expert ties and top-k "
+                "routing becomes backend tie-breaking. Export a trained or seeded router (rec-9as)."
+            )
 
 
 def validate(directory: Path, manifest_path: Path) -> dict:
