@@ -79,6 +79,8 @@ constexpr int q4_total_bytes(int idx) { return q4_packed_bytes(idx) + 2 * q4_sb_
 __device__ inline float tofloat(bf16 v) { return __bfloat162float(v); }
 __device__ inline bf16 tobf(float v) { return __float2bfloat16(v); }
 
+__device__ inline float silu(float v) { return v / (1.0f + expf(-v)); }
+
 __device__ inline float warp_sum(float v) {
     #pragma unroll
     for (int off = 16; off >= 1; off >>= 1)
@@ -107,7 +109,10 @@ __device__ inline void q4(const uint8_t* w, const bf16* s, const bf16* b,
     #pragma unroll
     for (int j = 0; j < PER; ++j) { v[j] = x[scalar + j]; sum += v[j]; }
     #pragma unroll
-    for (int j = 0; j < PER; ++j) vs[j] = v[j] / (float)(1u << (4 * ((j >> 1) * 2 + (j & 1))));
+    // MSL load_vector pre-scale: period 4 (one ushort = 4 nibbles), i.e.
+    // x/1, x/16, x/256, x/4096 repeating. The old exponent (j>>1)*2+(j&1) == j
+    // scaled elements 4..7 of K=256 rows by 16^-4 (o_proj, dense down).
+    for (int j = 0; j < PER; ++j) vs[j] = v[j] / (float)(1u << (4 * (j & 3)));
     for (int first = 0; first < n; first += 4) {
         float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
         for (int r = 0; r < 4; ++r) {
@@ -362,7 +367,7 @@ extern "C" __global__ void tiny_generate(
                 if (pos == 0 && lane == 0) printf("MK up-out %.6f %.6f\n", sh_up[0], sh_up[1]);
 #endif
                 for (int i = lane; i < DENSE_I; i += 32)
-                    sh_mid[i] = tobf(tofloat(sh_mid[i]) * tofloat(sh_up[i]));
+                    sh_mid[i] = tobf(silu(tofloat(tobf(sh_mid[i]))) * tofloat(sh_up[i]));
                 __syncthreads();
                 q4<DENSE_I>(QW(DOWN_L0), QS(DOWN_L0), QB(DOWN_L0), sh_mid, sh_mlp, HID);
                 __syncthreads();
@@ -384,13 +389,16 @@ extern "C" __global__ void tiny_generate(
                     for (int e = 0; e < NEXP; ++e) {
                         float sc = 0.0f;
                         for (int i = 0; i < HID; ++i) sc += tofloat(rw[(size_t)e * HID + i]) * sh_xn[i];
-                        sc = tofloat(tobf(sc)) + tofloat(B(IDX_ROUTER_B)[e]);
-                        float sig = 1.0f / (1.0f + expf(-sc));
+                        // model.py SparseMoeBlock: scores = sigmoid(gate(x)); the
+                        // expert_bias only biases SELECTION (choice = scores + bias),
+                        // the mixing weights are the unbiased scores renormalized.
+                        float sig = 1.0f / (1.0f + expf(-tofloat(tobf(sc))));
+                        float choice = sig + tofloat(B(IDX_ROUTER_B)[e]);
                         sh_score[e] = sig;
                         for (int t = 0; t < TOPK; ++t)
-                            if (sig > tv[t]) {
+                            if (choice > tv[t]) {
                                 for (int u = TOPK - 1; u > t; --u) { tv[u] = tv[u - 1]; top[u] = top[u - 1]; }
-                                tv[t] = sig; top[t] = e;
+                                tv[t] = choice; top[t] = e;
                                 break;
                             }
                     }
@@ -439,7 +447,7 @@ extern "C" __global__ void tiny_generate(
                             sh_xn, sh_u2, MOE_I);
                     __syncthreads();
                     for (int i = lane; i < MOE_I; i += 32)
-                        sh_mi[i] = tobf(tofloat(sh_mi[i]) * tofloat(sh_u2[i]));
+                        sh_mi[i] = tobf(silu(tofloat(tobf(sh_mi[i]))) * tofloat(sh_u2[i]));
                     __syncthreads();
 #ifdef DEBUG_TINY
                     if (pos == 0 && lane == 0)
@@ -471,7 +479,7 @@ extern "C" __global__ void tiny_generate(
                 q4<HID>(QW(SH_GATE), QS(SH_GATE), QB(SH_GATE), sh_xn, sh_sg, SH_I);
                 q4<HID>(QW(SH_UP), QS(SH_UP), QB(SH_UP), sh_xn, sh_su, SH_I);
                 __syncthreads();
-                for (int i = lane; i < SH_I; i += 32) sh_sg[i] = tobf(tofloat(sh_sg[i]) * tofloat(sh_su[i]));
+                for (int i = lane; i < SH_I; i += 32) sh_sg[i] = tobf(silu(tofloat(tobf(sh_sg[i]))) * tofloat(sh_su[i]));
                 __syncthreads();
                 q4<SH_I>(QW(SH_DOWN), QS(SH_DOWN), QB(SH_DOWN), sh_sg, sh_sd, HID);
                 __syncthreads();
