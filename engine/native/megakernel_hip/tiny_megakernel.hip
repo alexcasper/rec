@@ -93,12 +93,14 @@ constexpr uint16_t NIB[4] = {15u, 240u, 3840u, 61440u};
 // q4 matmul, compile-time K (K % 32 == 0): lane covers K/32 consecutive
 // K-elements = (K/32)/4 ushorts. x: shared K floats; out: float[n] zeroed by
 // caller. Literal MSL nibble arithmetic with the x-scaling bias fold.
+// Multi-warp + multi-workgroup: global warp `sg` steps by `groups * 4` rows.
 template <int K, int TAG = 0>
 __device__ inline void q4(const uint8_t* w, const bf16* s, const bf16* b,
-                          const float* x, float* out, int n) {
+                          const float* x, float* out, int n,
+                          int sg = 0, int groups = 1) {
     int lane = threadIdx.x & 31;
 #ifdef DEBUG_TINY
-    if (TAG == 9 && lane == 0)
+    if (TAG == 9 && lane == 0 && sg == 0)
         printf("MK q4ptr t9 w %llu s %llu b %llu\n",
                (unsigned long long)w, (unsigned long long)s, (unsigned long long)b);
 #endif
@@ -113,10 +115,11 @@ __device__ inline void q4(const uint8_t* w, const bf16* s, const bf16* b,
     // x/1, x/16, x/256, x/4096 repeating. The old exponent (j>>1)*2+(j&1) == j
     // scaled elements 4..7 of K=256 rows by 16^-4 (o_proj, dense down).
     for (int j = 0; j < PER; ++j) vs[j] = v[j] / (float)(1u << (4 * (j & 3)));
-    for (int first = 0; first < n; first += 4) {
+    for (int first = sg * 4; first < n; first += groups * 4) {
         float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
         for (int r = 0; r < 4; ++r) {
             int row = first + r;
+            if (row >= n) break;
             int gi = row * (K / 64) + scalar / 64;
             float sc = tofloat(s[gi]), bi = tofloat(b[gi]);
             const uint16_t* p = (const uint16_t*)(w + (size_t)row * (K / 2) + scalar / 2);
@@ -136,26 +139,51 @@ __device__ inline void q4(const uint8_t* w, const bf16* s, const bf16* b,
                 dsum = vs[0] * (pb[0] & 15u) + vs[1] * (pb[0] & 240u);
             }
             a[r] += sc * dsum + sum * bi;
-#ifdef DEBUG_TINY
-            if (TAG != 0 && row < 2 && threadIdx.x == 0)
-                printf("MK q4 t%d row%d sc %.6f bi %.6f dsum %.6f sum %.6f a %.6f\n",
-                       TAG, row, sc, bi, dsum, sum, a[r]);
-#ifdef DEBUG_TINY
-            if (TAG == 8 && row == 1)
-                printf("MK upL lane %d a %.6e sc %.6e dsum %.6e\n", (int)lane, a[r], sc, dsum);
-#endif
-#endif
         }
         for (int r = 0; r < 4; ++r) {
             float v = warp_sum(a[r]);
-            if (lane == 0) out[first + r] += v;
+            if (lane == 0 && first + r < n) out[first + r] += v;
         }
     }
 }
 
-// RMSNorm over HID from shared in[] to shared out[]; lane owns 4 elements.
+// Device-wide spin barrier (MSL sync_all equivalent) across `workers` workgroups.
+// control[0]: arrived count, control[1]: current phase, control[2]: abort flag.
+__device__ inline bool sync_all(uint32_t* control, int tid, uint32_t& phase,
+                                uint32_t* ready, int workers) {
+    __threadfence();
+    __syncthreads();
+    if (workers <= 1) {
+        ++phase;
+        return true;
+    }
+    if (tid == 0) {
+        uint32_t arrived = __hip_atomic_fetch_add(control, 1u, __ATOMIC_ACQ_REL, __HIP_MEMORY_SCOPE_AGENT);
+        if (arrived == (uint32_t)(workers - 1)) {
+            __hip_atomic_store(control, 0u, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
+            __threadfence();
+            __hip_atomic_store(control + 1, phase + 1u, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_AGENT);
+        }
+        uint32_t spins = 0;
+        while (__hip_atomic_load(control + 1, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_AGENT) == phase &&
+               __hip_atomic_load(control + 2, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT) == 0u &&
+               spins < 20000000u) {
+            ++spins;
+        }
+        uint32_t ok = (__hip_atomic_load(control + 1, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_AGENT) > phase) ? 1u : 0u;
+        ready[0] = ok;
+        if (!ok) __hip_atomic_store(control + 2, phase + 1u, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
+    }
+    __syncthreads();
+    __threadfence();
+    ++phase;
+    return ready[0] != 0u;
+}
+
+// RMSNorm over HID from shared in[] to shared out[]; warp 0 owns the 128 elements (4/lane).
 __device__ inline void rmsnorm(const float* in, const bf16* w, float* out) {
-    int lane = threadIdx.x;
+    if ((threadIdx.x >> 5) != 0) return;
+    int lane = threadIdx.x & 31;
     float squared = 0.0f;
     for (int j = 0; j < 4; ++j) { float v = in[lane * 4 + j]; squared += v * v; }
     float inv = 1.0f / sqrtf(warp_sum(squared) / (float)HID + EPS);
@@ -192,8 +220,14 @@ extern "C" __global__ void tiny_generate(
     const uint8_t* bank, const int64_t* off,
     bf16* kv,                                // [NL][2 (K|V)][NKV][total][HDIM]
     const int* prompt, int prompt_len,
-    int* out_tokens, int n_out, float* out_last_logits) {
-    const int lane = threadIdx.x & 31;
+    int* out_tokens, int n_out, float* out_last_logits,
+    float* ws, uint32_t* control, int workers) {
+    const int tid = threadIdx.x;
+    const int group = blockIdx.x;
+    const int bthreads = blockDim.x;
+    const int bwarps = bthreads >> 5;
+    const int sg = group * bwarps + (tid >> 5);
+    const int groups = workers * bwarps;
     const int total = prompt_len + n_out;
     const size_t cap = (size_t)total;
 
@@ -206,25 +240,38 @@ extern "C" __global__ void tiny_generate(
     auto QB = [&](int idx) -> const bf16* {
         return (const bf16*)(bank + OFF(Q4_FIRST + idx) + q4_packed_bytes(idx) + q4_sb_bytes(idx)); };
 
-    // shared scratch — the whole working set of the tiny model
-    __shared__ float sh_x[HID];       // residual stream (pre-norm)
-    __shared__ float sh_xn[HID];      // normalized copy for q4 inputs
-    __shared__ float sh_q[HEADS * HDIM], sh_k[NKV * HDIM], sh_v[NKV * HDIM];
-    __shared__ float sh_attn[HEADS * HDIM], sh_o[HID], sh_mlp[HID];
-    __shared__ float sh_mid[DENSE_I]; // widest intermediate (L0 MLP)
-    __shared__ float sh_up[DENSE_I];  // L0 up-proj output (256 wide)
-    __shared__ float sh_score[NEXP], sh_wsel[TOPK], sh_logits[VOCAB];
+    // When workers > 1, output buffers for multi-workgroup phases live in device workspace `ws`
+    // so all workgroups write to and read from the same arrays across `sync_all`.
+    __shared__ float sh_x[HID];       // residual stream (pre-norm, replicated per workgroup)
+    __shared__ float sh_xn[HID];      // normalized copy for q4 inputs (replicated per workgroup)
+    __shared__ float sh_q_local[HEADS * HDIM], sh_k_local[NKV * HDIM], sh_v_local[NKV * HDIM];
+    __shared__ float sh_attn_local[HEADS * HDIM], sh_o_local[HID], sh_mlp_local[HID];
+    __shared__ float sh_mid_local[DENSE_I], sh_up_local[DENSE_I];
+    __shared__ float sh_score[NEXP], sh_wsel[TOPK], sh_logits_local[VOCAB];
     __shared__ int sh_sel[TOPK];
+    __shared__ uint32_t sh_ready[1];
+    uint32_t phase = 0;
+
+    float* sh_q      = ws ? (ws + 0) : sh_q_local;
+    float* sh_k      = ws ? (ws + HEADS * HDIM) : sh_k_local;
+    float* sh_v      = ws ? (ws + (HEADS + NKV) * HDIM) : sh_v_local;
+    float* sh_attn   = ws ? (ws + (HEADS + 2 * NKV) * HDIM) : sh_attn_local;
+    float* sh_o      = ws ? (ws + (2 * HEADS + 2 * NKV) * HDIM) : sh_o_local;
+    float* sh_mlp    = ws ? (ws + (2 * HEADS + 2 * NKV) * HDIM + HID) : sh_mlp_local;
+    float* sh_mid    = ws ? (ws + (2 * HEADS + 2 * NKV) * HDIM + 2 * HID) : sh_mid_local;
+    float* sh_up     = ws ? (ws + (2 * HEADS + 2 * NKV) * HDIM + 2 * HID + DENSE_I) : sh_up_local;
+    float* sh_logits = ws ? (ws + (2 * HEADS + 2 * NKV) * HDIM + 2 * HID + 2 * DENSE_I) : sh_logits_local;
+    float* ws_moe    = ws ? (ws + (2 * HEADS + 2 * NKV) * HDIM + 2 * HID + 2 * DENSE_I + VOCAB) : nullptr;
+
+    #define SYNC_ALL() if (!sync_all(control, tid, phase, sh_ready, workers)) return
 
     for (int pos = 0; pos < total; ++pos) {
         int token = (pos < prompt_len) ? prompt[pos] : out_tokens[pos - prompt_len];
 
-        // ---- embedding ----
-        for (int i = lane; i < HID; i += 32)
+        // ---- embedding (replicated across workgroups) ----
+        for (int i = tid; i < HID; i += bthreads)
             sh_x[i] = tofloat(B(IDX_EMBED)[(size_t)token * HID + i]);
-#ifdef DEBUG_TINY
-        if (pos == 0 && lane == 0) printf("MK embed %.6f %.6f %.6f %.6f\n", sh_x[0], sh_x[1], sh_x[2], sh_x[3]);
-#endif
+        __syncthreads();
 
         for (int layer = 0; layer < NL; ++layer) {
             int ln = layer == 0 ? IDX_L0LN : IDX_L1LN;
@@ -241,62 +288,45 @@ extern "C" __global__ void tiny_generate(
             // ---- input RMSNorm -> sh_xn ----
             rmsnorm(sh_x, B(ln), sh_xn);
             __syncthreads();
-#ifdef DEBUG_TINY
-            if (pos == 0 && lane == 0) printf("MK after-rmsnorm %.6f %.6f %.6f %.6f\n", sh_xn[0], sh_xn[1], sh_xn[2], sh_xn[3]);
-#endif
 
             // ---- qkv (all K = HID) ----
-            for (int i = lane; i < HEADS * HDIM; i += 32) sh_q[i] = 0.0f;
-            for (int i = lane; i < NKV * HDIM; i += 32) { sh_k[i] = 0.0f; sh_v[i] = 0.0f; }
-            __syncthreads();
-            q4<HID, 1>(QW(qidx), QS(qidx), QB(qidx), sh_xn, sh_q, HEADS * HDIM);
-#ifdef DEBUG_TINY
-            if (pos == 0 && layer == 0 && lane == 0) printf("MK qk-after-q k0 %.6f v0 %.6f\n", sh_k[0], sh_v[0]);
-#endif
-            q4<HID, 2>(QW(kidx), QS(kidx), QB(kidx), sh_xn, sh_k, NKV * HDIM);
-#ifdef DEBUG_TINY
-            if (pos == 0 && layer == 0 && lane == 0) printf("MK qk-after-k k0 %.6f v0 %.6f\n", sh_k[0], sh_v[0]);
-#endif
-            q4<HID, 3>(QW(vidx), QS(vidx), QB(vidx), sh_xn, sh_v, NKV * HDIM);
-#ifdef DEBUG_TINY
-            if (pos == 0 && layer == 0 && lane == 0) printf("MK qk-after-v k0 %.6f v0 %.6f\n", sh_k[0], sh_v[0]);
-#endif
-            __syncthreads();
+            if (group == 0) {
+                for (int i = tid; i < HEADS * HDIM; i += bthreads) sh_q[i] = 0.0f;
+                for (int i = tid; i < NKV * HDIM; i += bthreads) { sh_k[i] = 0.0f; sh_v[i] = 0.0f; }
+                for (int i = tid; i < HEADS * HDIM; i += bthreads) sh_attn[i] = 0.0f;
+                for (int i = tid; i < HID; i += bthreads) sh_o[i] = 0.0f;
+            }
+            SYNC_ALL();
+            q4<HID, 1>(QW(qidx), QS(qidx), QB(qidx), sh_xn, sh_q, HEADS * HDIM, sg, groups);
+            q4<HID, 2>(QW(kidx), QS(kidx), QB(kidx), sh_xn, sh_k, NKV * HDIM, sg, groups);
+            q4<HID, 3>(QW(vidx), QS(vidx), QB(vidx), sh_xn, sh_v, NKV * HDIM, sg, groups);
+            SYNC_ALL();
 
             // ---- head norm + rope on q and k ----
-#ifdef DEBUG_TINY
-            if (pos == 0 && lane == 0) printf("MK after-qkv-q %.6f %.6f %.6f %.6f\n", sh_q[0], sh_q[1], sh_q[2], sh_q[3]);
-#endif
-            head_norm_rope(sh_q, B(qni), HEADS, rotary, pos);
-            head_norm_rope(sh_k, B(kni), NKV, rotary, pos);
-            __syncthreads();
+            if (group == 0) {
+                head_norm_rope(sh_q, B(qni), HEADS, rotary, pos);
+                head_norm_rope(sh_k, B(kni), NKV, rotary, pos);
+            }
+            SYNC_ALL();
 
             // ---- write k, v into cache at pos ----
-#ifdef DEBUG_TINY
-            if (pos == 0 && lane == 0) printf("MK after-headnorm-q %.6f %.6f %.6f %.6f\n", sh_q[0], sh_q[1], sh_q[2], sh_q[3]);
-#endif
-            for (int h = 0; h < NKV; ++h)
-                for (int d = lane; d < HDIM; d += 32) {
-                    // Metal KVStorage head-major order: [NL][2 (K|V)][NKV][cap][HDIM]
-                    size_t kk = (((size_t)layer * 2 + 0) * NKV + h) * cap * HDIM + (size_t)pos * HDIM + d;
-                    size_t vv = (((size_t)layer * 2 + 1) * NKV + h) * cap * HDIM + (size_t)pos * HDIM + d;
-                    kv[kk] = tobf(sh_k[h * HDIM + d]);
-                    kv[vv] = tobf(sh_v[h * HDIM + d]);
-                }
-            __syncthreads();
-#ifdef DEBUG_TINY
-            if (pos == 0 && layer == 0 && lane == 0)
-                printf("MK kvwrite sh_k0 %.6f sh_v0 %.6f kvk0 %.6f kvv0 %.6f\\n",
-                       sh_k[0], sh_v[0], tofloat(kv[0]), tofloat(kv[(size_t)NKV * cap * HDIM]));
-#endif
+            if (group == 0) {
+                for (int h = 0; h < NKV; ++h)
+                    for (int d = tid; d < HDIM; d += bthreads) {
+                        // Metal KVStorage head-major order: [NL][2 (K|V)][NKV][cap][HDIM]
+                        size_t kk = (((size_t)layer * 2 + 0) * NKV + h) * cap * HDIM + (size_t)pos * HDIM + d;
+                        size_t vv = (((size_t)layer * 2 + 1) * NKV + h) * cap * HDIM + (size_t)pos * HDIM + d;
+                        kv[kk] = tobf(sh_k[h * HDIM + d]);
+                        kv[vv] = tobf(sh_v[h * HDIM + d]);
+                    }
+            }
+            SYNC_ALL();
 
             // ---- attention with sinks ----
             const bf16* sinkp = B(sinks);
-            for (int i = lane; i < HEADS * HDIM; i += 32) sh_attn[i] = 0.0f;
-            __syncthreads();
             int nqh = HEADS / NKV;
-            if (lane < nqh) {
-                int kvh = lane;
+            if (group == 0 && tid < nqh) {
+                int kvh = tid;
                 const bf16* kc = kv + (((size_t)layer * 2 + 0) * NKV + kvh) * cap * HDIM;
                 const bf16* vc = kv + (((size_t)layer * 2 + 1) * NKV + kvh) * cap * HDIM;
                 for (int g = 0; g < nqh; ++g) {
@@ -311,11 +341,6 @@ extern "C" __global__ void tiny_generate(
                     for (int t = 0; t <= pos; ++t) {
                         float score = 0.0f;
                         for (int d = 0; d < HDIM; ++d) score += qreg[d] * tofloat(kc[(size_t)t * HDIM + d]);
-#ifdef DEBUG_TINY
-                        if (pos == 0 && lane == 0)
-                            printf("MK attn h0 t0 score %.6f hi %.6f z %.6f q0 %.6f k0 %.6f v0 %.6f\n",
-                                   score, hi, z, qreg[0], tofloat(kc[0]), tofloat(vc[0]));
-#endif
                         float next = fmaxf(hi, score);
                         float low = expf(-fabsf(score - hi));
                         bool wins = score > hi;
@@ -328,71 +353,45 @@ extern "C" __global__ void tiny_generate(
                     for (int d = 0; d < HDIM; ++d) sh_attn[h * HDIM + d] = acc[d] / z;
                 }
             }
-            __syncthreads();
+            SYNC_ALL();
 
             // ---- o proj + residual ----
-#ifdef DEBUG_TINY
-            if (pos == 0 && lane == 0) printf("MK after-attn %.6f %.6f %.6f %.6f\n", sh_attn[0], sh_attn[1], sh_attn[2], sh_attn[3]);
-#endif
-            for (int i = lane; i < HID; i += 32) sh_o[i] = 0.0f;
-            __syncthreads();
-            q4<DENSE_I>(QW(oidx), QS(oidx), QB(oidx), sh_attn, sh_o, HID);
-            __syncthreads();
-            for (int i = lane; i < HID; i += 32) sh_x[i] += sh_o[i];
+            q4<DENSE_I>(QW(oidx), QS(oidx), QB(oidx), sh_attn, sh_o, HID, sg, groups);
+            SYNC_ALL();
+            for (int i = tid; i < HID; i += bthreads) sh_x[i] += sh_o[i];
             __syncthreads();
 
             // ---- post RMSNorm -> sh_xn ----
-#ifdef DEBUG_TINY
-            if (pos == 0 && lane == 0) printf("MK after-o-residual %.6f %.6f %.6f %.6f\n", sh_x[0], sh_x[1], sh_x[2], sh_x[3]);
-#endif
             rmsnorm(sh_x, B(post), sh_xn);
             __syncthreads();
 
             // ---- MLP / MoE ----
-#ifdef DEBUG_TINY
-            if (pos == 0 && lane == 0) printf("MK after-postnorm %.6f %.6f %.6f %.6f\n", sh_xn[0], sh_xn[1], sh_xn[2], sh_xn[3]);
-#endif
             if (layer == 0) {
-                for (int i = lane; i < DENSE_I; i += 32) { sh_mid[i] = 0.0f; sh_up[i] = 0.0f; }
-                for (int i = lane; i < HID; i += 32) sh_o[i] = 0.0f;
-                for (int i = lane; i < HID; i += 32) sh_mlp[i] = 0.0f;
+                if (group == 0) {
+                    for (int i = tid; i < DENSE_I; i += bthreads) { sh_mid[i] = 0.0f; sh_up[i] = 0.0f; }
+                    for (int i = tid; i < HID; i += bthreads) sh_mlp[i] = 0.0f;
+                }
+                SYNC_ALL();
+                q4<HID, 7>(QW(GATE_L0), QS(GATE_L0), QB(GATE_L0), sh_xn, sh_mid, DENSE_I, sg, groups);
+                q4<HID, 8>(QW(UP_L0), QS(UP_L0), QB(UP_L0), sh_xn, sh_up, DENSE_I, sg, groups);
+                SYNC_ALL();
+                if (group == 0) {
+                    for (int i = tid; i < DENSE_I; i += bthreads)
+                        sh_mid[i] = tobf(silu(tofloat(tobf(sh_mid[i]))) * tofloat(sh_up[i]));
+                }
+                SYNC_ALL();
+                q4<DENSE_I>(QW(DOWN_L0), QS(DOWN_L0), QB(DOWN_L0), sh_mid, sh_mlp, HID, sg, groups);
+                SYNC_ALL();
+                for (int i = tid; i < HID; i += bthreads) sh_x[i] += sh_mlp[i];
                 __syncthreads();
-                q4<HID, 7>(QW(GATE_L0), QS(GATE_L0), QB(GATE_L0), sh_xn, sh_mid, DENSE_I);
-                __syncthreads();
-#ifdef DEBUG_TINY
-                if (pos == 0 && lane == 0) printf("MK gate-out %.6f %.6f\n", sh_mid[0], sh_mid[1]);
-#endif
-                q4<HID, 8>(QW(UP_L0), QS(UP_L0), QB(UP_L0), sh_xn, sh_up, DENSE_I);
-                __syncthreads();
-#ifdef DEBUG_TINY
-                if (pos == 0 && lane == 0) printf("MK up-out %.6f %.6f\n", sh_up[0], sh_up[1]);
-#endif
-                for (int i = lane; i < DENSE_I; i += 32)
-                    sh_mid[i] = tobf(silu(tofloat(tobf(sh_mid[i]))) * tofloat(sh_up[i]));
-                __syncthreads();
-                q4<DENSE_I>(QW(DOWN_L0), QS(DOWN_L0), QB(DOWN_L0), sh_mid, sh_mlp, HID);
-                __syncthreads();
-#ifdef DEBUG_TINY
-                if (pos == 0 && layer == 0 && lane == 0)
-                    printf("MK l0mlp mlp %.6f %.6f mid %.6f %.6f\n", sh_mlp[0], sh_mlp[1], sh_mid[0], sh_mid[1]);
-#endif
-                for (int i = lane; i < HID; i += 32) sh_x[i] += sh_mlp[i];
-                __syncthreads();
-#ifdef DEBUG_TINY
-                if (pos == 0 && layer == 0 && lane == 0)
-                    printf("MK l0mlp-after x %.6f %.6f\n", sh_x[0], sh_x[1]);
-#endif
             } else {
-                if (lane == 0) {
+                if (tid == 0) {
                     int top[TOPK]; float tv[TOPK];
                     for (int t = 0; t < TOPK; ++t) { tv[t] = -1e30f; top[t] = 0; }
                     const bf16* rw = B(IDX_ROUTER_W);
                     for (int e = 0; e < NEXP; ++e) {
                         float sc = 0.0f;
                         for (int i = 0; i < HID; ++i) sc += tofloat(rw[(size_t)e * HID + i]) * sh_xn[i];
-                        // model.py SparseMoeBlock: scores = sigmoid(gate(x)); the
-                        // expert_bias only biases SELECTION (choice = scores + bias),
-                        // the mixing weights are the unbiased scores renormalized.
                         float sig = 1.0f / (1.0f + expf(-tofloat(tobf(sc))));
                         float choice = sig + tofloat(B(IDX_ROUTER_B)[e]);
                         sh_score[e] = sig;
@@ -404,127 +403,111 @@ extern "C" __global__ void tiny_generate(
                             }
                     }
                     for (int t = 0; t < TOPK; ++t) sh_sel[t] = top[t];
-#ifdef DEBUG_TINY
-                    if (pos == 0)
-                        printf("MK router top %d %d tv %.6f %.6f\n", top[0], top[1], tv[0], tv[1]);
-#endif
-                }
-                __syncthreads();
-                if (lane == 0) {
                     float s0 = sh_score[sh_sel[0]], s1 = sh_score[sh_sel[1]];
                     float wsum = s0 + s1 + 1e-20f;
                     sh_wsel[0] = s0 / wsum; sh_wsel[1] = s1 / wsum;
                 }
                 __syncthreads();
-                for (int i = lane; i < HID; i += 32) sh_mlp[i] = 0.0f;
-                __syncthreads();
-#ifdef DEBUG_TINY
-                if (pos == 0 && lane == 0)
-                    printf("MK moeptr off25 %ld wptr %ld sptr %ld\n",
-                           (long)OFF(Q4_FIRST + SW_GATE),
-                           (long)((const uint8_t*)QW(SW_GATE) - bank),
-                           (long)((const uint8_t*)QS(SW_GATE) - bank));
-#endif
+                if (group == 0) {
+                    for (int i = tid; i < HID; i += bthreads) sh_mlp[i] = 0.0f;
+                }
+                SYNC_ALL();
+                __shared__ float sh_mi_local[MOE_I], sh_u2_local[MOE_I], sh_dyn_local[HID];
+                float* sh_mi  = ws_moe ? (ws_moe + 0) : sh_mi_local;
+                float* sh_u2  = ws_moe ? (ws_moe + MOE_I) : sh_u2_local;
+                float* sh_dyn = ws_moe ? (ws_moe + 2 * MOE_I) : sh_dyn_local;
                 for (int t = 0; t < TOPK; ++t) {
                     int e = sh_sel[t];
-#ifdef DEBUG_TINY
-                    if (pos == 0 && lane == 0)
-                        printf("MK tloop t%d e %d sel %d %d\n", t, e, sh_sel[0], sh_sel[1]);
-#endif
-                    __shared__ float sh_mi[MOE_I], sh_u2[MOE_I], sh_dyn[HID];
-                    for (int i = lane; i < MOE_I; i += 32) { sh_mi[i] = 0.0f; sh_u2[i] = 0.0f; }
-                    for (int i = lane; i < HID; i += 32) sh_dyn[i] = 0.0f;
-                    __syncthreads();
-                    // per-expert q4: gate/up rows [MOE_I, HID], down rows [HID, MOE_I]
-                    // NB: QS/QB return bf16* — per-expert strides are in ELEMENTS
-                    // (byte stride / 2), not bytes (rec-hjr).
+                    if (group == 0) {
+                        for (int i = tid; i < MOE_I; i += bthreads) { sh_mi[i] = 0.0f; sh_u2[i] = 0.0f; }
+                        for (int i = tid; i < HID; i += bthreads) sh_dyn[i] = 0.0f;
+                    }
+                    SYNC_ALL();
                     q4<HID, 9>(QW(SW_GATE) + (size_t)e * (MOE_I * HID / 2),
                             QS(SW_GATE) + (size_t)e * (MOE_I * (HID / 64)),
                             QB(SW_GATE) + (size_t)e * (MOE_I * (HID / 64)),
-                            sh_xn, sh_mi, MOE_I);
+                            sh_xn, sh_mi, MOE_I, sg, groups);
                     q4<HID>(QW(SW_UP) + (size_t)e * (MOE_I * HID / 2),
                             QS(SW_UP) + (size_t)e * (MOE_I * (HID / 64)),
                             QB(SW_UP) + (size_t)e * (MOE_I * (HID / 64)),
-                            sh_xn, sh_u2, MOE_I);
-                    __syncthreads();
-                    for (int i = lane; i < MOE_I; i += 32)
-                        sh_mi[i] = tobf(silu(tofloat(tobf(sh_mi[i]))) * tofloat(sh_u2[i]));
-                    __syncthreads();
-#ifdef DEBUG_TINY
-                    if (pos == 0 && lane == 0)
-                        printf("MK exp gate/up t%d mi %.6f %.6f u2 %.6f %.6f\n", t, sh_mi[0], sh_mi[1], sh_u2[0], sh_u2[1]);
-#endif
+                            sh_xn, sh_u2, MOE_I, sg, groups);
+                    SYNC_ALL();
+                    if (group == 0) {
+                        for (int i = tid; i < MOE_I; i += bthreads)
+                            sh_mi[i] = tobf(silu(tofloat(tobf(sh_mi[i]))) * tofloat(sh_u2[i]));
+                    }
+                    SYNC_ALL();
                     q4<MOE_I>(QW(SW_DOWN) + (size_t)e * (HID * MOE_I / 2),
                               QS(SW_DOWN) + (size_t)e * (HID * (MOE_I / 64)),
                               QB(SW_DOWN) + (size_t)e * (HID * (MOE_I / 64)),
-                              sh_mi, sh_dyn, HID);
-                    __syncthreads();
-#ifdef DEBUG_TINY
-                    if (pos == 0 && lane == 0)
-                        printf("MK exp down t%d dyn %.6f %.6f mi %.6f %.6f\n", t, sh_dyn[0], sh_dyn[1], sh_mi[0], sh_mi[1]);
-#endif
-                    for (int i = lane; i < HID; i += 32) sh_mlp[i] += sh_wsel[t] * sh_dyn[i];
-                    __syncthreads();
+                              sh_mi, sh_dyn, HID, sg, groups);
+                    SYNC_ALL();
+                    if (group == 0) {
+                        for (int i = tid; i < HID; i += bthreads) sh_mlp[i] += sh_wsel[t] * sh_dyn[i];
+                    }
+                    SYNC_ALL();
                 }
-#ifdef DEBUG_TINY
-                if (pos == 0 && lane == 0)
-                    printf("MK moe wsel %.6f %.6f sh_mlp %.6f %.6f sel %d %d scores %.6f %.6f %.6f %.6f\n",
-                           sh_wsel[0], sh_wsel[1], sh_mlp[0], sh_mlp[1],
-                           sh_sel[0], sh_sel[1], sh_score[0], sh_score[1], sh_score[2], sh_score[3]);
-#endif
                 // shared expert
-                __shared__ float sh_sg[SH_I], sh_su[SH_I], sh_sd[HID];
-                for (int i = lane; i < SH_I; i += 32) { sh_sg[i] = 0.0f; sh_su[i] = 0.0f; }
-                for (int i = lane; i < HID; i += 32) sh_sd[i] = 0.0f;
-                __syncthreads();
-                q4<HID>(QW(SH_GATE), QS(SH_GATE), QB(SH_GATE), sh_xn, sh_sg, SH_I);
-                q4<HID>(QW(SH_UP), QS(SH_UP), QB(SH_UP), sh_xn, sh_su, SH_I);
-                __syncthreads();
-                for (int i = lane; i < SH_I; i += 32) sh_sg[i] = tobf(silu(tofloat(tobf(sh_sg[i]))) * tofloat(sh_su[i]));
-                __syncthreads();
-                q4<SH_I>(QW(SH_DOWN), QS(SH_DOWN), QB(SH_DOWN), sh_sg, sh_sd, HID);
-                __syncthreads();
-                for (int i = lane; i < HID; i += 32) sh_mlp[i] += sh_sd[i];
-                __syncthreads();
-#ifdef DEBUG_TINY
-                if (pos == 0 && lane == 0)
-                    printf("MK moe-after sh_sd %.6f %.6f sh_mlp %.6f %.6f\n", sh_sd[0], sh_sd[1], sh_mlp[0], sh_mlp[1]);
-#endif
-                for (int i = lane; i < HID; i += 32) sh_x[i] += sh_mlp[i];
+                __shared__ float sh_sg_local[SH_I], sh_su_local[SH_I], sh_sd_local[HID];
+                float* sh_sg = ws_moe ? (ws_moe + 2 * MOE_I + HID) : sh_sg_local;
+                float* sh_su = ws_moe ? (ws_moe + 2 * MOE_I + HID + SH_I) : sh_su_local;
+                float* sh_sd = ws_moe ? (ws_moe + 2 * MOE_I + HID + 2 * SH_I) : sh_sd_local;
+                if (group == 0) {
+                    for (int i = tid; i < SH_I; i += bthreads) { sh_sg[i] = 0.0f; sh_su[i] = 0.0f; }
+                    for (int i = tid; i < HID; i += bthreads) sh_sd[i] = 0.0f;
+                    for (int i = tid; i < VOCAB; i += bthreads) sh_logits[i] = 0.0f;
+                }
+                SYNC_ALL();
+                q4<HID>(QW(SH_GATE), QS(SH_GATE), QB(SH_GATE), sh_xn, sh_sg, SH_I, sg, groups);
+                q4<HID>(QW(SH_UP), QS(SH_UP), QB(SH_UP), sh_xn, sh_su, SH_I, sg, groups);
+                SYNC_ALL();
+                if (group == 0) {
+                    for (int i = tid; i < SH_I; i += bthreads)
+                        sh_sg[i] = tobf(silu(tofloat(tobf(sh_sg[i]))) * tofloat(sh_su[i]));
+                }
+                SYNC_ALL();
+                q4<SH_I>(QW(SH_DOWN), QS(SH_DOWN), QB(SH_DOWN), sh_sg, sh_sd, HID, sg, groups);
+                SYNC_ALL();
+                if (group == 0) {
+                    for (int i = tid; i < HID; i += bthreads) sh_mlp[i] += sh_sd[i];
+                }
+                SYNC_ALL();
+                for (int i = tid; i < HID; i += bthreads) sh_x[i] += sh_mlp[i];
                 __syncthreads();
             }
         }
 
         // ---- final norm + lm head + greedy argmax ----
-#ifdef DEBUG_TINY
-            if (pos == 0 && lane == 0) printf("MK after-L1-final %.6f %.6f %.6f %.6f\n", sh_x[0], sh_x[1], sh_x[2], sh_x[3]);
-#endif
         rmsnorm(sh_x, B(IDX_FNNORM), sh_xn);
         __syncthreads();
-        for (int i = lane; i < VOCAB; i += 32) sh_logits[i] = 0.0f;
-        __syncthreads();
-        q4<HID>(QW(LM_HEAD), QS(LM_HEAD), QB(LM_HEAD), sh_xn, sh_logits, VOCAB);
-        __syncthreads();
-        if (lane == 0) {
+        q4<HID>(QW(LM_HEAD), QS(LM_HEAD), QB(LM_HEAD), sh_xn, sh_logits, VOCAB, sg, groups);
+        SYNC_ALL();
+        if (group == 0 && tid == 0) {
             int best = 0;
             for (int i = 1; i < VOCAB; ++i) if (sh_logits[i] > sh_logits[best]) best = i;
             if (out_last_logits) for (int i = 0; i < VOCAB; ++i) out_last_logits[i] = sh_logits[i];
             int slot = pos - prompt_len + 1;
             if (slot >= 0 && slot < n_out) out_tokens[slot] = best;
         }
-        __syncthreads();
+        SYNC_ALL();
     }
+    #undef SYNC_ALL
 }
 
-extern "C" void tiny_launch(const uint8_t* h_bank, const int64_t* h_off, bf16* h_kv,
-                            const int* h_prompt, int prompt_len, int* h_out_tokens,
-                            int n_out, float* h_out_last_logits) {
+extern "C" void tiny_launch_ex(const uint8_t* h_bank, const int64_t* h_off, bf16* h_kv,
+                               const int* h_prompt, int prompt_len, int* h_out_tokens,
+                               int n_out, float* h_out_last_logits,
+                               int workers, int block_threads) {
+    if (workers < 1) workers = 1;
+    if (block_threads < 32) block_threads = 32;
     int total = prompt_len + n_out;
     size_t bank_sz = (size_t)h_off[31] + q4_total_bytes(17);
     size_t off_sz = 32 * sizeof(int64_t);
     size_t kv_sz = (size_t)NL * NKV * 2 * (size_t)total * HDIM * sizeof(bf16);
+    size_t ws_elems = (2 * HEADS + 2 * NKV) * HDIM + 2 * HID + 2 * DENSE_I + VOCAB + 2 * MOE_I + 2 * HID + 2 * SH_I;
 
     uint8_t* d_bank; int64_t* d_off; bf16* d_kv; int* d_prompt; int* d_out; float* d_logits;
+    float* d_ws = nullptr; uint32_t* d_control = nullptr;
     auto chk = [](hipError_t e, const char* what) {
         if (e != hipSuccess) fprintf(stderr, "tiny_launch %s: %s\n", what, hipGetErrorString(e));
     };
@@ -534,6 +517,10 @@ extern "C" void tiny_launch(const uint8_t* h_bank, const int64_t* h_off, bf16* h
     chk(hipMalloc(&d_prompt, (size_t)prompt_len * sizeof(int)), "hipMalloc prompt");
     chk(hipMalloc(&d_out, (size_t)n_out * sizeof(int)), "hipMalloc out");
     chk(hipMalloc(&d_logits, h_out_last_logits ? (size_t)VOCAB * sizeof(float) : 0), "hipMalloc logits");
+    chk(hipMalloc(&d_ws, ws_elems * sizeof(float)), "hipMalloc ws");
+    chk(hipMalloc(&d_control, 16 * sizeof(uint32_t)), "hipMalloc control");
+    chk(hipMemset(d_ws, 0, ws_elems * sizeof(float)), "hipMemset ws");
+    chk(hipMemset(d_control, 0, 16 * sizeof(uint32_t)), "hipMemset control");
     chk(hipMemcpy(d_bank, h_bank, bank_sz, hipMemcpyHostToDevice), "hipMemcpy bank");
     chk(hipMemcpy(d_off, h_off, off_sz, hipMemcpyHostToDevice), "hipMemcpy off");
     chk(hipMemcpy(d_kv, h_kv, kv_sz, hipMemcpyHostToDevice), "hipMemcpy kv");
@@ -541,11 +528,19 @@ extern "C" void tiny_launch(const uint8_t* h_bank, const int64_t* h_off, bf16* h
     chk(hipMemcpy(d_out, h_out_tokens, (size_t)n_out * sizeof(int), hipMemcpyHostToDevice), "hipMemcpy out");
     if (h_out_last_logits) chk(hipMemcpy(d_logits, h_out_last_logits, VOCAB * sizeof(float), hipMemcpyHostToDevice), "hipMemcpy logits");
 
-    hipLaunchKernelGGL(tiny_generate, dim3(1), dim3(32), 0, 0,
-                       d_bank, d_off, d_kv, d_prompt, prompt_len, d_out, n_out, d_logits);
+    hipLaunchKernelGGL(tiny_generate, dim3(workers), dim3(block_threads), 0, 0,
+                       d_bank, d_off, d_kv, d_prompt, prompt_len, d_out, n_out, d_logits,
+                       d_ws, d_control, workers);
     chk(hipDeviceSynchronize(), "sync");
     chk(hipMemcpy(h_out_tokens, d_out, (size_t)n_out * sizeof(int), hipMemcpyDeviceToHost), "hipMemcpy out D2H");
     if (h_out_last_logits) chk(hipMemcpy(h_out_last_logits, d_logits, VOCAB * sizeof(float), hipMemcpyDeviceToHost), "hipMemcpy logits D2H");
     chk(hipFree(d_bank), "hipFree"); chk(hipFree(d_off), "hipFree"); chk(hipFree(d_kv), "hipFree");
     chk(hipFree(d_prompt), "hipFree"); chk(hipFree(d_out), "hipFree"); chk(hipFree(d_logits), "hipFree");
+    chk(hipFree(d_ws), "hipFree ws"); chk(hipFree(d_control), "hipFree control");
+}
+
+extern "C" void tiny_launch(const uint8_t* h_bank, const int64_t* h_off, bf16* h_kv,
+                            const int* h_prompt, int prompt_len, int* h_out_tokens,
+                            int n_out, float* h_out_last_logits) {
+    tiny_launch_ex(h_bank, h_off, h_kv, h_prompt, prompt_len, h_out_tokens, n_out, h_out_last_logits, 4, 128);
 }

@@ -96,6 +96,7 @@ def make_bank(seed=0, data="signed"):
 
 def main(argv):
     data, seed, prompt, n_out, out = "signed", 0, [1, 5, 6, 7], 8, HERE / "tiny_mk_io.npz"
+    workers, block_threads = 4, 128
     for a in argv:
         key, _, val = a.partition("=")
         if key == "--data":
@@ -108,6 +109,10 @@ def main(argv):
             n_out = int(val)
         elif key == "--out":
             out = Path(val)
+        elif key == "--workers":
+            workers = int(val)
+        elif key == "--block-threads":
+            block_threads = int(val)
         else:
             raise SystemExit(f"unknown arg {a}")
     bank, off, store = make_bank(seed, data)
@@ -119,11 +124,15 @@ def main(argv):
     prompt_arr = np.array(prompt, dtype=np.int32)
 
     lib = ctypes.CDLL(str(HERE / "flint_tiny.so"))  # before any torch import (libhsa)
-    lib.tiny_launch.restype = None
-    lib.tiny_launch.argtypes = [ctypes.c_void_p] * 4 + [ctypes.c_int] + [ctypes.c_void_p] + [ctypes.c_int] + [ctypes.c_void_p]
-    lib.tiny_launch(bank.ctypes.data, off.ctypes.data, kv.ctypes.data,
-                    prompt_arr.ctypes.data, ctypes.c_int(len(prompt)),
-                    out_tokens.ctypes.data, ctypes.c_int(n_out), out_logits.ctypes.data)
+    lib.tiny_launch_ex.restype = None
+    lib.tiny_launch_ex.argtypes = (
+        [ctypes.c_void_p] * 4 + [ctypes.c_int] + [ctypes.c_void_p]
+        + [ctypes.c_int] + [ctypes.c_void_p] + [ctypes.c_int, ctypes.c_int]
+    )
+    lib.tiny_launch_ex(bank.ctypes.data, off.ctypes.data, kv.ctypes.data,
+                       prompt_arr.ctypes.data, ctypes.c_int(len(prompt)),
+                       out_tokens.ctypes.data, ctypes.c_int(n_out), out_logits.ctypes.data,
+                       ctypes.c_int(workers), ctypes.c_int(block_threads))
     np.savez(out, bank=bank, offsets=off, tokens=out_tokens, last_logits=out_logits,
              data=np.array(data), seed=np.int32(seed),
              prompt=prompt_arr, n_out=np.int32(n_out), **store)
