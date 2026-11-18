@@ -21,7 +21,7 @@ Kernel-output npz schema "rec-mk-out/1":
   prompt       int32 [P]       must equal the case prompt
   tokens       int32 [n_out]   greedy tokens, tokens[i] chosen from step_logits[i]
   last_logits  f32   [V]       logits after consuming tokens[-1] (picks token n_out+1)
-  step_logits  f32   [n_out,V] optional, strongly recommended
+  step_logits  f32   [n_out,V] logits that picked tokens[i] (required)
   kv_dtype     str   optional "fp32" (default) | "bf16": KV-cache storage precision.
                      Selects the reference: fp32 compute with K/V rounded to this
                      dtype at the storage points. Compute must be fp32 either way.
@@ -40,7 +40,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 SCHEMA = "rec-mk-out/1"
 # Pass criteria (README.md "Pass criteria").
-LOGIT_RTOL = 1e-3   # max|kernel - ref| / max|ref|, last_logits and every step_logits row
+# max|kernel - ref| / max|ref| over last_logits and every step_logits row, by the
+# declared KV storage dtype. Measured on mid-8L (dusk 890M): correct fp32 floor
+# 3.4e-6, correct fp32-compute/bf16-KV floor 5.0e-4. The softmax-mix MoE fault
+# keeps tokens exact and lands at 4.2e-4..9.0e-4 vs the bf16-KV reference
+# (invisible) but 2.5e-4..1.05e-3 vs fp32 (caught), so sign-off needs both
+# builds (README "Pass criteria").
+LOGIT_RTOL = {"fp32": 1e-4, "bf16": 1e-3}
 TIE_TOL = 5e-3      # a token may differ from the fp32 argmax only if the fp32 margin <= this
 N_OUT = 24
 
@@ -98,7 +104,7 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
           ref_kv: str = "auto") -> dict:
     d = np.load(path, allow_pickle=False)
     problems: list[str] = []
-    for key in ("schema", "case", "ckpt_sha256", "prompt", "tokens", "last_logits"):
+    for key in ("schema", "case", "ckpt_sha256", "prompt", "tokens", "last_logits", "step_logits"):
         if key not in d.files:
             problems.append(f"missing key {key}")
     if problems:
@@ -141,7 +147,8 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
     kl = d["last_logits"].astype(np.float64)
     last_rel = float(np.abs(kl - ref[-1]).max() / max(np.abs(ref[-1]).max(), 1e-6))
     step_rel = None
-    if "step_logits" in d.files:
+    rtol = LOGIT_RTOL[kv_dtype]
+    if True:  # step_logits is required (schema check above)
         sl = d["step_logits"].astype(np.float64)
         if sl.shape != (len(tokens), vocab):
             problems.append(f"step_logits shape {sl.shape} != ({len(tokens)}, {vocab})")
@@ -154,13 +161,14 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
         problems.append("non-finite last_logits")
     if bad:
         problems.append(f"{len(bad)} token(s) differ from the fp32 reference beyond the near-tie margin")
-    if last_rel > LOGIT_RTOL:
-        problems.append(f"last_logits rel err {last_rel:.3e} > {LOGIT_RTOL}")
-    if step_rel is not None and step_rel > LOGIT_RTOL:
-        problems.append(f"step_logits max rel err {step_rel:.3e} > {LOGIT_RTOL}")
+    if last_rel > rtol:
+        problems.append(f"last_logits rel err {last_rel:.3e} > {rtol} ({kv_dtype}-KV tier)")
+    if step_rel is not None and step_rel > rtol:
+        problems.append(f"step_logits max rel err {step_rel:.3e} > {rtol} ({kv_dtype}-KV tier)")
     ref_tokens = [int(r.argmax()) for r in ref[:-1]]
     result = {
         "case": case, "impl": str(d["impl"]) if "impl" in d.files else "?", "ref_kv": kv_dtype,
+        "logit_rtol": rtol,
         "pass": not problems, "problems": problems,
         "tokens_exact": not bad and not flips, "near_ties_accepted": flips, "bad_tokens": bad[:5],
         "last_logits_rel": last_rel, "step_logits_max_rel": step_rel,
