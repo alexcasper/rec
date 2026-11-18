@@ -24,20 +24,11 @@ def production_format(src, dst):
     U8 packed weights, BF16 scales/biases/norms/router, no expert_bias."""
     import shutil
 
+    from rec_mlx.synthetic import to_production_format
+
     shutil.copytree(src, dst)
     shard = dst / "model-00001.safetensors"
-    out = {}
-    for name, value in mx.load(str(shard)).items():
-        if name.endswith(".mlp.gate.expert_bias"):
-            continue
-        if value.dtype == mx.uint32:
-            out[name] = value.view(mx.uint8)
-        elif value.dtype == mx.float32:
-            out[name] = value.astype(mx.bfloat16)
-        else:
-            out[name] = value
-    mx.eval(out)  # mx.load is lazy: materialize before overwriting the same file
-    mx.save_safetensors(str(shard), out)
+    mx.save_safetensors(str(shard), to_production_format(mx.load(str(shard))))
     return dst
 
 

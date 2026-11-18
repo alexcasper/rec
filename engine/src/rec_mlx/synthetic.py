@@ -9,6 +9,13 @@ measured tie-breaking. Here every tensor the zero-init leaves degenerate
 
     python -m rec_mlx.synthetic --preset tiny --out engine/output/cpu-baseline-ckpt
     python -m rec_mlx.synthetic --preset mid  --out engine/output/cpu-baseline-mid
+    python -m rec_mlx.synthetic --preset mid  --format production --out ckpt/mid-prod
+
+``--format production`` writes the tensors the way RecursiveSI/flint-int4
+ships them (verified from its safetensors header): U8 packed weights
+``[..., out, K/2]``, BF16 scales/biases/norms/router/sinks, and no
+``expert_bias`` (``router_expert_bias: false``). Same seeded values as the
+default format, rounded to bf16.
 """
 
 from __future__ import annotations
@@ -84,8 +91,29 @@ FILES = ["config.json", "tokenizer.json", "tokenizer_config.json", "special_toke
          "model-00001.safetensors"]
 
 
+FORMATS = ("synthetic", "production")
+
+
+def to_production_format(flat: dict) -> dict:
+    """U32 packed -> U8 bytes (same order), F32 -> BF16, drop expert_bias."""
+    import mlx.core as mx
+
+    out = {}
+    for name, value in flat.items():
+        if name.endswith(".mlp.gate.expert_bias"):
+            continue
+        if value.dtype == mx.uint32:
+            out[name] = value.view(mx.uint8)
+        elif value.dtype == mx.float32:
+            out[name] = value.astype(mx.bfloat16)
+        else:
+            out[name] = value
+    mx.eval(out)
+    return out
+
+
 def build_checkpoint(directory: Path, preset: str | dict = "tiny", seed: int = 0,
-                     model_id: str | None = None) -> Path:
+                     model_id: str | None = None, fmt: str = "synthetic") -> Path:
     """Write a valid synthetic checkpoint (config, tokenizer, weights, manifest).
 
     Weights: ``Model`` init under ``mx.random.seed(seed)``, quantized like
@@ -144,6 +172,10 @@ def build_checkpoint(directory: Path, preset: str | dict = "tiny", seed: int = 0
         {k: np.array(v.astype(mx.float32)) for k, v in flat.items() if k.endswith(".mlp.gate.weight")},
         config,
     )
+    if fmt not in FORMATS:
+        raise ValueError(f"fmt must be one of {FORMATS}, got {fmt!r}")
+    if fmt == "production":
+        flat = to_production_format(flat)
     mx.save_safetensors(str(directory / "model-00001.safetensors"), flat)
     _write_tokenizer(directory, config["vocab_size"])
     (directory / "manifest.json").write_text(
@@ -152,7 +184,8 @@ def build_checkpoint(directory: Path, preset: str | dict = "tiny", seed: int = 0
                 "weight_format": "mlx-affine-int4",
                 "kv_format": "bf16",
                 "max_context": QATModel.context_limit,
-                "model_id": model_id or f"synthetic-{name}-flint-seed{seed}",
+                "model_id": model_id or f"synthetic-{name}-flint-seed{seed}"
+                + ("-prod" if fmt == "production" else ""),
                 "checkpoint_files": FILES,
             },
             indent=2,
@@ -199,9 +232,11 @@ def main(argv=None) -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--model-id")
+    parser.add_argument("--format", choices=FORMATS, default="synthetic")
     args = parser.parse_args(argv)
-    path = build_checkpoint(args.out, args.preset, args.seed, args.model_id)
-    print(f"wrote {path} ({args.preset}, seed {args.seed}); validate() OK, router non-degenerate")
+    path = build_checkpoint(args.out, args.preset, args.seed, args.model_id, args.format)
+    print(f"wrote {path} ({args.preset}, {args.format}, seed {args.seed}); validate() OK, "
+          "router non-degenerate")
 
 
 if __name__ == "__main__":
