@@ -88,6 +88,7 @@ def test_kv_cache_incremental_matches_full(tiny_checkpoint):
     steps += [model.forward(ids[:, t:t + 1], kv) for t in range(10, ids.shape[1])]
     assert (torch.cat(steps, 1) - full).abs().max() < 1e-4
     assert all(k.dtype == torch.float32 for k, _ in kv)
+    assert kv.offset == ids.shape[1]
     bf = load_model(tiny_checkpoint, device="cpu", dtype=torch.bfloat16)
     kv = bf.new_cache()
     bf.forward(ids[:, :4], kv)
@@ -168,3 +169,39 @@ def test_torch_dtype_env_is_validated(monkeypatch):
         resolve_dtype()
     monkeypatch.setenv("REC_TORCH_DTYPE", "fp32")
     assert resolve_dtype() == torch.float32
+
+
+@torch.no_grad()
+@pytest.mark.parametrize("chunks", [[300] + [1] * 400, [100, 600], [520, 1, 1, 177]])
+def test_sliding_ring_matches_full_forward_past_window(tiny_checkpoint, chunks):
+    """rec-1h9: 513-slot ring on sliding layers == no-cache forward (pinned to MLX above),
+    for decode steps and prefill chunks longer than the window."""
+    model = load_model(tiny_checkpoint, device="cpu", dtype=torch.float32)
+    total = sum(chunks)
+    ids = torch.tensor([[int(t) for t in np.random.default_rng(1).integers(3, 512, size=total)]])
+    full = model.forward(ids)
+    kv, outs, start = model.new_cache(), [], 0
+    for n in chunks:
+        outs.append(model.forward(ids[:, start:start + n], kv))
+        start += n
+    assert (torch.cat(outs, 1) - full).abs().max() < 1e-4
+    window = model.cfg.sliding_window
+    for i, entry in enumerate(kv.layers):
+        if model.cfg.layer_types[i] == "sliding_attention":
+            assert entry.k.shape[2] == window  # bounded: never grows past 513
+            assert int(entry.pos.max()) == total - 1 and int(entry.pos.min()) == total - window
+        else:
+            assert entry[0].shape[2] == total
+
+
+@torch.no_grad()
+def test_sliding_ring_kv_bytes_stay_constant(tiny_checkpoint):
+    model = load_model(tiny_checkpoint, device="cpu", dtype=torch.bfloat16)
+    kv = model.new_cache()
+    model.forward(torch.tensor([[3 + t % 509 for t in range(512)]]), kv)
+    sliding = [i for i, t in enumerate(model.cfg.layer_types) if t == "sliding_attention"]
+    before = sum(kv.layers[i].nbytes for i in sliding)
+    for t in range(200):
+        model.forward(torch.tensor([[3 + t % 509]]), kv)
+    assert sum(kv.layers[i].nbytes for i in sliding) == before
+    assert kv.layers[sliding[0]].k.dtype == torch.bfloat16
