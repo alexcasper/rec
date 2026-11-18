@@ -7,9 +7,10 @@ ROCm (or any torch device). Semantics follow the MLX checkpoint exactly:
   word at bits [bits*j, bits*(j+1)), dequant = q*scale + bias). Weights stay
   packed in device memory and are dequantized inside the matmul.
 - INT8 embeddings, dequantized per gathered row.
-- bf16 KV cache (k is stored after q/k RMSNorm and NeoX RoPE).
+- bf16 KV cache (k is stored after q/k RMSNorm and NeoX RoPE); full layers
+  grow, sliding layers use a 513-slot ring (slot = pos % window).
 - Attention sinks (``softmax_offset``) appended as an extra softmax column.
-- Sliding-window layers mask keys older than ``sliding_window - 1``.
+- Sliding-window layers attend to positions within ``sliding_window - 1``.
 - MoE: sigmoid router with additive expert bias for top-k selection, gate
   weights from the unbiased sigmoid, renormalised; plus a shared expert.
 
@@ -172,6 +173,55 @@ def rope_neox(x: torch.Tensor, offset: int, theta: float) -> torch.Tensor:
     return torch.cat([x1 * c - x2 * s, x1 * s + x2 * c], dim=-1)
 
 
+class SlidingKV:
+    """Fixed 513-slot ring for one sliding-window layer (rec-1h9).
+
+    Matches the layout contract (docs/rocm-model-layer.md s4) and production
+    ``FixedSlidingKVCache``: K and V ``[B, kv_heads, W, head_dim]``, position
+    ``p`` lives in slot ``p % W``. ``pos[slot]`` is the absolute position held
+    (-1 = empty), so attention masks come from slot positions, not slot order.
+    """
+
+    def __init__(self, B: int, heads: int, window: int, head_dim: int, dtype, device):
+        self.window = window
+        self.k = torch.zeros(B, heads, window, head_dim, dtype=dtype, device=device)
+        self.v = torch.zeros_like(self.k)
+        self.pos = torch.full((window,), -1, dtype=torch.long, device=device)
+
+    def write(self, k: torch.Tensor, v: torch.Tensor, qpos: torch.Tensor) -> None:
+        """Store the newest min(L, W) positions of a chunk (older ones are out of window)."""
+        n = min(k.shape[2], self.window)
+        slots = qpos[-n:] % self.window
+        self.k[:, :, slots] = k[:, :, -n:].to(self.k.dtype)
+        self.v[:, :, slots] = v[:, :, -n:].to(self.v.dtype)
+        self.pos[slots] = qpos[-n:]
+
+    @property
+    def nbytes(self) -> int:
+        return self.k.nbytes + self.v.nbytes
+
+
+class KVCache:
+    """Per-layer cache: growing ``(k, v)`` on full-attention layers, a
+    :class:`SlidingKV` ring on sliding layers. ``offset`` = tokens consumed."""
+
+    def __init__(self, cfg: Config):
+        self.layers: list = [None] * cfg.layers
+        self.offset = 0
+
+    def __iter__(self):
+        """(k, v) per populated layer (ring buffers for sliding layers)."""
+        for entry in self.layers:
+            if isinstance(entry, SlidingKV):
+                yield entry.k, entry.v
+            elif entry is not None:
+                yield entry
+
+    @property
+    def nbytes(self) -> int:
+        return sum(k.nbytes + v.nbytes for k, v in self)
+
+
 class Model:
     """Flint-shaped decoder on torch. Load with :func:`load_model`."""
 
@@ -193,7 +243,7 @@ class Model:
         u = self._lin(f"{tag}.up_proj", x)
         return self._lin(f"{tag}.down_proj", F.silu(g) * u)
 
-    def _attention(self, x, i, mask, offset, kv):
+    def _attention(self, x, i, qpos, offset, cache):
         cfg = self.cfg
         B, L, _ = x.shape
         p = f"model.layers.{i}.self_attn"
@@ -205,14 +255,34 @@ class Model:
         if i not in cfg.no_rope:
             q = rope_neox(q, offset, cfg.theta)
             k = rope_neox(k, offset, cfg.theta)
-        if kv is not None:
-            if kv[i] is not None:
-                k = torch.cat([kv[i][0], k], dim=2)
-                v = torch.cat([kv[i][1], v], dim=2)
-            kv[i] = (k, v)
+        sliding = cfg.layer_types[i] == "sliding_attention"
+        entry = cache.layers[i] if cache is not None else None
+        if sliding and cache is not None:
+            if entry is None:
+                entry = cache.layers[i] = SlidingKV(B, cfg.kv_heads, cfg.sliding_window, cfg.head_dim,
+                                                    self.dtype, x.device)
+            # keys = ring contents (positions < offset) + this chunk; mask by position.
+            # A fresh ring (offset 0) holds nothing: attend to the chunk only.
+            if offset == 0:
+                kpos, keys, vals = qpos, k, v
+            else:
+                kpos = torch.cat([entry.pos, qpos])
+                keys, vals = torch.cat([entry.k, k], dim=2), torch.cat([entry.v, v], dim=2)
+            entry.write(k, v, qpos)
+        else:
+            if entry is not None:
+                k = torch.cat([entry[0], k], dim=2)
+                v = torch.cat([entry[1], v], dim=2)
+            if cache is not None:
+                cache.layers[i] = (k, v)
+            keys, vals = k, v
+            kpos = torch.arange(keys.shape[2], device=x.device)
+        mask = (kpos[None, :] > qpos[:, None]) | (kpos[None, :] < 0)
+        if sliding:
+            mask = mask | (kpos[None, :] < qpos[:, None] - (cfg.sliding_window - 1))
         rep = cfg.heads // cfg.kv_heads
-        kk = k.repeat_interleave(rep, dim=1)
-        vv = v.repeat_interleave(rep, dim=1)
+        kk = keys.repeat_interleave(rep, dim=1)
+        vv = vals.repeat_interleave(rep, dim=1)
         scores = (q.float() @ kk.float().transpose(-1, -2)) / math.sqrt(cfg.head_dim)
         scores = scores.masked_fill(mask, float("-inf"))
         sinks = self.t[f"{p}.softmax_offset"].float().view(1, -1, 1, 1).expand(B, cfg.heads, L, 1)
@@ -252,36 +322,27 @@ class Model:
         return out + self._mlp(x, f"{pre}.shared_expert")
 
     # -- public ------------------------------------------------------------
-    def forward(self, ids: torch.Tensor, kv: list | None = None) -> torch.Tensor:
-        """ids: [B, L] int64 on device. ``kv`` (list of per-layer (k, v) or None)
-        is updated in place for incremental decode. Returns fp32 logits [B, L, V]."""
+    def forward(self, ids: torch.Tensor, kv: KVCache | None = None) -> torch.Tensor:
+        """ids: [B, L] int64 on device. ``kv`` (from :meth:`new_cache`) is
+        updated in place for incremental decode. Returns fp32 logits [B, L, V]."""
         cfg = self.cfg
         B, L = ids.shape
-        offset = kv[0][0].shape[2] if kv is not None and kv[0] is not None else 0
-        T = offset + L
-        qpos = torch.arange(offset, T, device=ids.device)
-        kpos = torch.arange(T, device=ids.device)
-        causal = kpos[None, :] > qpos[:, None]
-        sliding = causal | (kpos[None, :] < qpos[:, None] - (cfg.sliding_window - 1))
-        masks = {"full_attention": causal, "sliding_attention": sliding}
-
+        offset = kv.offset if kv is not None else 0
+        qpos = torch.arange(offset, offset + L, device=ids.device)
         h = self.embed.rows(ids, self.dtype)
-        if kv is None:
-            kv_local: list = [None] * cfg.layers
-        else:
-            kv_local = kv
         for i in range(cfg.layers):
-            mask = masks[cfg.layer_types[i]]
             a = self._attention(rms_norm(h, self.t[f"model.layers.{i}.input_layernorm.weight"], cfg.eps),
-                                i, mask, offset, kv_local)
+                                i, qpos, offset, kv)
             h = h + a
             x = rms_norm(h, self.t[f"model.layers.{i}.post_attention_layernorm.weight"], cfg.eps)
             h = h + (self._mlp(x, f"model.layers.{i}.mlp") if i in cfg.dense_layers else self._moe(x, i))
+        if kv is not None:
+            kv.offset += L
         h = rms_norm(h, self.t["model.norm.weight"], cfg.eps)
         return F.linear(h, self.q["lm_head"].dense(self.dtype)).float()
 
-    def new_cache(self) -> list:
-        return [None] * self.cfg.layers
+    def new_cache(self) -> KVCache:
+        return KVCache(self.cfg)
 
 
 def load_model(ckpt: Path, device: str = "cpu", dtype: torch.dtype = torch.bfloat16) -> Model:

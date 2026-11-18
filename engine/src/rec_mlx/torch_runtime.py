@@ -64,15 +64,6 @@ def resolve_dtype(requested: str | None = None) -> torch.dtype:
     return _DTYPES[name]
 
 
-class _KVBytes:
-    def __init__(self, kv):
-        self._kv = kv
-
-    @property
-    def nbytes(self):
-        return sum(k.nbytes + v.nbytes for k, v in (e for e in self._kv if e is not None))
-
-
 def _to_mx(logits: torch.Tensor) -> mx.array:
     """[1, 1, V] fp32 torch logits -> mx.array (host copy; V floats per step)."""
     return mx.array(np.ascontiguousarray(logits.detach().float().cpu().numpy()))
@@ -99,7 +90,7 @@ class TorchSession:
         ids = torch.tensor([tokens], dtype=torch.long, device=model.device)
         logits = model.forward(ids, self._kv)[:, -1:]
         self._state = {
-            "kv": _KVBytes(self._kv),
+            "kv": self._kv,  # KVCache exposes .nbytes
             "capacity": limit,
             "limit": limit,
             "growth_count": 0,
