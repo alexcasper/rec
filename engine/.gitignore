@@ -6,3 +6,4 @@ dist/
 output/
 download-plan.json
 *.so
+native/megakernel_hip/*.npz
