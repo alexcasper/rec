@@ -61,6 +61,19 @@ weight dtype, kv dtype, context used, host RAM, any HSA/arch overrides.
   decode at this model size, so the discrete-GPU bandwidth advantage is
   masked until the fused decode path exists.)
 
+## Reference numbers (albion, Instinct MI50 gfx906 CDNA1, 2026-11-18)
+
+- Stack: torch **2.9.1+rocm6.3** (pip, rocm6.3 index) — **the only wheel line
+  that still ships gfx906 kernels** (rocm6.4 and rocm7.0 wheels dropped it;
+  TheRock gfx906 nightlies expired; do NOT attempt to mix the rocm7.0 stack
+  with /opt/rocm 7.2.3 libs — RTLD_NOW makes every ABI mismatch fatal).
+  Device cuda:1 (select with CUDA_VISIBLE_DEVICES=1).
+- tiny-2L: conformance PASS (2e-6); prefill512 85,737 tok/s; decode32
+  878.8 tok/s.
+- mid-8L: prefill512 **2,000.4 tok/s**; decode32 **12.2 tok/s**; peak 3.31 GiB.
+  MI50 is the slowest AMD arm (CDNA1, pre-bf16-era); useful as an
+  other-architecture reference, not a speed target.
+
 Scripts: `engine/.build/torch_conformance.py` (conformance + tiny bench),
 `engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0).
 AUP arm: replicate the mid-8L shapes exactly; report both configs if compute
