@@ -46,6 +46,21 @@ weight dtype, kv dtype, context used, host RAM, any HSA/arch overrides.
 - Incumbent on the same GPU (flint llama.cpp, Vulkan/RADV, Q3_K_XL, 131k ctx):
   decode ≈ 28.5 tok/s (cumulative), prefill gauge ≈ 404 tok/s.
 
+## Reference numbers (albion, Radeon AI PRO R9700 gfx1201 RDNA4, 2026-11-17)
+
+- Stack: NixOS, HIP 7.2.53211 (nix toolchain), torch 2.10.0+rocm7.0
+  (pip, rocm7.0 index) — **no HSA override needed**, RDNA4 natively supported.
+  NixOS LD_LIBRARY_PATH fix same pattern as dusk (gcc-11.5.0-lib, zstd, zlib).
+  SSH: `albion@albion` (user albion; dawn/uther do not work). Connections
+  rate-limit after bursts — use ControlMaster multiplexing.
+- Three GPUs visible: 0 = R9700 (gfx1201, 32 GB), 1 = MI50 (gfx906, 32 GB),
+  2 = Raphael iGPU (gfx1103, 23 GiB GTT). Benchmarks target cuda:0 (R9700).
+- tiny-2L: prefill512 132,474 tok/s; decode32 985.6 tok/s; peak 0.04 GiB.
+- mid-8L: prefill512 **13,126.7 tok/s**; decode32 **58.7 tok/s**; peak 3.31 GiB.
+  (5.3× dusk prefill; decode only 1.6× — eager per-op dispatch dominates
+  decode at this model size, so the discrete-GPU bandwidth advantage is
+  masked until the fused decode path exists.)
+
 Scripts: `engine/.build/torch_conformance.py` (conformance + tiny bench),
 `engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0).
 AUP arm: replicate the mid-8L shapes exactly; report both configs if compute
