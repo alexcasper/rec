@@ -106,8 +106,14 @@ implements it (`router_substitution` in `mid_mk_check.py`). It is the
 **interim** gate. The long-term fix is exact routing teacher-forcing from
 kernel-emitted `step_experts` (Gemini lane). **ROUTER_TIE_TOL = 2.5e-4 is
 PROVISIONAL.** Recalibrating it across cases and seeds is the required bead
-rec-tan.3. The calibration results and a recommendation are in section 4b;
-the threshold change awaits the coordinator.
+rec-tan.3. The stand-in calibration is in section 4b. The kernel calibration
+(section 4c) confirms 2.5e-4 and proposes a declared-routing count rule.
+
+**Preferred path.** If the kernel output carries `step_experts`, the checker
+takes its routing deviations from the kernel's declared routing and searches
+nothing (`router_path: "step_experts"`). It applies the all-declared rule
+(section 4c, adopted under rec-tan.4). The single-swap search below is the
+fallback for outputs without `step_experts`.
 
 **Why it is needed.** The near-tie rule in section 4 (fp32 margin ≤ 5e-3)
 covers only the output-token argmax. The other discrete decision in the
@@ -234,9 +240,9 @@ orders of magnitude smaller, with no flips, so it needs no allowance.
   boundary with a gap in (2.5e-4, 2.9e-4] and be falsely failed.
 - No boundary moved by more than 5e-4.
 
-**Recommendation (coordinator decision; 2.5e-4 stays in force until then).**
-Raise ROUTER_TIE_TOL to **5e-4**, about 1.7× the largest observed |Δgap|,
-with zero boundaries over it. The rule's safety does not rest on the
+**Recommendation: superseded by section 4c.** This section originally
+suggested 5e-4, from the stand-in's tail. Kernel data confirms 2.5e-4, so
+that suggestion is withdrawn. The rule's safety does not rest on the
 threshold: a swap counts only if the full unchanged criteria then pass, and
 the fp32 tier has no allowance.
 
@@ -244,6 +250,87 @@ the fp32 tier has no allowance.
 reduces in a different order. Once the kernel emits `step_experts`, measure
 the kernel's own |Δgap| (or switch to exact routing teacher-forcing) and
 re-check the threshold.
+
+### 4c. Kernel routing calibration from `step_experts` (rec-tan.3, 2026-11-19)
+
+**Setup.**
+- **Kernel:** Gemini 4c1cb9a, `flint_mid.so` on dusk, workers 16.
+  `router_kernel_emit.py` runs it torch-free and writes `step_experts` for the
+  same 3 cases and 10 seeds as section 4b, in both validation builds
+  (fp32-KV mode 2 and fp32-compute/bf16-KV mode 1). Each run decodes 24
+  tokens.
+- **Analysis:** `router_kernel_analyze.py` forces the reference to the
+  kernel's routing everywhere (`Reference.run(force=…)`). It then compares the
+  kernel's expert set with the reference's own top-k at every MoE
+  (layer, position). Upstream routing is identical by construction, so each
+  deviation is a clean boundary crossing, not a downstream consequence of
+  another one.
+- **Limitation:** the kernel emits expert ids, not scores, so its |Δgap| (the
+  section 4b quantity) cannot be measured. The table bins the reference gap at
+  every boundary and counts how many of those the kernel crossed.
+- Results: `results-rec-tan3-kernel-calibration.json`.
+
+| tier | boundaries | crossings | non-k/(k+1) | crossing gap median / max | < 1e-5 | 1e-5–5e-5 | 5e-5–1e-4 | 1e-4–2.5e-4 | 2.5e-4–5e-4 | 5e-4–1e-3 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| bf16-KV | 24,871 | 22 | 0 | 1.4e-5 / **9.5e-5** | 3 / 19 | 17 / 70 | 2 / 76 | **0 / 233** | **0 / 349** | 0 / 673 |
+| fp32-KV | 24,871 | **0** | 0 | — | 0 / 22 | 0 / 65 | 0 / 98 | 0 / 214 | 0 / 334 | 0 / 680 |
+
+Bin columns are crossings / boundaries in that gap bin. No boundary with a
+gap above 1e-3 was crossed in either tier.
+
+| tier | runs failing stock | runs failing adopted rule (≤ 1 deviation) | runs failing proposed rule (below) | reference forced to kernel routing: step / last rel max, tokens |
+|---|---|---|---|---|
+| bf16-KV | 6 / 13 | **5 / 13** (seed2, 4, 5, 6, 10: 2–5 deviations each) | **0 / 13** | 6.87e-4 / 5.63e-4, all exact |
+| fp32-KV | 0 / 13 | 0 / 13 | 0 / 13 | 3.80e-6 / 3.02e-6, all exact |
+
+The 3 sign-off cases pass the formal `check` in both tiers under the adopted
+rule. Section 6's chat swap reappears here as the kernel's only chat
+deviation (L2 pos 19, gap 4.1e-5). `wrap512` bf16-KV has 3 harmless
+deviations and passes stock.
+
+**Threshold: 2.5e-4 CONFIRMED from kernel data.**
+- The kernel's crossings stop at 9.5e-5, a 2.6× margin under 2.5e-4.
+- None of the 582 boundaries with gaps in 1e-4 to 5e-4 was crossed.
+- The crossing rate is 16–24% below 5e-5, 2.6% in 5e-5 to 1e-4, and 0 above.
+- The section 4b suggestion of 5e-4 is **withdrawn**. It came from the
+  stand-in's |Δgap| tail, which is a different implementation; the kernel's
+  crossings are the direct evidence.
+
+**ADOPTED 2026-11-19 (rec-tan.4): the count limit was the real problem.**
+- On the adopted rule's count limit, a correct kernel fails 5 of 13 bf16-KV
+  prompts. Each of those has 2–5 genuine near-tie crossings, all at gaps
+  ≤ 9.5e-5, and with the kernel's routing forced each one sits inside the
+  tier.
+- The single-swap limit was written for **search**, where every extra swap
+  is another free hypothesis. When the kernel **declares** its routing,
+  nothing is searched, and each declared deviation can be checked
+  individually.
+
+Rule in force for the `step_experts` path (`ROUTER_EXPERTS_POLICY =
+"all-declared"`, the default since rec-tan.4; `"single"` stays selectable for
+comparison only):
+
+> **Declared-routing rule (when `step_experts` is present).**
+>
+> - **bf16-KV tier:** every (layer, position) where the kernel's experts
+>   differ from the reference's own top-k must satisfy both of:
+>   (1) it is a k-th/(k+1)-th exchange;
+>   (2) its gap is ≤ ROUTER_TIE_TOL.
+>   Deviations are measured on the reference forced to the kernel's routing.
+>   The run then PASSES only if the full unchanged section-4 criteria hold
+>   against that forced reference.
+> - **fp32-KV tier:** any declared deviation is a FAIL, even if the stock
+>   check passes. This tightens the adopted rule; the kernel showed 0 of
+>   24,871.
+> - Without `step_experts`, the adopted single-swap search rule applies
+>   unchanged.
+
+The safety argument is the same as before:
+- deviations are possible only at genuine near-ties (gap ≤ 2.5e-4, about
+  1.6% of boundaries);
+- misreported routing cannot pass, because the forced reference must still
+  reproduce the kernel's logits (tested);
+- the fp32 tier is stricter than before.
 
 ## 5. Commands (dusk)
 

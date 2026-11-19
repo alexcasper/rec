@@ -1,0 +1,1390 @@
+{
+ "ckpt_sha256": "f494e7885d10bdedf5d885faef826a27fdbe4bfb1fb11781fac12c7cabbd92ad",
+ "bins": [
+  0.0,
+  1e-05,
+  5e-05,
+  0.0001,
+  0.00025,
+  0.0005,
+  0.001,
+  "inf"
+ ],
+ "router_tie_tol": 0.00025,
+ "runs": [
+  {
+   "file": "chat_fp32_bf16kv.npz",
+   "prompt": "chat",
+   "tier": "bf16",
+   "P": 5,
+   "boundaries": 203,
+   "deviations": [
+    {
+     "layer": 2,
+     "pos": 19,
+     "gap": 4.100799560546875e-05,
+     "kth": 12,
+     "next": 7,
+     "kernel": [
+      7,
+      22
+     ],
+     "ref": [
+      12,
+      22
+     ],
+     "k_k1_exchange": true
+    }
+   ],
+   "n_dev": 1,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    2,
+    1,
+    6,
+    0,
+    11,
+    183
+   ],
+   "hist_dev": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": false,
+   "stock_problems": [
+    "1 token(s) differ from the fp32 reference beyond the near-tie margin",
+    "last_logits rel err 1.368e-02 > 0.001 (bf16-KV tier)",
+    "step_logits max rel err 2.036e-01 > 0.001 (bf16-KV tier)"
+   ],
+   "gate_pass": true,
+   "gate_pass_check": true,
+   "router": {
+    "kind": "router",
+    "source": "step_experts",
+    "layer": 2,
+    "pos": 19,
+    "drop": 12,
+    "add": 7,
+    "step": 15,
+    "gap": 4.100799560546875e-05
+   },
+   "note": null,
+   "forced_step_rel": 0.0006873679302135767,
+   "forced_last_rel": 0.0004169627677471932,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.20360912839650663
+  },
+  {
+   "file": "chat_fp32kv.npz",
+   "prompt": "chat",
+   "tier": "fp32",
+   "P": 5,
+   "boundaries": 203,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    0,
+    3,
+    4,
+    1,
+    11,
+    184
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": true,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.591743286673778e-06,
+   "forced_last_rel": 3.003596964269031e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.591743286673778e-06
+  },
+  {
+   "file": "seed1-len32_fp32_bf16kv.npz",
+   "prompt": "seed1-len32",
+   "tier": "bf16",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    2,
+    1,
+    1,
+    5,
+    6,
+    10,
+    367
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 0.0004023900873891294,
+   "forced_last_rel": 0.0003215759505490899,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.0004023900873891294
+  },
+  {
+   "file": "seed1-len32_fp32kv.npz",
+   "prompt": "seed1-len32",
+   "tier": "fp32",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    2,
+    3,
+    7,
+    6,
+    13,
+    361
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.801386060066822e-06,
+   "forced_last_rel": 2.6749064253869665e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.801386060066822e-06
+  },
+  {
+   "file": "seed10-len512_fp32_bf16kv.npz",
+   "prompt": "seed10-len512",
+   "tier": "bf16",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [
+    {
+     "layer": 2,
+     "pos": 507,
+     "gap": 2.396106719970703e-05,
+     "kth": 11,
+     "next": 3,
+     "kernel": [
+      0,
+      3
+     ],
+     "ref": [
+      0,
+      11
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 4,
+     "pos": 311,
+     "gap": 4.7326087951660156e-05,
+     "kth": 14,
+     "next": 12,
+     "kernel": [
+      12,
+      22
+     ],
+     "ref": [
+      14,
+      22
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 6,
+     "pos": 25,
+     "gap": 1.1563301086425781e-05,
+     "kth": 2,
+     "next": 7,
+     "kernel": [
+      6,
+      7
+     ],
+     "ref": [
+      2,
+      6
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 7,
+     "pos": 0,
+     "gap": 1.4185905456542969e-05,
+     "kth": 3,
+     "next": 19,
+     "kernel": [
+      16,
+      19
+     ],
+     "ref": [
+      3,
+      16
+     ],
+     "k_k1_exchange": true
+    }
+   ],
+   "n_dev": 4,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    1,
+    5,
+    7,
+    25,
+    41,
+    67,
+    3606
+   ],
+   "hist_dev": [
+    0,
+    4,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": false,
+   "stock_problems": [
+    "step_logits max rel err 1.147e-03 > 0.001 (bf16-KV tier)"
+   ],
+   "gate_pass": false,
+   "gate_pass_check": null,
+   "router": null,
+   "note": "4 routing deviations at or before the first failing row",
+   "forced_step_rel": 0.0002656800580658607,
+   "forced_last_rel": 0.00024074812737844744,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.0011468179165134427
+  },
+  {
+   "file": "seed10-len512_fp32kv.npz",
+   "prompt": "seed10-len512",
+   "tier": "fp32",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    5,
+    6,
+    8,
+    24,
+    38,
+    76,
+    3595
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.204532490754924e-06,
+   "forced_last_rel": 3.022819711995649e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.204532490754924e-06
+  },
+  {
+   "file": "seed2-len512_fp32_bf16kv.npz",
+   "prompt": "seed2-len512",
+   "tier": "bf16",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [
+    {
+     "layer": 1,
+     "pos": 366,
+     "gap": 9.179115295410156e-06,
+     "kth": 4,
+     "next": 25,
+     "kernel": [
+      14,
+      25
+     ],
+     "ref": [
+      4,
+      14
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 2,
+     "pos": 234,
+     "gap": 1.0371208190917969e-05,
+     "kth": 0,
+     "next": 31,
+     "kernel": [
+      26,
+      31
+     ],
+     "ref": [
+      0,
+      26
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 5,
+     "pos": 474,
+     "gap": 3.832578659057617e-05,
+     "kth": 20,
+     "next": 7,
+     "kernel": [
+      7,
+      9
+     ],
+     "ref": [
+      9,
+      20
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 7,
+     "pos": 0,
+     "gap": 1.329183578491211e-05,
+     "kth": 3,
+     "next": 19,
+     "kernel": [
+      16,
+      19
+     ],
+     "ref": [
+      3,
+      16
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 7,
+     "pos": 232,
+     "gap": 6.401538848876953e-05,
+     "kth": 18,
+     "next": 24,
+     "kernel": [
+      14,
+      24
+     ],
+     "ref": [
+      14,
+      18
+     ],
+     "k_k1_exchange": true
+    }
+   ],
+   "n_dev": 5,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    3,
+    13,
+    10,
+    38,
+    49,
+    121,
+    3518
+   ],
+   "hist_dev": [
+    1,
+    3,
+    1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": false,
+   "stock_problems": [
+    "last_logits rel err 1.434e-03 > 0.001 (bf16-KV tier)",
+    "step_logits max rel err 8.790e-02 > 0.001 (bf16-KV tier)"
+   ],
+   "gate_pass": false,
+   "gate_pass_check": null,
+   "router": null,
+   "note": "5 routing deviations at or before the first failing row",
+   "forced_step_rel": 0.000281413255033296,
+   "forced_last_rel": 0.0002536639318675317,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.08789990390160966
+  },
+  {
+   "file": "seed2-len512_fp32kv.npz",
+   "prompt": "seed2-len512",
+   "tier": "fp32",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    4,
+    12,
+    11,
+    32,
+    66,
+    109,
+    3518
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.019985089387051e-06,
+   "forced_last_rel": 2.7283979313814962e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.019985089387051e-06
+  },
+  {
+   "file": "seed3-len32_fp32_bf16kv.npz",
+   "prompt": "seed3-len32",
+   "tier": "bf16",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    10,
+    372
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 0.00048219968479338237,
+   "forced_last_rel": 0.00036440240734315037,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.00048219968479338237
+  },
+  {
+   "file": "seed3-len32_fp32kv.npz",
+   "prompt": "seed3-len32",
+   "tier": "fp32",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    1,
+    2,
+    2,
+    4,
+    10,
+    373
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.2323806968689546e-06,
+   "forced_last_rel": 2.4269785010443376e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.2323806968689546e-06
+  },
+  {
+   "file": "seed4-len512_fp32_bf16kv.npz",
+   "prompt": "seed4-len512",
+   "tier": "bf16",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [
+    {
+     "layer": 3,
+     "pos": 467,
+     "gap": 5.602836608886719e-06,
+     "kth": 20,
+     "next": 6,
+     "kernel": [
+      5,
+      6
+     ],
+     "ref": [
+      5,
+      20
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 7,
+     "pos": 0,
+     "gap": 1.430511474609375e-05,
+     "kth": 3,
+     "next": 19,
+     "kernel": [
+      16,
+      19
+     ],
+     "ref": [
+      3,
+      16
+     ],
+     "k_k1_exchange": true
+    }
+   ],
+   "n_dev": 2,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    7,
+    17,
+    16,
+    52,
+    84,
+    132,
+    3444
+   ],
+   "hist_dev": [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": false,
+   "stock_problems": [
+    "last_logits rel err 9.562e-02 > 0.001 (bf16-KV tier)"
+   ],
+   "gate_pass": false,
+   "gate_pass_check": null,
+   "router": null,
+   "note": "2 routing deviations at or before the first failing row",
+   "forced_step_rel": 0.0002537566747256951,
+   "forced_last_rel": 0.0001882375930059439,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.0008485472319788965
+  },
+  {
+   "file": "seed4-len512_fp32kv.npz",
+   "prompt": "seed4-len512",
+   "tier": "fp32",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    6,
+    15,
+    22,
+    53,
+    76,
+    141,
+    3439
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.3437585059011476e-06,
+   "forced_last_rel": 2.9392715938795016e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.3437585059011476e-06
+  },
+  {
+   "file": "seed5-len32_fp32_bf16kv.npz",
+   "prompt": "seed5-len32",
+   "tier": "bf16",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [
+    {
+     "layer": 2,
+     "pos": 28,
+     "gap": 2.6226043701171875e-06,
+     "kth": 6,
+     "next": 8,
+     "kernel": [
+      4,
+      8
+     ],
+     "ref": [
+      4,
+      6
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 4,
+     "pos": 9,
+     "gap": 9.512901306152344e-05,
+     "kth": 26,
+     "next": 14,
+     "kernel": [
+      9,
+      14
+     ],
+     "ref": [
+      9,
+      26
+     ],
+     "k_k1_exchange": true
+    }
+   ],
+   "n_dev": 2,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    1,
+    2,
+    3,
+    3,
+    4,
+    8,
+    371
+   ],
+   "hist_dev": [
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": false,
+   "stock_problems": [
+    "last_logits rel err 7.705e-03 > 0.001 (bf16-KV tier)",
+    "step_logits max rel err 1.582e-01 > 0.001 (bf16-KV tier)"
+   ],
+   "gate_pass": false,
+   "gate_pass_check": null,
+   "router": null,
+   "note": "2 routing deviations at or before the first failing row",
+   "forced_step_rel": 0.0006298778478022312,
+   "forced_last_rel": 0.0005630004048564525,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.15817242594761396
+  },
+  {
+   "file": "seed5-len32_fp32kv.npz",
+   "prompt": "seed5-len32",
+   "tier": "fp32",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    0,
+    1,
+    3,
+    5,
+    12,
+    371
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.703576890033395e-06,
+   "forced_last_rel": 2.505790816050473e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.703576890033395e-06
+  },
+  {
+   "file": "seed6-len512_fp32_bf16kv.npz",
+   "prompt": "seed6-len512",
+   "tier": "bf16",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [
+    {
+     "layer": 1,
+     "pos": 144,
+     "gap": 1.2278556823730469e-05,
+     "kth": 7,
+     "next": 31,
+     "kernel": [
+      17,
+      31
+     ],
+     "ref": [
+      7,
+      17
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 1,
+     "pos": 180,
+     "gap": 1.2099742889404297e-05,
+     "kth": 21,
+     "next": 4,
+     "kernel": [
+      4,
+      7
+     ],
+     "ref": [
+      7,
+      21
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 7,
+     "pos": 0,
+     "gap": 2.9325485229492188e-05,
+     "kth": 3,
+     "next": 19,
+     "kernel": [
+      16,
+      19
+     ],
+     "ref": [
+      3,
+      16
+     ],
+     "k_k1_exchange": true
+    }
+   ],
+   "n_dev": 3,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    1,
+    11,
+    8,
+    19,
+    54,
+    80,
+    3579
+   ],
+   "hist_dev": [
+    0,
+    3,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": false,
+   "stock_problems": [
+    "last_logits rel err 2.994e-03 > 0.001 (bf16-KV tier)",
+    "step_logits max rel err 3.513e-03 > 0.001 (bf16-KV tier)"
+   ],
+   "gate_pass": false,
+   "gate_pass_check": null,
+   "router": null,
+   "note": "3 routing deviations at or before the first failing row",
+   "forced_step_rel": 0.00024942304212327197,
+   "forced_last_rel": 0.00018264750241234244,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.0035131179397450574
+  },
+  {
+   "file": "seed6-len512_fp32kv.npz",
+   "prompt": "seed6-len512",
+   "tier": "fp32",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    5,
+    8,
+    13,
+    20,
+    39,
+    79,
+    3588
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.7600476564622463e-06,
+   "forced_last_rel": 3.0120501319185987e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.7600476564622463e-06
+  },
+  {
+   "file": "seed7-len32_fp32_bf16kv.npz",
+   "prompt": "seed7-len32",
+   "tier": "bf16",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    0,
+    1,
+    2,
+    9,
+    13,
+    367
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 0.0005075358233173291,
+   "forced_last_rel": 0.0003699348551377255,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.0005075358233173291
+  },
+  {
+   "file": "seed7-len32_fp32kv.npz",
+   "prompt": "seed7-len32",
+   "tier": "fp32",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    0,
+    2,
+    2,
+    5,
+    14,
+    369
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.5456381875808796e-06,
+   "forced_last_rel": 2.55041789052568e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.5456381875808796e-06
+  },
+  {
+   "file": "seed8-len512_fp32_bf16kv.npz",
+   "prompt": "seed8-len512",
+   "tier": "bf16",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [
+    {
+     "layer": 3,
+     "pos": 135,
+     "gap": 3.8743019104003906e-05,
+     "kth": 2,
+     "next": 25,
+     "kernel": [
+      8,
+      25
+     ],
+     "ref": [
+      2,
+      8
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 7,
+     "pos": 0,
+     "gap": 1.430511474609375e-05,
+     "kth": 3,
+     "next": 19,
+     "kernel": [
+      16,
+      19
+     ],
+     "ref": [
+      3,
+      16
+     ],
+     "k_k1_exchange": true
+    }
+   ],
+   "n_dev": 2,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    2,
+    5,
+    13,
+    32,
+    47,
+    106,
+    3547
+   ],
+   "hist_dev": [
+    0,
+    2,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 0.00025109564177512806,
+   "forced_last_rel": 0.0002071655398882424,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.0006946851035318844
+  },
+  {
+   "file": "seed8-len512_fp32kv.npz",
+   "prompt": "seed8-len512",
+   "tier": "fp32",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    12,
+    17,
+    25,
+    43,
+    106,
+    3549
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.5306859269506966e-06,
+   "forced_last_rel": 2.906279709621544e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.5306859269506966e-06
+  },
+  {
+   "file": "seed9-len32_fp32_bf16kv.npz",
+   "prompt": "seed9-len32",
+   "tier": "bf16",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    0,
+    2,
+    3,
+    7,
+    8,
+    372
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 0.0005639951958970364,
+   "forced_last_rel": 0.0004438374284798918,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.0005639951958970364
+  },
+  {
+   "file": "seed9-len32_fp32kv.npz",
+   "prompt": "seed9-len32",
+   "tier": "fp32",
+   "P": 32,
+   "boundaries": 392,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    2,
+    1,
+    5,
+    5,
+    7,
+    372
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": null,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.1199200846651767e-06,
+   "forced_last_rel": 2.732724590464926e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.1199200846651767e-06
+  },
+  {
+   "file": "short4_fp32_bf16kv.npz",
+   "prompt": "short4",
+   "tier": "bf16",
+   "P": 4,
+   "boundaries": 196,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    0,
+    0,
+    1,
+    0,
+    6,
+    189
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": true,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 0.0006215062210856609,
+   "forced_last_rel": 0.00043548986838099196,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.0006215062210856609
+  },
+  {
+   "file": "short4_fp32kv.npz",
+   "prompt": "short4",
+   "tier": "fp32",
+   "P": 4,
+   "boundaries": 196,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    0,
+    0,
+    1,
+    0,
+    3,
+    5,
+    187
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": true,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.6492082248516746e-06,
+   "forced_last_rel": 2.6938525476706393e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.6492082248516746e-06
+  },
+  {
+   "file": "wrap512_fp32_bf16kv.npz",
+   "prompt": "wrap512",
+   "tier": "bf16",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [
+    {
+     "layer": 4,
+     "pos": 44,
+     "gap": 1.4424324035644531e-05,
+     "kth": 17,
+     "next": 19,
+     "kernel": [
+      0,
+      19
+     ],
+     "ref": [
+      0,
+      17
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 4,
+     "pos": 291,
+     "gap": 1.1265277862548828e-05,
+     "kth": 9,
+     "next": 17,
+     "kernel": [
+      2,
+      17
+     ],
+     "ref": [
+      2,
+      9
+     ],
+     "k_k1_exchange": true
+    },
+    {
+     "layer": 7,
+     "pos": 0,
+     "gap": 1.4185905456542969e-05,
+     "kth": 3,
+     "next": 19,
+     "kernel": [
+      16,
+      19
+     ],
+     "ref": [
+      3,
+      16
+     ],
+     "k_k1_exchange": true
+    }
+   ],
+   "n_dev": 3,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    2,
+    13,
+    12,
+    44,
+    44,
+    101,
+    3536
+   ],
+   "hist_dev": [
+    0,
+    3,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": true,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 0.0002746132704134438,
+   "forced_last_rel": 0.00023754486430523157,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 0.0007868576698155096
+  },
+  {
+   "file": "wrap512_fp32kv.npz",
+   "prompt": "wrap512",
+   "tier": "fp32",
+   "P": 512,
+   "boundaries": 3752,
+   "deviations": [],
+   "n_dev": 0,
+   "n_dev_not_k_k1": 0,
+   "hist_all": [
+    2,
+    7,
+    14,
+    37,
+    43,
+    97,
+    3552
+   ],
+   "hist_dev": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "stock_pass": true,
+   "stock_problems": [],
+   "gate_pass": true,
+   "gate_pass_check": true,
+   "router": null,
+   "note": null,
+   "forced_step_rel": 3.1877142940934205e-06,
+   "forced_last_rel": 2.606368090562368e-06,
+   "forced_tokens_ok": true,
+   "stock_step_rel": 3.1877142940934205e-06
+  }
+ ]
+}

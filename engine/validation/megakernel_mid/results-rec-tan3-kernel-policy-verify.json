@@ -1,0 +1,144 @@
+[
+ {
+  "file": "chat_fp32_bf16kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS",
+  "check_single": "PASS",
+  "check_all-declared": "PASS"
+ },
+ {
+  "file": "chat_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS",
+  "check_single": "PASS",
+  "check_all-declared": "PASS"
+ },
+ {
+  "file": "seed1-len32_fp32_bf16kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed1-len32_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed10-len512_fp32_bf16kv.npz",
+  "single": "FAIL",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed10-len512_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed2-len512_fp32_bf16kv.npz",
+  "single": "FAIL",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed2-len512_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed3-len32_fp32_bf16kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed3-len32_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed4-len512_fp32_bf16kv.npz",
+  "single": "FAIL",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed4-len512_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed5-len32_fp32_bf16kv.npz",
+  "single": "FAIL",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed5-len32_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed6-len512_fp32_bf16kv.npz",
+  "single": "FAIL",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed6-len512_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed7-len32_fp32_bf16kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed7-len32_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed8-len512_fp32_bf16kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed8-len512_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed9-len32_fp32_bf16kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "seed9-len32_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS"
+ },
+ {
+  "file": "short4_fp32_bf16kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS",
+  "check_single": "PASS",
+  "check_all-declared": "PASS"
+ },
+ {
+  "file": "short4_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS",
+  "check_single": "PASS",
+  "check_all-declared": "PASS"
+ },
+ {
+  "file": "wrap512_fp32_bf16kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS",
+  "check_single": "PASS",
+  "check_all-declared": "PASS"
+ },
+ {
+  "file": "wrap512_fp32kv.npz",
+  "single": "PASS",
+  "all-declared": "PASS",
+  "check_single": "PASS",
+  "check_all-declared": "PASS"
+ }
+]

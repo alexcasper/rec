@@ -80,19 +80,26 @@ def test_case_prompts_valid_for_any_vocab():
 
 
 # ---------------------------------------------------------------- router near-tie rule (README 4a)
-def _forced_kernel(ckpt, out, kv, swaps, case="short4"):
+def _forced_kernel(ckpt, out, kv, swaps, case="short4", experts=False, report_swaps=None):
     """A 'kernel' that is the exact reference except for the given routing swaps:
-    greedy decode with the swaps applied, written as rec-mk-out/1."""
+    greedy decode with the swaps applied, written as rec-mk-out/1. experts=True adds
+    step_experts (the routing actually used, or that of `report_swaps` to model a
+    kernel that misreports its routing)."""
     ref = H.Reference(ckpt, "cpu", kv)
     prompt = H.case_matrix(H.vocab_of(ckpt))[case]["prompt"]
     tokens = []
     for _ in range(H.N_OUT):
         tokens.append(int(ref.run(prompt, tokens, swaps)[0][-1].argmax()))
     logits, _ = ref.run(prompt, tokens, swaps)
+    extra = {}
+    if experts:
+        if report_swaps is not None:
+            ref.run(prompt, tokens, report_swaps)
+        extra["step_experts"] = ref.used.copy()
     np.savez(out, schema=np.array(H.SCHEMA), case=np.array(case), ckpt_sha256=np.array(H.shard_sha256(ckpt)),
              impl=np.array(f"forced-routing {swaps}"), kv_dtype=np.array(kv),
              prompt=np.array(prompt, np.int32), tokens=np.array(tokens, np.int32),
-             last_logits=logits[-1], step_logits=logits[:-1])
+             last_logits=logits[-1], step_logits=logits[:-1], **extra)
     return out
 
 
@@ -181,3 +188,126 @@ def test_matrix_requires_both_kv_tiers_per_case(prod_ckpt, tmp_path):
     for case in H.case_matrix(H.vocab_of(prod_ckpt)):
         H.produce(prod_ckpt, case, d / f"{case}_bf16kv.npz", "torch-fp32-bf16kv", "cpu")
     assert H.main(["matrix", "--ckpt", str(prod_ckpt), str(d), "--ref-device", "cpu"]) == 0
+
+
+# ---------------------------------------------------------------- step_experts path (preferred)
+def test_step_experts_exact_reference_passes_with_no_deviations(prod_ckpt, tmp_path):
+    out = _forced_kernel(prod_ckpt, tmp_path / "exact.npz", "bf16", [], experts=True)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert r["pass"] and r["router_path"] == "step_experts" and r["n_routing_deviations"] == 0
+
+
+def test_step_experts_single_flip_named_by_kernel(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    monkeypatch.setattr(H, "ROUTER_EXPERTS_POLICY", "single")  # superseded policy, still selectable
+    g = router_ties[0]
+    out = _forced_kernel(prod_ckpt, tmp_path / "one_se.npz", "bf16", [_swap(g)], experts=True)
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", g["gap"] * 1.01)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert r["pass"], r
+    rt = r["router_near_tie"]
+    assert rt["source"] == "step_experts" and (rt["layer"], rt["pos"]) == (g["layer"], g["pos"])
+    assert r["n_routing_deviations"] == 1 and r["routing_deviations"][0]["k_k1_exchange"]
+    assert r["router_candidates_tried"] == 0  # nothing searched
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", g["gap"] * 0.99)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and "ROUTER_TIE_TOL" in r["router_note"]
+
+
+def test_step_experts_two_flips_fail(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    monkeypatch.setattr(H, "ROUTER_EXPERTS_POLICY", "single")  # superseded policy, still selectable
+    a, _ = router_ties
+    ref = H.Reference(prod_ckpt, "cpu", "bf16")
+    prompt = H.case_matrix(H.vocab_of(prod_ckpt))["short4"]["prompt"]
+    first = np.load(_forced_kernel(prod_ckpt, tmp_path / "a.npz", "bf16", [_swap(a)]))
+    _, gaps = ref.run(prompt, first["tokens"].tolist(), [_swap(a)])
+    b = min((g for g in gaps if g["pos"] > a["pos"] and g["layer"] == a["layer"]), key=lambda g: g["gap"])
+    out = _forced_kernel(prod_ckpt, tmp_path / "two_se.npz", "bf16", [_swap(a), _swap(b)], experts=True)
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", 1.0)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and r["router_near_tie"] is None and r["n_routing_deviations"] >= 2
+
+    # a kernel that reports only the first swap cannot be rescued by it
+    out = _forced_kernel(prod_ckpt, tmp_path / "lie.npz", "bf16", [_swap(a), _swap(b)], experts=True,
+                         report_swaps=[_swap(a)])
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and r["router_near_tie"] is None
+
+
+def test_step_experts_fp32_tier_gets_no_allowance(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    g = router_ties[0]
+    out = _forced_kernel(prod_ckpt, tmp_path / "fp32_se.npz", "fp32", [_swap(g)], experts=True)
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", 1.0)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and r["router_near_tie"] is None and r["n_routing_deviations"] == 1
+
+
+@pytest.mark.parametrize("bad", ["shape", "dense", "repeat"])
+def test_step_experts_malformed_rejected(prod_ckpt, tmp_path, bad):
+    out = _forced_kernel(prod_ckpt, tmp_path / f"m_{bad}.npz", "bf16", [], experts=True)
+    data = dict(np.load(out))
+    se = data["step_experts"].copy()
+    ref = H.Reference(prod_ckpt, "cpu", "bf16")
+    moe = [i for i in range(ref.model.cfg.layers) if i not in ref.model.cfg.dense_layers]
+    if bad == "shape":
+        se = se[:-1]
+    elif bad == "dense":
+        se[0, sorted(ref.model.cfg.dense_layers)[0], 0] = 0
+    else:
+        se[0, moe[0], 1] = se[0, moe[0], 0]
+    data["step_experts"] = se
+    np.savez(out, **data)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and any("step_experts" in p for p in r["problems"])
+
+
+# ---------------------------------------------------------------- all-declared policy (README 4c, ADOPTED rec-tan.4)
+def _two_flip_kernel(prod_ckpt, tmp_path, router_ties, **kw):
+    a, _ = router_ties
+    ref = H.Reference(prod_ckpt, "cpu", "bf16")
+    prompt = H.case_matrix(H.vocab_of(prod_ckpt))["short4"]["prompt"]
+    first = np.load(_forced_kernel(prod_ckpt, tmp_path / "a2.npz", "bf16", [_swap(a)]))
+    _, gaps = ref.run(prompt, first["tokens"].tolist(), [_swap(a)])
+    b = min((g for g in gaps if g["pos"] > a["pos"] and g["layer"] == a["layer"]), key=lambda g: g["gap"])
+    out = _forced_kernel(prod_ckpt, tmp_path / f"two_{len(kw)}.npz", "bf16", [_swap(a), _swap(b)],
+                         experts=True, **{k: v([_swap(a)]) for k, v in kw.items()})
+    return out, a, b
+
+
+def test_policy_default_is_adopted_all_declared():
+    assert H.ROUTER_EXPERTS_POLICY == "all-declared"  # rec-tan.4, adopted 2026-11-19
+
+
+def test_all_declared_passes_two_genuine_near_ties(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    out, a, b = _two_flip_kernel(prod_ckpt, tmp_path, router_ties)
+    monkeypatch.setattr(H, "ROUTER_EXPERTS_POLICY", "all-declared")
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", 1.0)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert r["pass"], r
+    assert r["router_near_tie"]["policy"] == "all-declared" and r["router_near_tie"]["n"] == 2
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", min(a["gap"], b["gap"]) * 0.99)  # one deviation over tol
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and "exceeds the rule" in r["router_note"]
+
+
+def test_all_declared_misreported_routing_fails(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    out, _, _ = _two_flip_kernel(prod_ckpt, tmp_path, router_ties, report_swaps=lambda x: x)
+    monkeypatch.setattr(H, "ROUTER_EXPERTS_POLICY", "all-declared")
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", 1.0)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and r["router_near_tie"] is None
+
+
+def test_all_declared_fp32_tier_rejects_any_deviation(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    out = _forced_kernel(prod_ckpt, tmp_path / "fp32_all.npz", "fp32", [_swap(router_ties[0])], experts=True)
+    monkeypatch.setattr(H, "ROUTER_EXPERTS_POLICY", "all-declared")
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", 1.0)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and "fp32-KV tier" in r["router_note"]
+
+
+def test_all_declared_exact_kernel_passes(prod_ckpt, tmp_path, monkeypatch):
+    monkeypatch.setattr(H, "ROUTER_EXPERTS_POLICY", "all-declared")
+    for kv in ("bf16", "fp32"):
+        r = H.check(prod_ckpt, _forced_kernel(prod_ckpt, tmp_path / f"ex_{kv}.npz", kv, [], experts=True),
+                    "cpu", verbose=False)
+        assert r["pass"] and r["router_near_tie"] is None and r["n_routing_deviations"] == 0

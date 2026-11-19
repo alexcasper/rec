@@ -1,0 +1,23 @@
+# rec-tan.4 re-check on dusk: mid_mk_check.py default ROUTER_EXPERTS_POLICY=all-declared, ckpt mid-prod f494e788.
+# record   = the 6 formal npz of the 853ed1f run of record (megakernel_hip/pp2_no_exp, no step_experts -> search fallback)
+# with_exp = the same kernel run with --emit-experts (pp2_with_exp; step_logits bit-identical) -> all-declared path
+policy all-declared
+== record
+PASS  chat_fp32_bf16kv.npz               case=chat     ref_kv=bf16 tokens_exact=True ties=1 last_rel=4.17e-04 step_rel=6.87e-04  router-tie L2@pos19 12->7 gap 4.10e-05
+PASS  chat_fp32kv.npz                    case=chat     ref_kv=fp32 tokens_exact=True ties=0 last_rel=3.00e-06 step_rel=3.59e-06  
+PASS  short4_fp32_bf16kv.npz             case=short4   ref_kv=bf16 tokens_exact=True ties=0 last_rel=4.35e-04 step_rel=6.22e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref_kv=fp32 tokens_exact=True ties=0 last_rel=2.69e-06 step_rel=3.65e-06  
+PASS  wrap512_fp32_bf16kv.npz            case=wrap512  ref_kv=bf16 tokens_exact=True ties=0 last_rel=5.56e-04 step_rel=7.87e-04  
+PASS  wrap512_fp32kv.npz                 case=wrap512  ref_kv=fp32 tokens_exact=True ties=0 last_rel=2.61e-06 step_rel=3.19e-06  
+6/6 PASS; (case, kv tier) without a passing run: none
+matrix exit 0
+== with_exp
+PASS  chat_fp32_bf16kv.npz               case=chat     ref_kv=bf16 tokens_exact=True ties=1 last_rel=4.17e-04 step_rel=6.87e-04  router-tie L2@pos19 12->7 gap 4.10e-05
+PASS  chat_fp32kv.npz                    case=chat     ref_kv=fp32 tokens_exact=True ties=0 last_rel=3.00e-06 step_rel=3.59e-06  
+PASS  short4_fp32_bf16kv.npz             case=short4   ref_kv=bf16 tokens_exact=True ties=0 last_rel=4.35e-04 step_rel=6.22e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref_kv=fp32 tokens_exact=True ties=0 last_rel=2.69e-06 step_rel=3.65e-06  
+PASS  wrap512_fp32_bf16kv.npz            case=wrap512  ref_kv=bf16 tokens_exact=True ties=1 last_rel=2.38e-04 step_rel=2.75e-04  router-tie L4@pos44 17->19 gap 1.44e-05
+PASS  wrap512_fp32kv.npz                 case=wrap512  ref_kv=fp32 tokens_exact=True ties=0 last_rel=2.61e-06 step_rel=3.19e-06  
+6/6 PASS; (case, kv tier) without a passing run: none
+matrix exit 0
+DONE
