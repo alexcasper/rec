@@ -467,6 +467,30 @@ def case_matrix(vocab: int = MID_VOCAB) -> dict[str, dict]:
     }
 
 
+def assert_valid_launch_outputs(
+    rc: int,
+    ctrl: np.ndarray,
+    out_tokens: np.ndarray,
+    last_logits: np.ndarray | None = None,
+    step_logits: np.ndarray | None = None,
+    all_experts: np.ndarray | None = None,
+) -> None:
+    """Reject failed, aborted, or no-op/unwritten launches (rec-tan.5 / R2 / R5)."""
+    if rc != 0 or int(ctrl[2]) != 0 or int(ctrl[1]) == 0:
+        raise RuntimeError(
+            f"mid_session_run_ex2 failed: rc={rc}, control={ctrl.tolist()} "
+            f"(phase={int(ctrl[1])}, abort={int(ctrl[2])}; check HSA_OVERRIDE_GFX_VERSION is unset for gfx1150)"
+        )
+    if len(out_tokens) > 0 and not np.any(out_tokens != 0):
+        raise RuntimeError("mid_session_run_ex2 produced all-zero out_tokens (unwritten output buffer)")
+    if last_logits is not None and not np.any(last_logits != 0):
+        raise RuntimeError("mid_session_run_ex2 produced all-zero last_logits (unwritten output buffer)")
+    if step_logits is not None and not np.any(step_logits != 0):
+        raise RuntimeError("mid_session_run_ex2 produced all-zero step_logits (unwritten output buffer)")
+    if all_experts is not None and bool((all_experts[:, 1:, :] < 0).any()):
+        raise RuntimeError("mid_session_run_ex2 left unwritten -1 entries in MoE layers 1..7 of step_experts")
+
+
 def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
                            builds: tuple[str, ...] = ("fp32kv", "bf16kv", "fp32_bf16kv"),
                            emit_experts: bool = False) -> None:
@@ -527,9 +551,7 @@ def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
                 all_experts.ctypes.data if all_experts is not None else None,
             )
             dt = time.perf_counter() - t0
-            assert rc == 0 and int(ctrl[2]) == 0, (
-                f"mid_session_run_ex2 failed: rc={rc}, control[2]={int(ctrl[2])} (phase={int(ctrl[1])})"
-            )
+            assert_valid_launch_outputs(rc, ctrl, out_tokens, last_logits, step_logits, all_experts)
             out_path = out_dir / f"{cname}_{bname}.npz"
             payload = dict(
                 schema=np.array("rec-mk-out/1"),
@@ -637,11 +659,11 @@ def run_benchmark(ckpt_dir: Path, requested_workers: int = 64, mode: int = 0) ->
         # Probe / warmup: 2 short launches (prompt4, n_out=8)
         for _ in range(2):
             dt, toks, ctrl, rc = run_one(prompt4, 8, w)
-            if rc != 0 or ctrl[2] != 0:
+            if rc != 0 or ctrl[2] != 0 or ctrl[1] == 0 or not any(t != 0 for t in toks):
                 return {
                     "workers": w,
                     "valid": False,
-                    "abort_reason": f"warmup barrier abort: rc={rc}, control={ctrl} (phase={ctrl[1]}, abort_flag={ctrl[2]})",
+                    "abort_reason": f"warmup launch/barrier failure: rc={rc}, control={ctrl} (phase={ctrl[1]}, abort_flag={ctrl[2]})",
                     "warmup_elapsed_s": round(dt, 4),
                 }
 
@@ -657,8 +679,12 @@ def run_benchmark(ckpt_dir: Path, requested_workers: int = 64, mode: int = 0) ->
                 t_a, tok_a, ctrl_a, rc_a = run_one(prompt4, 4, w)
             dt_pair = t_b - t_a
             prefix_ok = (tok_a == tok_b[:4])
-            ids_ok = all(0 <= t < MID_VOCAB for t in tok_b)
-            no_abort = (rc_a == 0 and rc_b == 0 and ctrl_a[2] == 0 and ctrl_b[2] == 0)
+            ids_ok = all(0 <= t < MID_VOCAB for t in tok_b) and any(t != 0 for t in tok_b)
+            no_abort = (
+                rc_a == 0 and rc_b == 0
+                and ctrl_a[2] == 0 and ctrl_b[2] == 0
+                and ctrl_a[1] > 0 and ctrl_b[1] > 0
+            )
             pair_valid = no_abort and prefix_ok and ids_ok and (dt_pair > 0)
             short_pairs.append({
                 "pair": p_idx,
@@ -676,11 +702,11 @@ def run_benchmark(ckpt_dir: Path, requested_workers: int = 64, mode: int = 0) ->
 
         # 2. 512-ctx ABBA over 4 pairs after 1 warmup at 516
         w_dt, w_tok, w_ctrl, w_rc = run_one(prompt512, 4, w)
-        if w_rc != 0 or w_ctrl[2] != 0:
+        if w_rc != 0 or w_ctrl[2] != 0 or w_ctrl[1] == 0 or not any(t != 0 for t in w_tok):
             return {
                 "workers": w,
                 "valid": False,
-                "abort_reason": f"512-ctx warmup barrier abort: rc={w_rc}, control={w_ctrl}",
+                "abort_reason": f"512-ctx warmup launch/barrier failure: rc={w_rc}, control={w_ctrl}",
             }
 
         ctx512_pairs = []
@@ -695,8 +721,12 @@ def run_benchmark(ckpt_dir: Path, requested_workers: int = 64, mode: int = 0) ->
             last_tok36 = tok_b
             dt_pair = t_b - t_a
             prefix_ok = (tok_a == tok_b[:4])
-            ids_ok = all(0 <= t < MID_VOCAB for t in tok_b)
-            no_abort = (rc_a == 0 and rc_b == 0 and ctrl_a[2] == 0 and ctrl_b[2] == 0)
+            ids_ok = all(0 <= t < MID_VOCAB for t in tok_b) and any(t != 0 for t in tok_b)
+            no_abort = (
+                rc_a == 0 and rc_b == 0
+                and ctrl_a[2] == 0 and ctrl_b[2] == 0
+                and ctrl_a[1] > 0 and ctrl_b[1] > 0
+            )
             pair_valid = no_abort and prefix_ok and ids_ok and (dt_pair > 0)
             ctx512_pairs.append({
                 "pair": p_idx,
@@ -783,6 +813,74 @@ def run_benchmark(ckpt_dir: Path, requested_workers: int = 64, mode: int = 0) ->
         "runs": runs,
     }
     print(json.dumps(res, indent=2))
+
+
+def run_launch_failure_test(ckpt_dir: Path) -> bool:
+    """Regression test for rec-tan.5:
+      1. Unit-test `assert_valid_launch_outputs` against unwritten/no-op outputs.
+      2. Subprocess test with `HSA_OVERRIDE_GFX_VERSION=11.0.0` (which hides the gfx1150
+         code object in `flint_mid.so`): verify `mid_session_run_ex2` returns a negative
+         rc (`-6` from `hipLaunchKernel` / `hipGetLastError()` or `-7` from `control[1]==0`)
+         and `mid_mk_driver.py` exits nonzero instead of writing all-zero outputs.
+      3. Subprocess test with `HSA_OVERRIDE_GFX_VERSION` unset: verify `mid_session_run_ex2`
+         returns `rc == 0`, `control[1] > 0`, `control[2] == 0`, and non-zero valid outputs.
+    """
+    import os
+    import subprocess
+
+    # 1. Unit assertions on assert_valid_launch_outputs
+    z_tok = np.zeros(4, dtype=np.int32)
+    nz_tok = np.array([124538, 146358, 17939, 145985], dtype=np.int32)
+    z_ctrl = np.array([0, 0, 0, 0], dtype=np.uint32)
+    ok_ctrl = np.array([0, 320, 0, 0], dtype=np.uint32)
+
+    for label, args in [
+        ("nonzero_rc", (-6, ok_ctrl, nz_tok)),
+        ("zero_phase_no_op", (0, z_ctrl, nz_tok)),
+        ("all_zero_tokens", (0, ok_ctrl, z_tok)),
+    ]:
+        caught = False
+        try:
+            assert_valid_launch_outputs(*args)
+        except RuntimeError:
+            caught = True
+        assert caught, f"rec-tan.5 unit check failed to reject {label}"
+    print("rec-tan.5 unit check: assert_valid_launch_outputs rejected all invalid cases -> PASS")
+
+    # 2. Subprocess check with HSA_OVERRIDE_GFX_VERSION=11.0.0 (must fail with rc < 0)
+    env_bad = dict(os.environ)
+    env_bad["HSA_OVERRIDE_GFX_VERSION"] = "11.0.0"
+    probe_code = (
+        "import ctypes, sys, numpy as np\n"
+        "from pathlib import Path\n"
+        "import mid_mk_driver as D\n"
+        f"ckpt = Path({str(ckpt_dir)!r})\n"
+        "bank, off, _ = D.pack_mid_bank(ckpt)\n"
+        "lib = D.load_lib()\n"
+        "sess = lib.mid_session_create(bank.ctypes.data, off.ctypes.data, ctypes.c_int(64))\n"
+        "p = np.array([1, 43, 1006, 52006], dtype=np.int32)\n"
+        "out = np.zeros(4, dtype=np.int32)\n"
+        "logits = np.zeros(D.MID_VOCAB, dtype=np.float32)\n"
+        "ctrl = np.zeros(4, dtype=np.uint32)\n"
+        "rc = lib.mid_session_run_ex2(sess, p.ctypes.data, 4, out.ctypes.data, 4, None, logits.ctypes.data, 16, 2, ctrl.ctypes.data, None)\n"
+        "lib.mid_session_free(sess)\n"
+        "print(f'PROBE rc={rc} ctrl={ctrl.tolist()} tokens={out.tolist()}')\n"
+        "sys.exit(0 if rc == 0 else 42)\n"
+    )
+    proc_bad = subprocess.run(
+        [sys.executable, "-c", probe_code],
+        cwd=str(HERE),
+        env=env_bad,
+        capture_output=True,
+        text=True,
+    )
+    print("rec-tan.5 HSA_OVERRIDE_GFX_VERSION=11.0.0 stdout:", proc_bad.stdout.strip())
+    print("rec-tan.5 HSA_OVERRIDE_GFX_VERSION=11.0.0 stderr:", proc_bad.stderr.strip())
+    assert proc_bad.returncode == 42, (
+        f"rec-tan.5 regression: expected rc != 0 (exit 42) under HSA_OVERRIDE_GFX_VERSION=11.0.0, got exit {proc_bad.returncode}"
+    )
+    print("rec-tan.5 bad-override launch check: rejected with nonzero rc -> PASS")
+    return True
 
 
 def run_q4_bench() -> bool:
@@ -879,6 +977,7 @@ def main(argv: list[str]) -> int:
     emit_experts = False
     bench = False
     q4_bench = False
+    test_launch_check = False
 
     i = 0
     while i < len(argv):
@@ -889,6 +988,10 @@ def main(argv: list[str]) -> int:
             continue
         if a == "--q4-bench":
             q4_bench = True
+            i += 1
+            continue
+        if a == "--test-launch-check":
+            test_launch_check = True
             i += 1
             continue
         if a == "--emit-experts":
@@ -930,6 +1033,9 @@ def main(argv: list[str]) -> int:
 
     if ckpt is None:
         raise SystemExit("--ckpt <checkpoint_dir> is required (no host-specific default)")
+
+    if test_launch_check:
+        return 0 if run_launch_failure_test(ckpt) else 1
 
     if emit_suite_dir is not None:
         emit_conformance_suite(
@@ -975,7 +1081,7 @@ def main(argv: list[str]) -> int:
     )
     elapsed = time.perf_counter() - t0
     lib.mid_session_free(sess)
-    assert rc == 0 and int(ctrl[2]) == 0, f"launch failed: rc={rc}, control={ctrl.tolist()}"
+    assert_valid_launch_outputs(rc, ctrl, out_tokens, out_logits, None, all_experts)
 
     out.parent.mkdir(parents=True, exist_ok=True)
     save_kw = dict(

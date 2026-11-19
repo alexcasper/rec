@@ -791,6 +791,7 @@ extern "C" __global__ __launch_bounds__(256) void flint_q4_gemv_kernel(
 extern "C" int flint_q4_gemv_device(const void* d_w, const void* d_s, const void* d_b,
                                     const void* d_x, void* d_out_bf, float* d_out_f,
                                     int n, int k, int grid_blocks) {
+    (void)hipGetLastError(); // clear any stale sticky error before launch
     if (grid_blocks < 1) {
         int warps_needed = (n + 3) / 4;
         grid_blocks = (warps_needed + 7) / 8;
@@ -830,7 +831,11 @@ extern "C" int flint_q4_gemv_host(const uint8_t* h_w, const uint16_t* h_s, const
     chk_hip(hipMemcpy(d_x, h_x, xb, hipMemcpyHostToDevice), "q4 H2D x");
 
     for (int i = 0; i < warmup; ++i) {
-        flint_q4_gemv_device(d_w, d_s, d_b, d_x, d_out_bf, d_out_f, n, k, grid_blocks);
+        int lrc = flint_q4_gemv_device(d_w, d_s, d_b, d_x, d_out_bf, d_out_f, n, k, grid_blocks);
+        if (lrc != 0) {
+            fprintf(stderr, "flint_mid q4 warmup launch failed: %s (%d)\n", hipGetErrorString((hipError_t)lrc), lrc);
+            return -2;
+        }
     }
     chk_hip(hipDeviceSynchronize(), "q4 warmup sync");
 
@@ -839,7 +844,11 @@ extern "C" int flint_q4_gemv_host(const uint8_t* h_w, const uint16_t* h_s, const
     chk_hip(hipEventCreate(&ev1), "ev1");
     chk_hip(hipEventRecord(ev0, 0), "ev0 rec");
     for (int i = 0; i < iters; ++i) {
-        flint_q4_gemv_device(d_w, d_s, d_b, d_x, d_out_bf, d_out_f, n, k, grid_blocks);
+        int lrc = flint_q4_gemv_device(d_w, d_s, d_b, d_x, d_out_bf, d_out_f, n, k, grid_blocks);
+        if (lrc != 0) {
+            fprintf(stderr, "flint_mid q4 timed launch failed: %s (%d)\n", hipGetErrorString((hipError_t)lrc), lrc);
+            return -2;
+        }
     }
     chk_hip(hipEventRecord(ev1, 0), "ev1 rec");
     chk_hip(hipEventSynchronize(ev1), "ev1 sync");
@@ -970,37 +979,62 @@ extern "C" int mid_session_run_ex2(void* handle, const int* h_prompt, int prompt
                 "hipMemset chosen_experts");
     }
 
+    // Clear any prior sticky HIP error so hipGetLastError() reflects this launch only
+    (void)hipGetLastError();
+
+    const void* fn = nullptr;
+    void* k_kv_s = nullptr;
+    void* k_kv_f = nullptr;
     if (mode == 2) {
-        hipLaunchKernelGGL(mid_generate_fp32kv, dim3(workers), dim3(256), 0, 0,
-                           s->d_bank, s->d_off,
-                           s->d_kv_sliding_f32, s->d_kv_full_f32, s->max_total,
-                           s->d_prompt, prompt_len,
-                           s->d_out, n_out, d_step, d_last,
-                           s->d_ws_bf, s->d_ws_f, s->d_ws_i,
-                           s->d_control, workers, d_exp);
+        fn = (const void*)mid_generate_fp32kv;
+        k_kv_s = (void*)s->d_kv_sliding_f32;
+        k_kv_f = (void*)s->d_kv_full_f32;
     } else if (mode == 1) {
-        hipLaunchKernelGGL(mid_generate_fp32_bf16kv, dim3(workers), dim3(256), 0, 0,
-                           s->d_bank, s->d_off,
-                           s->d_kv_sliding, s->d_kv_full, s->max_total,
-                           s->d_prompt, prompt_len,
-                           s->d_out, n_out, d_step, d_last,
-                           s->d_ws_bf, s->d_ws_f, s->d_ws_i,
-                           s->d_control, workers, d_exp);
+        fn = (const void*)mid_generate_fp32_bf16kv;
+        k_kv_s = (void*)s->d_kv_sliding;
+        k_kv_f = (void*)s->d_kv_full;
     } else {
-        hipLaunchKernelGGL(mid_generate, dim3(workers), dim3(256), 0, 0,
-                           s->d_bank, s->d_off,
-                           s->d_kv_sliding, s->d_kv_full, s->max_total,
-                           s->d_prompt, prompt_len,
-                           s->d_out, n_out, d_step, d_last,
-                           s->d_ws_bf, s->d_ws_f, s->d_ws_i,
-                           s->d_control, workers, d_exp);
+        fn = (const void*)mid_generate;
+        k_kv_s = (void*)s->d_kv_sliding;
+        k_kv_f = (void*)s->d_kv_full;
     }
+
+    void* kargs[] = {
+        (void*)&s->d_bank,
+        (void*)&s->d_off,
+        (void*)&k_kv_s,
+        (void*)&k_kv_f,
+        (void*)&s->max_total,
+        (void*)&s->d_prompt,
+        (void*)&prompt_len,
+        (void*)&s->d_out,
+        (void*)&n_out,
+        (void*)&d_step,
+        (void*)&d_last,
+        (void*)&s->d_ws_bf,
+        (void*)&s->d_ws_f,
+        (void*)&s->d_ws_i,
+        (void*)&s->d_control,
+        (void*)&workers,
+        (void*)&d_exp,
+    };
+    hipError_t launch_err = hipLaunchKernel(fn, dim3(workers), dim3(256), kargs, 0, 0);
+    hipError_t last_err   = hipGetLastError();
+    if (launch_err != hipSuccess || last_err != hipSuccess) {
+        hipError_t err = (launch_err != hipSuccess) ? launch_err : last_err;
+        fprintf(stderr, "flint_mid mid_generate launch error (mode=%d, workers=%d): %s (%d)\n",
+                mode, workers, hipGetErrorString(err), (int)err);
+        return -6;
+    }
+
     hipError_t sync_err = hipDeviceSynchronize();
     if (sync_err != hipSuccess) {
         fprintf(stderr, "flint_mid mid_generate sync error: %s\n", hipGetErrorString(sync_err));
         return -4;
     }
-    // R2 & R5: always read back control[0..2] and check control[2] (barrier abort flag)
+    // R2 & R5 & rec-tan.5: always read back control[0..2] and check:
+    //   1) control[2] == 0 (no barrier spin-timeout abort)
+    //   2) control[1] > 0 when prompt_len + n_out > 0 (kernel actually executed barriers; guards against no-op launch)
     uint32_t h_ctrl[4] = {0, 0, 0, 0};
     chk_hip(hipMemcpy(h_ctrl, s->d_control, 4 * sizeof(uint32_t), hipMemcpyDeviceToHost), "hipMemcpy control D2H");
     if (out_control) {
@@ -1012,6 +1046,11 @@ extern "C" int mid_session_run_ex2(void* handle, const int* h_prompt, int prompt
         fprintf(stderr, "flint_mid BARRIER ABORT: control[2]=%u (phase=%u, arrived=%u, workers=%d)\n",
                 h_ctrl[2], h_ctrl[1], h_ctrl[0], workers);
         return -5;
+    }
+    if ((prompt_len + n_out) > 0 && h_ctrl[1] == 0u) {
+        fprintf(stderr, "flint_mid LAUNCH DID NOT EXECUTE: control[1]=0 (phase=0) after synchronize (workers=%d, mode=%d)\n",
+                workers, mode);
+        return -7;
     }
     if (h_out_tokens && n_out > 0)
         chk_hip(hipMemcpy(h_out_tokens, s->d_out, (size_t)n_out * sizeof(int), hipMemcpyDeviceToHost), "hipMemcpy out D2H");
