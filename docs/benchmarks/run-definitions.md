@@ -110,7 +110,7 @@ mid-launch host synchronize. It runs the identical full forward — including
 
 | Arch | GPU | Physical CUs (`prop.multiProcessorCount`) | Wave Size | Max Blocks/CU (`256` threads) | Max Co-Resident `workers` | Status |
 |---|---|---|---|---|---|---|
-| `gfx1150` | dusk Radeon 890M (RDNA 3.5, 8 WGPs / 16 CUs) | 8 WGPs (16 CUs) | 32 | 2 | **16** (`8` at 1/WGP) | Perf measured + `rec-pp2` `fp32`-KV 3/3 PASS (`045c72f`), `bf16`-KV 2/3 PASS (not yet signed off on `chat` `bf16`-KV) |
+| `gfx1150` | dusk Radeon 890M (RDNA 3.5, 8 WGPs / 16 CUs) | 8 WGPs (16 CUs) | 32 | 2 | **16** (`8` at 1/WGP) | Perf measured + `rec-pp2` **6/6 PASS** (`fp32`-KV 3/3 $\le 3.65\text{e-}6$, `bf16`-KV 3/3 $\le 7.87\text{e-}4$ with 1 accepted router near-tie on `chat` L2@pos19 `12->7`, gap `4.10e-5`) |
 | `gfx1201` | albion R9700 (RDNA 4, Navi 48) | 32 WGPs (64 CUs) | 32 | query on host | $\le 64$ (hard cap 64) | Host offline (`rec-109` / `rec-a4w`) |
 | `gfx906` | albion MI50 (CDNA 1, Vega 20) | 60 CUs | 64 | query on host | $\le 60$ (hard cap 64) | Host offline; requires ROCm 6.3 toolchain with `gfx906` device libs |
 
