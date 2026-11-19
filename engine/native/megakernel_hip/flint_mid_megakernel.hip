@@ -298,13 +298,35 @@ __device__ inline void mid_head_norm_rope(float* qk, const bf16* nw, int heads,
 //     ws_i_sel[2]         : selected top-2 expert indices
 //     ws_i_maxidx[64]     : per-workgroup argmax best index
 
-extern "C" __global__ __launch_bounds__(256) void mid_generate(
+template <typename KVT, bool PURE_FP32>
+__device__ inline float kv_load(KVT v);
+
+template <>
+__device__ inline float kv_load<bf16, false>(bf16 v) { return tofloat(v); }
+template <>
+__device__ inline float kv_load<bf16, true>(bf16 v) { return tofloat(v); }
+template <>
+__device__ inline float kv_load<float, false>(float v) { return v; }
+template <>
+__device__ inline float kv_load<float, true>(float v) { return v; }
+
+template <typename KVT>
+__device__ inline KVT kv_store(float v);
+
+template <>
+__device__ inline bf16 kv_store<bf16>(float v) { return tobf(v); }
+template <>
+__device__ inline float kv_store<float>(float v) { return v; }
+
+template <typename KVT, bool PURE_FP32>
+__device__ inline void mid_generate_impl(
     const uint8_t* bank, const int64_t* off,
-    bf16* kv_sliding,                        // [4][2 (K|V)][4][513][128] (layers 0,2,4,6)
-    bf16* kv_full,                           // [4][2 (K|V)][4][full_cap][128] (layers 1,3,5,7)
+    KVT* kv_sliding,                         // [4][2 (K|V)][4][513][128] (layers 0,2,4,6)
+    KVT* kv_full,                            // [4][2 (K|V)][4][full_cap][128] (layers 1,3,5,7)
     int full_cap,
     const int* prompt, int prompt_len,
-    int* out_tokens, int n_out, float* out_last_logits,
+    int* out_tokens, int n_out,
+    float* out_step_logits, float* out_last_logits,
     bf16* ws_bf, float* ws_f, int* ws_i,
     uint32_t* control, int workers) {
 
@@ -398,13 +420,11 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
             mid_head_norm_rope(ws_k, kn_w, MID_NKV, rotary, pos, lane, sg, groups);
             SYNC_ALL();
 
-            // ---- 5. Write K, V to head-major BF16 KV cache ----
-            // Sliding layers (0,2,4,6 -> idx = layer/2): cap = 513, slot = pos % 513
-            // Full layers (1,3,5,7 -> idx = layer/2): cap = full_cap, slot = pos
+            // ---- 5. Write K, V to head-major KV cache (KVT = bf16 or float) ----
             int l_idx = layer / 2;
             size_t l_cap = is_sliding ? (size_t)MID_WIN : (size_t)full_cap;
             size_t slot  = is_sliding ? (size_t)(pos % MID_WIN) : (size_t)pos;
-            bf16* l_kv   = is_sliding
+            KVT* l_kv    = is_sliding
                 ? (kv_sliding + (size_t)l_idx * 2 * MID_NKV * MID_WIN * MID_HDIM)
                 : (kv_full    + (size_t)l_idx * 2 * MID_NKV * (size_t)full_cap * MID_HDIM);
 
@@ -413,8 +433,8 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
                 int d = i % MID_HDIM;
                 size_t k_off = ((0 * MID_NKV + (size_t)h) * l_cap + slot) * MID_HDIM + d;
                 size_t v_off = ((1 * MID_NKV + (size_t)h) * l_cap + slot) * MID_HDIM + d;
-                l_kv[k_off] = tobf(ws_k[i]);
-                l_kv[v_off] = tobf(ws_v[i]);
+                l_kv[k_off] = kv_store<KVT>(ws_k[i]);
+                l_kv[v_off] = kv_store<KVT>(ws_v[i]);
             }
             SYNC_ALL();
 
@@ -422,21 +442,24 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
             int t_start = is_sliding ? ((pos - (MID_WIN - 1) > 0) ? (pos - (MID_WIN - 1)) : 0) : 0;
             for (int h = sg; h < MID_HEADS; h += groups) {
                 int kvh = h / (MID_HEADS / MID_NKV); // h / 8
-                const bf16* kc = l_kv + (0 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
-                const bf16* vc = l_kv + (1 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
+                const KVT* kc = l_kv + (0 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
+                const KVT* vc = l_kv + (1 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
                 float qreg[4], acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
                 #pragma unroll
-                for (int j = 0; j < 4; ++j)
-                    qreg[j] = tofloat(tobf(ws_q[(size_t)h * MID_HDIM + lane * 4 + j])) * MID_ATTN_SCALE;
+                for (int j = 0; j < 4; ++j) {
+                    float qv = ws_q[(size_t)h * MID_HDIM + lane * 4 + j];
+                    if constexpr (!PURE_FP32) qv = tofloat(tobf(qv));
+                    qreg[j] = qv * MID_ATTN_SCALE;
+                }
                 float hi = tofloat(sinks[h]);
                 float z = 1.0f;
                 for (int t = t_start; t <= pos; ++t) {
                     size_t t_slot = is_sliding ? (size_t)(t % MID_WIN) : (size_t)t;
-                    const bf16* kt = kc + t_slot * MID_HDIM + lane * 4;
-                    const bf16* vt = vc + t_slot * MID_HDIM + lane * 4;
+                    const KVT* kt = kc + t_slot * MID_HDIM + lane * 4;
+                    const KVT* vt = vc + t_slot * MID_HDIM + lane * 4;
                     float partial = 0.0f;
                     #pragma unroll
-                    for (int j = 0; j < 4; ++j) partial += qreg[j] * tofloat(kt[j]);
+                    for (int j = 0; j < 4; ++j) partial += qreg[j] * kv_load<KVT, PURE_FP32>(kt[j]);
                     float score = simd_sum(partial);
                     float next = fmaxf(hi, score);
                     float low = expf(-fabsf(score - hi));
@@ -445,7 +468,7 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
                     float add_f = wins ? 1.0f : low;
                     #pragma unroll
                     for (int j = 0; j < 4; ++j)
-                        acc[j] = acc[j] * old_f + add_f * tofloat(vt[j]);
+                        acc[j] = acc[j] * old_f + add_f * kv_load<KVT, PURE_FP32>(vt[j]);
                     z = z * old_f + add_f;
                     hi = next;
                 }
@@ -474,8 +497,12 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
                                      sh_xn, nullptr, ws_up, MID_DENSE_I, lane, sg, groups);
                 SYNC_ALL();
                 for (int i = gtid; i < MID_DENSE_I; i += gthreads) {
-                    bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
-                    ws_f_act[i] = tofloat(act);
+                    if constexpr (PURE_FP32) {
+                        ws_f_act[i] = silu_f(ws_gate[i]) * ws_up[i];
+                    } else {
+                        bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
+                        ws_f_act[i] = tofloat(act);
+                    }
                 }
                 SYNC_ALL();
                 q4_block512<MID_DENSE_I>(Q_W(qbase + 6), Q_S(qbase + 6, MID_HID, MID_DENSE_I), Q_B(qbase + 6, MID_HID, MID_DENSE_I),
@@ -496,7 +523,8 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
                     }
                     float dot = simd_sum(partial);
                     if (lane == 0) {
-                        ws_f_scores[e] = 1.0f / (1.0f + expf(-tofloat(tobf(dot))));
+                        float d_in = PURE_FP32 ? dot : tofloat(tobf(dot));
+                        ws_f_scores[e] = 1.0f / (1.0f + expf(-d_in));
                     }
                 }
                 SYNC_ALL();
@@ -543,8 +571,12 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
                                          sh_xn, nullptr, ws_up, MID_MOE_I, lane, sg, groups);
                     SYNC_ALL();
                     for (int i = gtid; i < MID_MOE_I; i += gthreads) {
-                        bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
-                        ws_f_act[i] = tofloat(act);
+                        if constexpr (PURE_FP32) {
+                            ws_f_act[i] = silu_f(ws_gate[i]) * ws_up[i];
+                        } else {
+                            bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
+                            ws_f_act[i] = tofloat(act);
+                        }
                     }
                     SYNC_ALL();
                     size_t dw_off = (size_t)e * MID_HID * (MID_MOE_I / 2);
@@ -561,8 +593,12 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
                                      sh_xn, nullptr, ws_up, MID_SH_I, lane, sg, groups);
                 SYNC_ALL();
                 for (int i = gtid; i < MID_SH_I; i += gthreads) {
-                    bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
-                    ws_f_act[i] = tofloat(act);
+                    if constexpr (PURE_FP32) {
+                        ws_f_act[i] = silu_f(ws_gate[i]) * ws_up[i];
+                    } else {
+                        bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
+                        ws_f_act[i] = tofloat(act);
+                    }
                 }
                 SYNC_ALL();
                 q4_block512<MID_SH_I>(Q_W(qbase + 9), Q_S(qbase + 9, MID_HID, MID_SH_I), Q_B(qbase + 9, MID_HID, MID_SH_I),
@@ -581,69 +617,121 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
         mid_rmsnorm_2048(ws_x, B(MID_OFF_FINAL_NORM), sh_xn, sh_red);
 
         // ---- 11. LM Head Q4 Matmul (150144 x 2048) -> ws_f_logits ----
-        q4_block512<MID_HID>(Q_W(MID_OFF_LM_HEAD), Q_S(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID), Q_B(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID),
-                             sh_xn, nullptr, ws_f_logits, MID_VOCAB, lane, sg, groups);
-        SYNC_ALL();
+        int step_slot = pos - prompt_len + 1;
+        // Skip LM head on early prompt positions before prompt_len - 1 to save compute during prefill!
+        if (step_slot >= 0) {
+            q4_block512<MID_HID>(Q_W(MID_OFF_LM_HEAD), Q_S(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID), Q_B(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID),
+                                 sh_xn, nullptr, ws_f_logits, MID_VOCAB, lane, sg, groups);
+            SYNC_ALL();
 
-        // ---- 12. Parallel Device Argmax over 150,144 vocab ----
-        float local_max = -1e30f;
-        int local_idx = 0;
-        for (int i = gtid; i < MID_VOCAB; i += gthreads) {
-            float val = ws_f_logits[i];
-            if (val > local_max || (val == local_max && i < local_idx)) {
-                local_max = val;
-                local_idx = i;
-            }
-        }
-        // Warp reduction
-        #pragma unroll
-        for (int off_lane = 16; off_lane >= 1; off_lane >>= 1) {
-            float other_max = __shfl_xor_sync(0xffffffffffffffffull, local_max, off_lane);
-            int   other_idx = __shfl_xor_sync(0xffffffffffffffffull, local_idx, off_lane);
-            if (other_max > local_max || (other_max == local_max && other_idx < local_idx)) {
-                local_max = other_max;
-                local_idx = other_idx;
-            }
-        }
-        __shared__ float sh_bmax[8];
-        __shared__ int   sh_bidx[8];
-        if (lane == 0) {
-            sh_bmax[tid >> 5] = local_max;
-            sh_bidx[tid >> 5] = local_idx;
-        }
-        __syncthreads();
-        if (tid == 0) {
-            float bmax = sh_bmax[0];
-            int   bidx = sh_bidx[0];
-            for (int w = 1; w < 8; ++w) {
-                if (sh_bmax[w] > bmax || (sh_bmax[w] == bmax && sh_bidx[w] < bidx)) {
-                    bmax = sh_bmax[w];
-                    bidx = sh_bidx[w];
+            // ---- 12. Parallel Device Argmax over 150,144 vocab ----
+            float local_max = -1e30f;
+            int local_idx = 0;
+            for (int i = gtid; i < MID_VOCAB; i += gthreads) {
+                float val = ws_f_logits[i];
+                if (val > local_max || (val == local_max && i < local_idx)) {
+                    local_max = val;
+                    local_idx = i;
                 }
             }
-            ws_f_maxval[group] = bmax;
-            ws_i_maxidx[group] = bidx;
-        }
-        SYNC_ALL();
-        if (group == 0 && tid == 0) {
-            float gmax = ws_f_maxval[0];
-            int   gidx = ws_i_maxidx[0];
-            for (int w = 1; w < workers; ++w) {
-                if (ws_f_maxval[w] > gmax || (ws_f_maxval[w] == gmax && ws_i_maxidx[w] < gidx)) {
-                    gmax = ws_f_maxval[w];
-                    gidx = ws_i_maxidx[w];
+            #pragma unroll
+            for (int off_lane = 16; off_lane >= 1; off_lane >>= 1) {
+                float other_max = __shfl_xor_sync(0xffffffffffffffffull, local_max, off_lane);
+                int   other_idx = __shfl_xor_sync(0xffffffffffffffffull, local_idx, off_lane);
+                if (other_max > local_max || (other_max == local_max && other_idx < local_idx)) {
+                    local_max = other_max;
+                    local_idx = other_idx;
                 }
             }
-            int slot = pos - prompt_len + 1;
-            if (slot >= 0 && slot < n_out) out_tokens[slot] = gidx;
+            __shared__ float sh_bmax[8];
+            __shared__ int   sh_bidx[8];
+            if (lane == 0) {
+                sh_bmax[tid >> 5] = local_max;
+                sh_bidx[tid >> 5] = local_idx;
+            }
+            __syncthreads();
+            if (tid == 0) {
+                float bmax = sh_bmax[0];
+                int   bidx = sh_bidx[0];
+                for (int w = 1; w < 8; ++w) {
+                    if (sh_bmax[w] > bmax || (sh_bmax[w] == bmax && sh_bidx[w] < bidx)) {
+                        bmax = sh_bmax[w];
+                        bidx = sh_bidx[w];
+                    }
+                }
+                ws_f_maxval[group] = bmax;
+                ws_i_maxidx[group] = bidx;
+            }
+            SYNC_ALL();
+            if (group == 0 && tid == 0) {
+                float gmax = ws_f_maxval[0];
+                int   gidx = ws_i_maxidx[0];
+                for (int w = 1; w < workers; ++w) {
+                    if (ws_f_maxval[w] > gmax || (ws_f_maxval[w] == gmax && ws_i_maxidx[w] < gidx)) {
+                        gmax = ws_f_maxval[w];
+                        gidx = ws_i_maxidx[w];
+                    }
+                }
+                if (step_slot < n_out) out_tokens[step_slot] = gidx;
+            }
+            if (step_slot < n_out && out_step_logits) {
+                float* dst = out_step_logits + (size_t)step_slot * MID_VOCAB;
+                for (int i = gtid; i < MID_VOCAB; i += gthreads)
+                    dst[i] = ws_f_logits[i];
+            }
+            if (pos == total - 1 && out_last_logits) {
+                for (int i = gtid; i < MID_VOCAB; i += gthreads)
+                    out_last_logits[i] = ws_f_logits[i];
+            }
+            SYNC_ALL();
         }
-        if (pos == total - 1 && out_last_logits) {
-            for (int i = gtid; i < MID_VOCAB; i += gthreads)
-                out_last_logits[i] = ws_f_logits[i];
-        }
-        SYNC_ALL();
     }
     #undef SYNC_ALL
+}
+
+// 1. Production BF16-KV megakernel (tiny_megakernel.hip rounding style)
+extern "C" __global__ __launch_bounds__(256) void mid_generate(
+    const uint8_t* bank, const int64_t* off,
+    bf16* kv_sliding, bf16* kv_full, int full_cap,
+    const int* prompt, int prompt_len,
+    int* out_tokens, int n_out,
+    float* out_step_logits, float* out_last_logits,
+    bf16* ws_bf, float* ws_f, int* ws_i,
+    uint32_t* control, int workers) {
+    mid_generate_impl<bf16, false>(
+        bank, off, kv_sliding, kv_full, full_cap,
+        prompt, prompt_len, out_tokens, n_out,
+        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers);
+}
+
+// 2. Pure-fp32 compute + BF16-KV megakernel
+extern "C" __global__ __launch_bounds__(256) void mid_generate_fp32_bf16kv(
+    const uint8_t* bank, const int64_t* off,
+    bf16* kv_sliding, bf16* kv_full, int full_cap,
+    const int* prompt, int prompt_len,
+    int* out_tokens, int n_out,
+    float* out_step_logits, float* out_last_logits,
+    bf16* ws_bf, float* ws_f, int* ws_i,
+    uint32_t* control, int workers) {
+    mid_generate_impl<bf16, true>(
+        bank, off, kv_sliding, kv_full, full_cap,
+        prompt, prompt_len, out_tokens, n_out,
+        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers);
+}
+
+// 3. Pure-fp32 compute + FP32-KV validation megakernel (1e-4 tier)
+extern "C" __global__ __launch_bounds__(256) void mid_generate_fp32kv(
+    const uint8_t* bank, const int64_t* off,
+    float* kv_sliding, float* kv_full, int full_cap,
+    const int* prompt, int prompt_len,
+    int* out_tokens, int n_out,
+    float* out_step_logits, float* out_last_logits,
+    bf16* ws_bf, float* ws_f, int* ws_i,
+    uint32_t* control, int workers) {
+    mid_generate_impl<float, true>(
+        bank, off, kv_sliding, kv_full, full_cap,
+        prompt, prompt_len, out_tokens, n_out,
+        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers);
 }
 
 // ---- Standalone Fused INT4 Dequant-Matmul Kernel (rec-aip) ----
@@ -761,37 +849,45 @@ struct MidSession {
     int64_t* d_off;
     bf16*    d_kv_sliding;
     bf16*    d_kv_full;
+    float*   d_kv_sliding_f32;
+    float*   d_kv_full_f32;
     bf16*    d_ws_bf;
     float*   d_ws_f;
     int*     d_ws_i;
     uint32_t* d_control;
     int*     d_prompt;
     int*     d_out;
+    float*   d_step_logits;
     float*   d_logits;
     int      max_total;
 };
+
+constexpr int MID_MAX_STEP_OUT = 64;
 
 extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off, int max_total) {
     MidSession* s = new MidSession();
     s->max_total = max_total;
     size_t bank_sz = (size_t)h_off[MID_NUM_OFFSETS - 1];
     size_t off_sz  = MID_NUM_OFFSETS * sizeof(int64_t);
-    size_t kvs_sz  = (size_t)4 * 2 * MID_NKV * MID_WIN * MID_HDIM * sizeof(bf16);
-    size_t kvf_sz  = (size_t)4 * 2 * MID_NKV * (size_t)max_total * MID_HDIM * sizeof(bf16);
+    size_t kvs_elems = (size_t)4 * 2 * MID_NKV * MID_WIN * MID_HDIM;
+    size_t kvf_elems = (size_t)4 * 2 * MID_NKV * (size_t)max_total * MID_HDIM;
     size_t ws_bf_sz = 1024 * sizeof(bf16);
     size_t ws_f_sz  = (32768 + 128 + MID_VOCAB) * sizeof(float);
     size_t ws_i_sz  = 128 * sizeof(int);
 
     chk_hip(hipMalloc(&s->d_bank, bank_sz), "hipMalloc bank");
     chk_hip(hipMalloc(&s->d_off, off_sz), "hipMalloc off");
-    chk_hip(hipMalloc(&s->d_kv_sliding, kvs_sz), "hipMalloc kv_sliding");
-    chk_hip(hipMalloc(&s->d_kv_full, kvf_sz), "hipMalloc kv_full");
+    chk_hip(hipMalloc(&s->d_kv_sliding, kvs_elems * sizeof(bf16)), "hipMalloc kv_sliding");
+    chk_hip(hipMalloc(&s->d_kv_full, kvf_elems * sizeof(bf16)), "hipMalloc kv_full");
+    chk_hip(hipMalloc(&s->d_kv_sliding_f32, kvs_elems * sizeof(float)), "hipMalloc kv_sliding_f32");
+    chk_hip(hipMalloc(&s->d_kv_full_f32, kvf_elems * sizeof(float)), "hipMalloc kv_full_f32");
     chk_hip(hipMalloc(&s->d_ws_bf, ws_bf_sz), "hipMalloc ws_bf");
     chk_hip(hipMalloc(&s->d_ws_f, ws_f_sz), "hipMalloc ws_f");
     chk_hip(hipMalloc(&s->d_ws_i, ws_i_sz), "hipMalloc ws_i");
     chk_hip(hipMalloc(&s->d_control, 16 * sizeof(uint32_t)), "hipMalloc control");
     chk_hip(hipMalloc(&s->d_prompt, (size_t)max_total * sizeof(int)), "hipMalloc prompt");
     chk_hip(hipMalloc(&s->d_out, (size_t)max_total * sizeof(int)), "hipMalloc out");
+    chk_hip(hipMalloc(&s->d_step_logits, (size_t)MID_MAX_STEP_OUT * MID_VOCAB * sizeof(float)), "hipMalloc step_logits");
     chk_hip(hipMalloc(&s->d_logits, (size_t)MID_VOCAB * sizeof(float)), "hipMalloc logits");
 
     chk_hip(hipMemcpy(s->d_bank, h_bank, bank_sz, hipMemcpyHostToDevice), "hipMemcpy bank");
@@ -799,27 +895,61 @@ extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off,
     return s;
 }
 
-extern "C" void mid_session_run(void* handle, const int* h_prompt, int prompt_len,
-                                int* h_out_tokens, int n_out, float* h_out_last_logits,
-                                int workers) {
+// mode:
+//   0 = production bf16-KV build (`mid_generate`, KVT=bf16, PURE_FP32=false)
+//   1 = pure-fp32 compute + bf16-KV build (`mid_generate_fp32_bf16kv`, KVT=bf16, PURE_FP32=true)
+//   2 = pure-fp32 compute + fp32-KV validation build (`mid_generate_fp32kv`, KVT=float, PURE_FP32=true)
+extern "C" void mid_session_run_ex(void* handle, const int* h_prompt, int prompt_len,
+                                   int* h_out_tokens, int n_out,
+                                   float* h_out_step_logits, float* h_out_last_logits,
+                                   int workers, int mode) {
     MidSession* s = (MidSession*)handle;
     if (workers < 1) workers = 16;
     chk_hip(hipMemset(s->d_control, 0, 16 * sizeof(uint32_t)), "hipMemset control");
     chk_hip(hipMemcpy(s->d_prompt, h_prompt, (size_t)prompt_len * sizeof(int), hipMemcpyHostToDevice), "hipMemcpy prompt");
     chk_hip(hipMemset(s->d_out, 0, (size_t)n_out * sizeof(int)), "hipMemset out");
 
-    hipLaunchKernelGGL(mid_generate, dim3(workers), dim3(256), 0, 0,
-                       s->d_bank, s->d_off,
-                       s->d_kv_sliding, s->d_kv_full, s->max_total,
-                       s->d_prompt, prompt_len,
-                       s->d_out, n_out, h_out_last_logits ? s->d_logits : nullptr,
-                       s->d_ws_bf, s->d_ws_f, s->d_ws_i,
-                       s->d_control, workers);
+    float* d_step = (h_out_step_logits && n_out <= MID_MAX_STEP_OUT) ? s->d_step_logits : nullptr;
+    float* d_last = h_out_last_logits ? s->d_logits : nullptr;
+
+    if (mode == 2) {
+        hipLaunchKernelGGL(mid_generate_fp32kv, dim3(workers), dim3(256), 0, 0,
+                           s->d_bank, s->d_off,
+                           s->d_kv_sliding_f32, s->d_kv_full_f32, s->max_total,
+                           s->d_prompt, prompt_len,
+                           s->d_out, n_out, d_step, d_last,
+                           s->d_ws_bf, s->d_ws_f, s->d_ws_i,
+                           s->d_control, workers);
+    } else if (mode == 1) {
+        hipLaunchKernelGGL(mid_generate_fp32_bf16kv, dim3(workers), dim3(256), 0, 0,
+                           s->d_bank, s->d_off,
+                           s->d_kv_sliding, s->d_kv_full, s->max_total,
+                           s->d_prompt, prompt_len,
+                           s->d_out, n_out, d_step, d_last,
+                           s->d_ws_bf, s->d_ws_f, s->d_ws_i,
+                           s->d_control, workers);
+    } else {
+        hipLaunchKernelGGL(mid_generate, dim3(workers), dim3(256), 0, 0,
+                           s->d_bank, s->d_off,
+                           s->d_kv_sliding, s->d_kv_full, s->max_total,
+                           s->d_prompt, prompt_len,
+                           s->d_out, n_out, d_step, d_last,
+                           s->d_ws_bf, s->d_ws_f, s->d_ws_i,
+                           s->d_control, workers);
+    }
     chk_hip(hipDeviceSynchronize(), "mid_generate sync");
     if (h_out_tokens && n_out > 0)
         chk_hip(hipMemcpy(h_out_tokens, s->d_out, (size_t)n_out * sizeof(int), hipMemcpyDeviceToHost), "hipMemcpy out D2H");
-    if (h_out_last_logits)
+    if (d_step)
+        chk_hip(hipMemcpy(h_out_step_logits, s->d_step_logits, (size_t)n_out * MID_VOCAB * sizeof(float), hipMemcpyDeviceToHost), "hipMemcpy step_logits D2H");
+    if (d_last)
         chk_hip(hipMemcpy(h_out_last_logits, s->d_logits, (size_t)MID_VOCAB * sizeof(float), hipMemcpyDeviceToHost), "hipMemcpy logits D2H");
+}
+
+extern "C" void mid_session_run(void* handle, const int* h_prompt, int prompt_len,
+                                int* h_out_tokens, int n_out, float* h_out_last_logits,
+                                int workers) {
+    mid_session_run_ex(handle, h_prompt, prompt_len, h_out_tokens, n_out, nullptr, h_out_last_logits, workers, 0);
 }
 
 extern "C" void mid_session_free(void* handle) {
@@ -829,12 +959,15 @@ extern "C" void mid_session_free(void* handle) {
     chk_hip(hipFree(s->d_off), "hipFree");
     chk_hip(hipFree(s->d_kv_sliding), "hipFree");
     chk_hip(hipFree(s->d_kv_full), "hipFree");
+    chk_hip(hipFree(s->d_kv_sliding_f32), "hipFree");
+    chk_hip(hipFree(s->d_kv_full_f32), "hipFree");
     chk_hip(hipFree(s->d_ws_bf), "hipFree");
     chk_hip(hipFree(s->d_ws_f), "hipFree");
     chk_hip(hipFree(s->d_ws_i), "hipFree");
     chk_hip(hipFree(s->d_control), "hipFree");
     chk_hip(hipFree(s->d_prompt), "hipFree");
     chk_hip(hipFree(s->d_out), "hipFree");
+    chk_hip(hipFree(s->d_step_logits), "hipFree");
     chk_hip(hipFree(s->d_logits), "hipFree");
     delete s;
 }

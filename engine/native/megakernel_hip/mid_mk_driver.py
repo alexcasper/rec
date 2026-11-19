@@ -18,6 +18,7 @@ Usage (on ROCm host, torch-free process for kernel launch):
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import struct
 import sys
@@ -372,9 +373,109 @@ def load_lib() -> ctypes.CDLL:
         ctypes.c_void_p,
         ctypes.c_int,
     ]
+    lib.mid_session_run_ex.restype = None
+    lib.mid_session_run_ex.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
     lib.mid_session_free.restype = None
     lib.mid_session_free.argtypes = [ctypes.c_void_p]
     return lib
+
+
+def shard_sha256(ckpt_dir: Path) -> str:
+    h = hashlib.sha256()
+    with open(ckpt_dir / "model-00001.safetensors", "rb") as f:
+        for block in iter(lambda: f.read(1 << 24), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def case_matrix(vocab: int = MID_VOCAB) -> dict[str, dict]:
+    """Fixed case matrix matching engine/validation/megakernel_mid/mid_mk_check.py."""
+    def tok(n: int) -> int:
+        return 6 + n % (vocab - 6)
+
+    rng = np.random.default_rng(0)
+    wrap = [1] + [int(t) for t in rng.integers(6, vocab, size=511)]
+    return {
+        "short4": {"prompt": [1, tok(37), tok(1000), tok(52000)], "n_out": 24},
+        "chat": {"prompt": [1, 4, tok(777), tok(8888), 5], "n_out": 24},
+        "wrap512": {"prompt": wrap, "n_out": 24},
+    }
+
+
+def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
+                           builds: tuple[str, ...] = ("fp32kv", "bf16kv", "fp32_bf16kv")) -> None:
+    """Emit rec-mk-out/1 npz files for cases (short4, chat, wrap512) across requested builds:
+      - fp32kv      : mode=2 (`mid_generate_fp32kv`, kv_dtype='fp32', pure fp32 compute + fp32 KV)
+      - bf16kv      : mode=0 (`mid_generate`, kv_dtype='bf16', production c264e52 bf16 build)
+      - fp32_bf16kv : mode=1 (`mid_generate_fp32_bf16kv`, kv_dtype='bf16', pure fp32 compute + bf16 KV)
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    sha = shard_sha256(ckpt_dir)
+    print(f"ckpt: {ckpt_dir} | sha256: {sha}")
+    bank, off, _ = pack_mid_bank(ckpt_dir)
+    cases = case_matrix(MID_VOCAB)
+
+    lib = load_lib()
+    max_total = 600
+    sess = lib.mid_session_create(bank.ctypes.data, off.ctypes.data, ctypes.c_int(max_total))
+
+    build_specs = {
+        "fp32kv": (2, "fp32", "flint_mid_megakernel.hip:mid_generate_fp32kv (fp32-compute, fp32-KV)"),
+        "bf16kv": (0, "bf16", "flint_mid_megakernel.hip:mid_generate (production bf16-KV build)"),
+        "fp32_bf16kv": (1, "bf16", "flint_mid_megakernel.hip:mid_generate_fp32_bf16kv (fp32-compute, bf16-KV)"),
+    }
+
+    for bname in builds:
+        mode, kv_dtype, impl_str = build_specs[bname]
+        for cname, cspec in cases.items():
+            prompt_arr = np.array(cspec["prompt"], dtype=np.int32)
+            n_out = int(cspec["n_out"])
+            out_tokens = np.zeros(n_out, dtype=np.int32)
+            step_logits = np.zeros((n_out, MID_VOCAB), dtype=np.float32)
+            last_logits = np.zeros(MID_VOCAB, dtype=np.float32)
+
+            t0 = time.perf_counter()
+            lib.mid_session_run_ex(
+                sess,
+                prompt_arr.ctypes.data,
+                ctypes.c_int(len(prompt_arr)),
+                out_tokens.ctypes.data,
+                ctypes.c_int(n_out),
+                step_logits.ctypes.data,
+                last_logits.ctypes.data,
+                ctypes.c_int(workers),
+                ctypes.c_int(mode),
+            )
+            dt = time.perf_counter() - t0
+            out_path = out_dir / f"{cname}_{bname}.npz"
+            np.savez(
+                out_path,
+                schema=np.array("rec-mk-out/1"),
+                case=np.array(cname),
+                ckpt_sha256=np.array(sha),
+                impl=np.array(f"{impl_str} workers={workers}"),
+                kv_dtype=np.array(kv_dtype),
+                prompt=prompt_arr,
+                tokens=out_tokens,
+                step_logits=step_logits,
+                last_logits=last_logits,
+            )
+            print(
+                f"wrote {out_path.name:26s} | {dt*1e3:6.1f} ms | kv={kv_dtype:4s} | "
+                f"tokens[:6]={out_tokens[:6].tolist()}"
+            )
+
+    lib.mid_session_free(sess)
 
 
 def run_benchmark(ckpt_dir: Path, workers: int = 16) -> None:
@@ -550,6 +651,8 @@ def main(argv: list[str]) -> int:
     workers = 16
     out = HERE / "mid_mk_io.npz"
     verify_path: Path | None = None
+    emit_suite_dir: Path | None = None
+    suite_builds = ("fp32kv", "bf16kv", "fp32_bf16kv")
     bench = False
     q4_bench = False
 
@@ -582,9 +685,17 @@ def main(argv: list[str]) -> int:
             out = Path(val)
         elif key == "--verify":
             verify_path = Path(val)
+        elif key == "--emit-suite":
+            emit_suite_dir = Path(val)
+        elif key == "--builds":
+            suite_builds = tuple(val.split(","))
         else:
             raise SystemExit(f"unknown arg {a}")
         i += 1
+
+    if emit_suite_dir is not None:
+        emit_conformance_suite(ckpt, emit_suite_dir, workers=workers, builds=suite_builds)
+        return 0
 
     if q4_bench:
         return 0 if run_q4_bench() else 1
