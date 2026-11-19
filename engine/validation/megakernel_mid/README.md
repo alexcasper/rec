@@ -106,7 +106,8 @@ implements it (`router_substitution` in `mid_mk_check.py`). It is the
 **interim** gate. The long-term fix is exact routing teacher-forcing from
 kernel-emitted `step_experts` (Gemini lane). **ROUTER_TIE_TOL = 2.5e-4 is
 PROVISIONAL.** Recalibrating it across cases and seeds is the required bead
-rec-tan.3, and the results go in section 4b.
+rec-tan.3. The calibration results and a recommendation are in section 4b;
+the threshold change awaits the coordinator.
 
 **Why it is needed.** The near-tie rule in section 4 (fp32 margin ≤ 5e-3)
 covers only the output-token argmax. The other discrete decision in the
@@ -190,6 +191,59 @@ kernel could emit `step_experts` (int32 [P + n_out, layers, k], its chosen
 expert ids) as an optional `rec-mk-out/1` key. The checker could then
 teacher-force routing exactly, instead of searching for a substitution, and
 apply the same gap and count limits to the positions where it differs.
+
+### 4b. ROUTER_TIE_TOL calibration (rec-tan.3, 2026-11-19)
+
+**Setup.** `router_tie_calibrate.py` ran on dusk (mid-prod `f494e788…`, top-2,
+7 MoE layers) over the 3 cases plus 10 seeded prompts. Odd seeds are 32
+tokens; even seeds are 512 tokens, which cross the sliding window. Each
+prompt decodes 24 tokens. The implementation under test is a **correct**
+stand-in in kernel order (prefill, then one token per step) in both tiers.
+It is compared with the batch reference teacher-forced on the stand-in's
+tokens.
+
+**Measured quantity.** The relevant noise is
+|Δgap| = |(r_k − r_k+1) − (s_k − s_k+1)|: how far the implementation moves
+the reference's top-k boundary. A flip happens when |Δgap| exceeds the gap.
+Boundaries after a run's first flip are excluded, because they are
+downstream of it. Results are in `results-rec-tan3-calibration.json`.
+
+| tier | boundaries | \|Δgap\| median | p99 | p99.9 | max | > 2.5e-4 | > 5e-4 | runs failing stock | runs failing with rule |
+|---|---|---|---|---|---|---|---|---|---|
+| bf16-KV | 21,406 | 4.2e-6 | 7.1e-5 | 1.6e-4 | **2.9e-4** | 3 | 0 | 1 / 13 | **0 / 13** |
+| fp32-KV | 24,871 | 1.2e-7 | 1.0e-6 | 1.6e-6 | 3.0e-6 | 0 | 0 | 0 / 13 | 0 / 13 |
+
+**Natural flips on correct implementations.**
+- `seed4-len512`, L4 pos 369, gap 3.5e-6: the stock gate FAILs. The rule
+  passes it by swapping exactly that boundary; the L5 flips that follow are
+  downstream of it.
+- `seed6-len512`, L4 pos 208, gap 2.2e-6: harmless, and the stock gate passes.
+- Kernel 045c72f `chat`, L2 pos 19, gap 4.1e-5 (section 4a).
+
+Every observed flip sits at a gap ≤ 4.1e-5. The fp32 tier's |Δgap| is two
+orders of magnitude smaller, with no flips, so it needs no allowance.
+
+**Reading.**
+- Without the rule, the stock gate falsely fails a correct bf16-KV
+  implementation about 1 time in 13 here (the stand-in), and 1 in 3 for the
+  kernel.
+- With the rule, it fails 0 of 13.
+- 2.5e-4 covers every observed flip with a 6× margin. However, it sits
+  **below** the tail of the noise: 3 of 21,406 boundaries move by more than
+  2.5e-4, up to 2.9e-4. A correct build can therefore, rarely, flip a
+  boundary with a gap in (2.5e-4, 2.9e-4] and be falsely failed.
+- No boundary moved by more than 5e-4.
+
+**Recommendation (coordinator decision; 2.5e-4 stays in force until then).**
+Raise ROUTER_TIE_TOL to **5e-4**, about 1.7× the largest observed |Δgap|,
+with zero boundaries over it. The rule's safety does not rest on the
+threshold: a swap counts only if the full unchanged criteria then pass, and
+the fp32 tier has no allowance.
+
+**Limitation.** This is the stand-in's noise, not the kernel's. The kernel
+reduces in a different order. Once the kernel emits `step_experts`, measure
+the kernel's own |Δgap| (or switch to exact routing teacher-forcing) and
+re-check the threshold.
 
 ## 5. Commands (dusk)
 
