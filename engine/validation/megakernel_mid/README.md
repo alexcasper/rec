@@ -78,9 +78,11 @@ A run **PASSES** when all of these hold:
 | `fp32` | fp32 compute, fp32 KV | **1e-4** | 3.4e-6 |
 | `bf16` | fp32 compute, K/V rounded to bf16 at the storage points (K after k_norm+RoPE, V after projection) | **1e-3** | 5.0e-4 |
 
-**Sign-off for Phase B** requires all 3 cases to PASS in **both** tiers: a
-validation build with fp32 KV, and the production build with bf16 KV. The
-fp32 tier is not optional. On mid-8L the `softmax-mix` MoE fault (mixing
+**Sign-off (adopted coordinator policy).** A production kernel signs off
+through its **fp32-intermediate validation build**. That build must PASS all
+3 cases in **both** KV tiers: once storing KV as fp32 (gate 1e-4) and once as
+bf16 (gate 1e-3). A direct run of the bf16-activation production build is
+**not** a substitute for sign-off. The fp32 tier is not optional. On mid-8L the `softmax-mix` MoE fault (mixing
 weights softmax instead of renormalised sigmoid) keeps tokens exact. Against
 the bf16-KV reference it lands at 4.2e-4 to 9.0e-4: under 1e-3 and the same
 size as the correct bf16-KV floor (5.0e-4), so the bf16 tier cannot see it.
