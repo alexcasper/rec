@@ -226,12 +226,17 @@ def rope_np(t: np.ndarray, positions: np.ndarray) -> np.ndarray:
     return np.concatenate([a * c - b * s, a * s + b * c], axis=-1)
 
 
-def forward_mid_np(raw: dict[str, tuple[np.ndarray, str]], seq: list[int]) -> np.ndarray:
+def forward_mid_np(
+    raw: dict[str, tuple[np.ndarray, str]], seq: list[int], return_experts: bool = False
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Portable fp64 numpy reference forward for mid-8L over `seq` (returns [T, V] fp32 logits).
+    When `return_experts=True`, also returns `step_experts` int32 [T, MID_NL, MID_TOPK]
+    (layer 0 filled with -1; layers 1..7 hold the router top-k expert indices in rank order).
     Mirrors tiny_mk_np_reference.py / rec_mlx.model.Model semantics exactly."""
     T = len(seq)
     seq_arr = np.array(seq, dtype=np.int64)
     x = dequant_np(raw, "model.embed_tokens", bits=8, idx=seq_arr)
+    step_experts = np.full((T, MID_NL, MID_TOPK), -1, dtype=np.int32) if return_experts else None
 
     def get_bf(name: str, fallback_zeros: int = 0) -> np.ndarray:
         if name in raw:
@@ -293,6 +298,8 @@ def forward_mid_np(raw: dict[str, tuple[np.ndarray, str]], seq: list[int]) -> np
             rb = get_bf(f"{mp}.gate.expert_bias", fallback_zeros=MID_NEXP)
             scores = 1.0 / (1.0 + np.exp(-(hn @ rw.T)))
             top = np.argsort(-(scores + rb[None, :]), axis=1, kind="stable")[:, :MID_TOPK]
+            if step_experts is not None:
+                step_experts[:, l, :] = top.astype(np.int32)
             mix = np.take_along_axis(scores, top, axis=1)
             mix = mix / (np.sum(mix, axis=1, keepdims=True) + 1e-20)
 
@@ -316,7 +323,10 @@ def forward_mid_np(raw: dict[str, tuple[np.ndarray, str]], seq: list[int]) -> np
 
     fn = rms_np(x, get_bf("model.norm.weight"))
     w_lm = dequant_np(raw, "lm_head")
-    return (fn @ w_lm.T).astype(np.float32)
+    out_logits = (fn @ w_lm.T).astype(np.float32)
+    if step_experts is not None:
+        return out_logits, step_experts
+    return out_logits
 
 
 def verify_run(npz_path: Path, ckpt_dir: Path) -> bool:
@@ -394,6 +404,20 @@ def load_lib() -> ctypes.CDLL:
         ctypes.c_int,
         ctypes.c_void_p,
     ]
+    lib.mid_session_run_ex2.restype = ctypes.c_int
+    lib.mid_session_run_ex2.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
     lib.mid_session_free.restype = None
     lib.mid_session_free.argtypes = [ctypes.c_void_p]
     return lib
@@ -444,15 +468,21 @@ def case_matrix(vocab: int = MID_VOCAB) -> dict[str, dict]:
 
 
 def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
-                           builds: tuple[str, ...] = ("fp32kv", "bf16kv", "fp32_bf16kv")) -> None:
+                           builds: tuple[str, ...] = ("fp32kv", "bf16kv", "fp32_bf16kv"),
+                           emit_experts: bool = False) -> None:
     """Emit rec-mk-out/1 npz files for cases (short4, chat, wrap512) across requested builds:
       - fp32kv      : mode=2 (`mid_generate_fp32kv`, kv_dtype='fp32', pure fp32 compute + fp32 KV)
       - bf16kv      : mode=0 (`mid_generate`, kv_dtype='bf16', production c264e52 bf16 build)
       - fp32_bf16kv : mode=1 (`mid_generate_fp32_bf16kv`, kv_dtype='bf16', pure fp32 compute + bf16 KV)
+    When `emit_experts=True`, passes an int32 [P + n_out, MID_NL, MID_TOPK] side buffer to
+    `mid_session_run_ex2` and saves:
+      - `chosen_experts`: int32 [n_out, MID_NL, MID_TOPK] (decode steps 0..n_out-1, at pos P-1..P+n_out-2)
+      - `step_experts`  : int32 [P + n_out, MID_NL, MID_TOPK] (all positions 0..P+n_out-1, per README 4a)
+    When `emit_experts=False` (default), passes nullptr so expert emission costs zero device work.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     sha = shard_sha256(ckpt_dir)
-    print(f"ckpt: {ckpt_dir} | sha256: {sha}")
+    print(f"ckpt: {ckpt_dir} | sha256: {sha} | emit_experts={emit_experts}")
     bank, off, _ = pack_mid_bank(ckpt_dir)
     cases = case_matrix(MID_VOCAB)
 
@@ -470,17 +500,23 @@ def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
         mode, kv_dtype, impl_str = build_specs[bname]
         for cname, cspec in cases.items():
             prompt_arr = np.array(cspec["prompt"], dtype=np.int32)
+            p_len = len(prompt_arr)
             n_out = int(cspec["n_out"])
             out_tokens = np.zeros(n_out, dtype=np.int32)
             step_logits = np.zeros((n_out, MID_VOCAB), dtype=np.float32)
             last_logits = np.zeros(MID_VOCAB, dtype=np.float32)
+            all_experts = (
+                np.full((p_len + n_out, MID_NL, MID_TOPK), -1, dtype=np.int32)
+                if emit_experts
+                else None
+            )
 
             ctrl = np.zeros(4, dtype=np.uint32)
             t0 = time.perf_counter()
-            rc = lib.mid_session_run_ex(
+            rc = lib.mid_session_run_ex2(
                 sess,
                 prompt_arr.ctypes.data,
-                ctypes.c_int(len(prompt_arr)),
+                ctypes.c_int(p_len),
                 out_tokens.ctypes.data,
                 ctypes.c_int(n_out),
                 step_logits.ctypes.data,
@@ -488,14 +524,14 @@ def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
                 ctypes.c_int(workers),
                 ctypes.c_int(mode),
                 ctrl.ctypes.data,
+                all_experts.ctypes.data if all_experts is not None else None,
             )
             dt = time.perf_counter() - t0
             assert rc == 0 and int(ctrl[2]) == 0, (
-                f"mid_session_run_ex failed: rc={rc}, control[2]={int(ctrl[2])} (phase={int(ctrl[1])})"
+                f"mid_session_run_ex2 failed: rc={rc}, control[2]={int(ctrl[2])} (phase={int(ctrl[1])})"
             )
             out_path = out_dir / f"{cname}_{bname}.npz"
-            np.savez(
-                out_path,
+            payload = dict(
                 schema=np.array("rec-mk-out/1"),
                 case=np.array(cname),
                 ckpt_sha256=np.array(sha),
@@ -506,9 +542,15 @@ def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
                 step_logits=step_logits,
                 last_logits=last_logits,
             )
+            if all_experts is not None:
+                # Decode step i (0 <= i < n_out) corresponds to forward position P - 1 + i
+                payload["chosen_experts"] = all_experts[p_len - 1 : p_len - 1 + n_out]
+                payload["step_experts"] = all_experts
+            np.savez(out_path, **payload)
             print(
                 f"wrote {out_path.name:26s} | {dt*1e3:6.1f} ms | kv={kv_dtype:4s} | "
                 f"tokens[:6]={out_tokens[:6].tolist()}"
+                + (f" | chosen_experts={payload['chosen_experts'].shape}" if all_experts is not None else "")
             )
 
     lib.mid_session_free(sess)
@@ -834,6 +876,7 @@ def main(argv: list[str]) -> int:
     verify_path: Path | None = None
     emit_suite_dir: Path | None = None
     suite_builds = ("fp32kv", "bf16kv", "fp32_bf16kv")
+    emit_experts = False
     bench = False
     q4_bench = False
 
@@ -846,6 +889,10 @@ def main(argv: list[str]) -> int:
             continue
         if a == "--q4-bench":
             q4_bench = True
+            i += 1
+            continue
+        if a == "--emit-experts":
+            emit_experts = True
             i += 1
             continue
         if "=" in a:
@@ -872,6 +919,8 @@ def main(argv: list[str]) -> int:
             emit_suite_dir = Path(val)
         elif key == "--builds":
             suite_builds = tuple(val.split(","))
+        elif key == "--emit-experts":
+            emit_experts = val.lower() not in ("0", "false", "no", "off")
         else:
             raise SystemExit(f"unknown arg {a}")
         i += 1
@@ -883,7 +932,9 @@ def main(argv: list[str]) -> int:
         raise SystemExit("--ckpt <checkpoint_dir> is required (no host-specific default)")
 
     if emit_suite_dir is not None:
-        emit_conformance_suite(ckpt, emit_suite_dir, workers=workers, builds=suite_builds)
+        emit_conformance_suite(
+            ckpt, emit_suite_dir, workers=workers, builds=suite_builds, emit_experts=emit_experts
+        )
         return 0
 
     if verify_path is not None:
@@ -895,18 +946,24 @@ def main(argv: list[str]) -> int:
 
     bank, off, _ = pack_mid_bank(ckpt)
     prompt_arr = np.array(prompt, dtype=np.int32)
+    p_len = len(prompt_arr)
     out_tokens = np.zeros(n_out, dtype=np.int32)
     out_logits = np.zeros(MID_VOCAB, dtype=np.float32)
+    all_experts = (
+        np.full((p_len + n_out, MID_NL, MID_TOPK), -1, dtype=np.int32)
+        if emit_experts
+        else None
+    )
     ctrl = np.zeros(4, dtype=np.uint32)
 
     lib = load_lib()
-    max_total = max(len(prompt) + n_out + 16, 64)
+    max_total = max(p_len + n_out + 16, 64)
     sess = lib.mid_session_create(bank.ctypes.data, off.ctypes.data, ctypes.c_int(max_total))
     t0 = time.perf_counter()
-    rc = lib.mid_session_run_ex(
+    rc = lib.mid_session_run_ex2(
         sess,
         prompt_arr.ctypes.data,
-        ctypes.c_int(len(prompt)),
+        ctypes.c_int(p_len),
         out_tokens.ctypes.data,
         ctypes.c_int(n_out),
         None,
@@ -914,20 +971,24 @@ def main(argv: list[str]) -> int:
         ctypes.c_int(workers),
         ctypes.c_int(mode),
         ctrl.ctypes.data,
+        all_experts.ctypes.data if all_experts is not None else None,
     )
     elapsed = time.perf_counter() - t0
     lib.mid_session_free(sess)
     assert rc == 0 and int(ctrl[2]) == 0, f"launch failed: rc={rc}, control={ctrl.tolist()}"
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(
-        out,
+    save_kw = dict(
         prompt=prompt_arr,
         tokens=out_tokens,
         last_logits=out_logits,
         workers=np.int32(workers),
         elapsed_s=np.float64(elapsed),
     )
+    if all_experts is not None:
+        save_kw["chosen_experts"] = all_experts[p_len - 1 : p_len - 1 + n_out]
+        save_kw["step_experts"] = all_experts
+    np.savez(out, **save_kw)
     print(f"tokens ({n_out} in {elapsed*1e3:.1f} ms, {(len(prompt)+n_out)/elapsed:.1f} step/s):", out_tokens.tolist())
     print(
         f"logits: min {out_logits.min():.4f} max {out_logits.max():.4f} "

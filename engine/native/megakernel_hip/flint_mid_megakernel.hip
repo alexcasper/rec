@@ -328,7 +328,8 @@ __device__ inline void mid_generate_impl(
     int* out_tokens, int n_out,
     float* out_step_logits, float* out_last_logits,
     bf16* ws_bf, float* ws_f, int* ws_i,
-    uint32_t* control, int workers) {
+    uint32_t* control, int workers,
+    int* out_chosen_experts = nullptr) {
 
     const int tid = threadIdx.x;          // 0..255
     const int lane = tid & 31;            // 0..31
@@ -491,6 +492,11 @@ __device__ inline void mid_generate_impl(
 
             // ---- 9. MLP (Layer 0 Dense vs Layers 1..7 MoE) ----
             if (layer == 0) {
+                if (group == 0 && tid == 0 && out_chosen_experts != nullptr) {
+                    int* exp_dst = out_chosen_experts + ((size_t)pos * MID_NL + layer) * MID_TOPK;
+                    exp_dst[0] = -1;
+                    exp_dst[1] = -1;
+                }
                 q4_block512<MID_HID>(Q_W(qbase + 4), Q_S(qbase + 4, MID_DENSE_I, MID_HID), Q_B(qbase + 4, MID_DENSE_I, MID_HID),
                                      sh_xn, nullptr, ws_gate, MID_DENSE_I, lane, sg, groups);
                 q4_block512<MID_HID>(Q_W(qbase + 5), Q_S(qbase + 5, MID_DENSE_I, MID_HID), Q_B(qbase + 5, MID_DENSE_I, MID_HID),
@@ -542,6 +548,11 @@ __device__ inline void mid_generate_impl(
                     }
                     ws_i_sel[0] = top0;
                     ws_i_sel[1] = top1;
+                    if (out_chosen_experts != nullptr) {
+                        int* exp_dst = out_chosen_experts + ((size_t)pos * MID_NL + layer) * MID_TOPK;
+                        exp_dst[0] = top0;
+                        exp_dst[1] = top1;
+                    }
                     float s0 = ws_f_scores[top0], s1 = ws_f_scores[top1];
                     float wsum = s0 + s1 + 1e-20f;
                     ws_f_wsel[0] = s0 / wsum;
@@ -696,11 +707,13 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate(
     int* out_tokens, int n_out,
     float* out_step_logits, float* out_last_logits,
     bf16* ws_bf, float* ws_f, int* ws_i,
-    uint32_t* control, int workers) {
+    uint32_t* control, int workers,
+    int* out_chosen_experts) {
     mid_generate_impl<bf16, false>(
         bank, off, kv_sliding, kv_full, full_cap,
         prompt, prompt_len, out_tokens, n_out,
-        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers);
+        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers,
+        out_chosen_experts);
 }
 
 // 2. Pure-fp32 compute + BF16-KV megakernel
@@ -711,11 +724,13 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate_fp32_bf16kv(
     int* out_tokens, int n_out,
     float* out_step_logits, float* out_last_logits,
     bf16* ws_bf, float* ws_f, int* ws_i,
-    uint32_t* control, int workers) {
+    uint32_t* control, int workers,
+    int* out_chosen_experts) {
     mid_generate_impl<bf16, true>(
         bank, off, kv_sliding, kv_full, full_cap,
         prompt, prompt_len, out_tokens, n_out,
-        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers);
+        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers,
+        out_chosen_experts);
 }
 
 // 3. Pure-fp32 compute + FP32-KV validation megakernel (1e-4 tier)
@@ -726,11 +741,13 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate_fp32kv(
     int* out_tokens, int n_out,
     float* out_step_logits, float* out_last_logits,
     bf16* ws_bf, float* ws_f, int* ws_i,
-    uint32_t* control, int workers) {
+    uint32_t* control, int workers,
+    int* out_chosen_experts) {
     mid_generate_impl<float, true>(
         bank, off, kv_sliding, kv_full, full_cap,
         prompt, prompt_len, out_tokens, n_out,
-        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers);
+        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers,
+        out_chosen_experts);
 }
 
 // ---- Standalone Fused INT4 Dequant-Matmul Kernel (rec-aip) ----
@@ -858,6 +875,7 @@ struct MidSession {
     int*     d_out;
     float*   d_step_logits;
     float*   d_logits;
+    int*     d_chosen_experts;
     int      max_total;
 };
 
@@ -907,6 +925,7 @@ extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off,
     chk_hip(hipMalloc(&s->d_out, (size_t)max_total * sizeof(int)), "hipMalloc out");
     chk_hip(hipMalloc(&s->d_step_logits, (size_t)MID_MAX_STEP_OUT * MID_VOCAB * sizeof(float)), "hipMalloc step_logits");
     chk_hip(hipMalloc(&s->d_logits, (size_t)MID_VOCAB * sizeof(float)), "hipMalloc logits");
+    chk_hip(hipMalloc(&s->d_chosen_experts, (size_t)max_total * MID_NL * MID_TOPK * sizeof(int)), "hipMalloc chosen_experts");
 
     chk_hip(hipMemcpy(s->d_bank, h_bank, bank_sz, hipMemcpyHostToDevice), "hipMemcpy bank");
     chk_hip(hipMemcpy(s->d_off, h_off, off_sz, hipMemcpyHostToDevice), "hipMemcpy off");
@@ -917,11 +936,15 @@ extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off,
 //   0 = production bf16-KV build (`mid_generate`, KVT=bf16, PURE_FP32=false)
 //   1 = pure-fp32 compute + bf16-KV build (`mid_generate_fp32_bf16kv`, KVT=bf16, PURE_FP32=true)
 //   2 = pure-fp32 compute + fp32-KV validation build (`mid_generate_fp32kv`, KVT=float, PURE_FP32=true)
+// h_out_chosen_experts (optional, default nullptr):
+//   int32 buffer of shape [prompt_len + n_out, MID_NL (8), MID_TOPK (2)].
+//   When nullptr, costs zero device work (null pointer passed to kernel).
 // Returns 0 on success (with control[2] == 0), nonzero on invalid arguments, HIP error, or barrier abort.
-extern "C" int mid_session_run_ex(void* handle, const int* h_prompt, int prompt_len,
-                                  int* h_out_tokens, int n_out,
-                                  float* h_out_step_logits, float* h_out_last_logits,
-                                  int workers, int mode, uint32_t* out_control) {
+extern "C" int mid_session_run_ex2(void* handle, const int* h_prompt, int prompt_len,
+                                   int* h_out_tokens, int n_out,
+                                   float* h_out_step_logits, float* h_out_last_logits,
+                                   int workers, int mode, uint32_t* out_control,
+                                   int* h_out_chosen_experts) {
     MidSession* s = (MidSession*)handle;
     if (!s) return -1;
     // R3: reject invalid workers loudly (no silent default to 16; enforce compiled cap <= 64)
@@ -941,6 +964,11 @@ extern "C" int mid_session_run_ex(void* handle, const int* h_prompt, int prompt_
 
     float* d_step = (h_out_step_logits && n_out <= MID_MAX_STEP_OUT) ? s->d_step_logits : nullptr;
     float* d_last = h_out_last_logits ? s->d_logits : nullptr;
+    int*   d_exp  = h_out_chosen_experts ? s->d_chosen_experts : nullptr;
+    if (d_exp) {
+        chk_hip(hipMemset(d_exp, 0xff, (size_t)(prompt_len + n_out) * MID_NL * MID_TOPK * sizeof(int)),
+                "hipMemset chosen_experts");
+    }
 
     if (mode == 2) {
         hipLaunchKernelGGL(mid_generate_fp32kv, dim3(workers), dim3(256), 0, 0,
@@ -949,7 +977,7 @@ extern "C" int mid_session_run_ex(void* handle, const int* h_prompt, int prompt_
                            s->d_prompt, prompt_len,
                            s->d_out, n_out, d_step, d_last,
                            s->d_ws_bf, s->d_ws_f, s->d_ws_i,
-                           s->d_control, workers);
+                           s->d_control, workers, d_exp);
     } else if (mode == 1) {
         hipLaunchKernelGGL(mid_generate_fp32_bf16kv, dim3(workers), dim3(256), 0, 0,
                            s->d_bank, s->d_off,
@@ -957,7 +985,7 @@ extern "C" int mid_session_run_ex(void* handle, const int* h_prompt, int prompt_
                            s->d_prompt, prompt_len,
                            s->d_out, n_out, d_step, d_last,
                            s->d_ws_bf, s->d_ws_f, s->d_ws_i,
-                           s->d_control, workers);
+                           s->d_control, workers, d_exp);
     } else {
         hipLaunchKernelGGL(mid_generate, dim3(workers), dim3(256), 0, 0,
                            s->d_bank, s->d_off,
@@ -965,7 +993,7 @@ extern "C" int mid_session_run_ex(void* handle, const int* h_prompt, int prompt_
                            s->d_prompt, prompt_len,
                            s->d_out, n_out, d_step, d_last,
                            s->d_ws_bf, s->d_ws_f, s->d_ws_i,
-                           s->d_control, workers);
+                           s->d_control, workers, d_exp);
     }
     hipError_t sync_err = hipDeviceSynchronize();
     if (sync_err != hipSuccess) {
@@ -991,13 +1019,23 @@ extern "C" int mid_session_run_ex(void* handle, const int* h_prompt, int prompt_
         chk_hip(hipMemcpy(h_out_step_logits, s->d_step_logits, (size_t)n_out * MID_VOCAB * sizeof(float), hipMemcpyDeviceToHost), "hipMemcpy step_logits D2H");
     if (d_last)
         chk_hip(hipMemcpy(h_out_last_logits, s->d_logits, (size_t)MID_VOCAB * sizeof(float), hipMemcpyDeviceToHost), "hipMemcpy logits D2H");
+    if (d_exp)
+        chk_hip(hipMemcpy(h_out_chosen_experts, d_exp, (size_t)(prompt_len + n_out) * MID_NL * MID_TOPK * sizeof(int), hipMemcpyDeviceToHost), "hipMemcpy chosen_experts D2H");
     return 0;
+}
+
+extern "C" int mid_session_run_ex(void* handle, const int* h_prompt, int prompt_len,
+                                  int* h_out_tokens, int n_out,
+                                  float* h_out_step_logits, float* h_out_last_logits,
+                                  int workers, int mode, uint32_t* out_control) {
+    return mid_session_run_ex2(handle, h_prompt, prompt_len, h_out_tokens, n_out,
+                               h_out_step_logits, h_out_last_logits, workers, mode, out_control, nullptr);
 }
 
 extern "C" int mid_session_run(void* handle, const int* h_prompt, int prompt_len,
                                int* h_out_tokens, int n_out, float* h_out_last_logits,
                                int workers) {
-    return mid_session_run_ex(handle, h_prompt, prompt_len, h_out_tokens, n_out, nullptr, h_out_last_logits, workers, 0, nullptr);
+    return mid_session_run_ex2(handle, h_prompt, prompt_len, h_out_tokens, n_out, nullptr, h_out_last_logits, workers, 0, nullptr, nullptr);
 }
 
 extern "C" void mid_session_free(void* handle) {
@@ -1017,5 +1055,6 @@ extern "C" void mid_session_free(void* handle) {
     chk_hip(hipFree(s->d_out), "hipFree");
     chk_hip(hipFree(s->d_step_logits), "hipFree");
     chk_hip(hipFree(s->d_logits), "hipFree");
+    chk_hip(hipFree(s->d_chosen_experts), "hipFree");
     delete s;
 }

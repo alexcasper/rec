@@ -83,6 +83,54 @@ def vocab_of(ckpt: Path) -> int:
 
 
 # ---------------------------------------------------------------- reference
+def reference_logits_and_experts(ckpt: Path, prompt: list[int], tokens: list[int], device: str,
+                                 kv_dtype: str = "fp32") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """fp32-compute torch-layer logits AND selected top-k MoE experts teacher-forced
+    along `tokens`, with K/V stored at `kv_dtype`.
+    Returns:
+      logits         : float32 [n_out + 1, V]
+      chosen_experts : int32   [n_out, NL, top_k]     (decode steps 0..n_out-1, at pos P-1..P+n_out-2)
+      step_experts   : int32   [P + n_out, NL, top_k] (all positions 0..P+n_out-1; dense layers = -1)
+    """
+    import types
+
+    import torch
+
+    from rec_mlx.torch_rocm import load_model
+
+    model = load_model(ckpt, device=device, dtype=torch.float32)
+    model.kv_store_dtype = {"fp32": None, "bf16": torch.bfloat16}[kv_dtype]
+    total = len(prompt) + len(tokens)
+    nl = model.cfg.layers
+    k_top = model.cfg.topk
+    step_experts = np.full((total, nl, k_top), -1, dtype=np.int32)
+    real_topk = torch.topk
+    cur_layer = [0]
+
+    def moe_hook(self, x, i):
+        cur_layer[0] = i
+
+        def topk_hook(t, k, dim=-1, **kw):
+            r = real_topk(t, k, dim=dim, **kw)
+            if k == k_top and t.dim() == 3:
+                step_experts[:, cur_layer[0], :] = r.indices[0].detach().cpu().numpy().astype(np.int32)
+            return r
+
+        torch.topk = topk_hook
+        try:
+            return type(self)._moe(self, x, i)
+        finally:
+            torch.topk = real_topk
+
+    model._moe = types.MethodType(moe_hook, model)
+    with torch.inference_mode():
+        ids = torch.tensor([prompt + tokens], device=model.device)
+        out = model.forward(ids)[0, len(prompt) - 1:]
+    p0 = len(prompt) - 1
+    chosen_experts = step_experts[p0 : p0 + len(tokens)].copy()
+    return out.float().cpu().numpy(), chosen_experts, step_experts
+
+
 def reference_logits(ckpt: Path, prompt: list[int], tokens: list[int], device: str,
                      kv_dtype: str = "fp32"):
     """fp32-compute torch-layer logits teacher-forced along `tokens`, with K/V
@@ -231,7 +279,10 @@ def _apply_fault(model, fault: str):
     return model
 
 
-def produce(ckpt: Path, case: str, out: Path, impl: str, device: str, fault: str = "none") -> Path:
+def produce(ckpt: Path, case: str, out: Path, impl: str, device: str, fault: str = "none",
+            emit_experts: bool = False) -> Path:
+    import types
+
     import torch
 
     from rec_mlx.torch_rocm import load_model
@@ -244,19 +295,62 @@ def produce(ckpt: Path, case: str, out: Path, impl: str, device: str, fault: str
     if impl == "torch-fp32-bf16kv":
         model.kv_store_dtype = torch.bfloat16  # fp32 compute, bf16 KV storage
     prompt = spec["prompt"]
+    n_out = spec["n_out"]
+    nl = model.cfg.layers
+    k_top = model.cfg.topk
+    all_experts = np.full((len(prompt) + n_out, nl, k_top), -1, dtype=np.int32) if emit_experts else None
+
+    if all_experts is not None:
+        bound_moe = model._moe
+        real_topk = torch.topk
+        pos_cursor = [0]
+        cur_layer = [0]
+
+        def moe_record(self, x, i):
+            cur_layer[0] = i
+            seq_len = x.shape[1]
+
+            def topk_record(t, k, dim=-1, **kw):
+                r = real_topk(t, k, dim=dim, **kw)
+                if k == k_top and t.dim() == 3:
+                    p0 = pos_cursor[0]
+                    all_experts[p0 : p0 + seq_len, cur_layer[0], :] = (
+                        r.indices[0].detach().cpu().numpy().astype(np.int32)
+                    )
+                return r
+
+            torch.topk = topk_record
+            try:
+                return bound_moe(x, i)
+            finally:
+                torch.topk = real_topk
+
+        model._moe = types.MethodType(moe_record, model)
+
     with torch.inference_mode():  # kernel-shaped flow: prefill, then one token per step
         kv = model.new_cache()
+        if all_experts is not None:
+            pos_cursor[0] = 0
         logits = model.forward(torch.tensor([prompt], device=model.device), kv)[0, -1]
         tokens, steps = [], []
-        for _ in range(spec["n_out"]):
+        for step_idx in range(n_out):
             steps.append(logits.float().cpu().numpy())
             tokens.append(int(logits.argmax()))
+            if all_experts is not None:
+                pos_cursor[0] = len(prompt) + step_idx
             logits = model.forward(torch.tensor([[tokens[-1]]], device=model.device), kv)[0, -1]
-    np.savez(out, schema=np.array(SCHEMA), case=np.array(case), ckpt_sha256=np.array(shard_sha256(ckpt)),
-             impl=np.array(f"{impl}@{device}" + (f" fault={fault}" if fault != "none" else "")),
-             kv_dtype=np.array(kv_dtype),
-             prompt=np.array(prompt, np.int32), tokens=np.array(tokens, np.int32),
-             last_logits=logits.float().cpu().numpy(), step_logits=np.stack(steps))
+    payload = dict(
+        schema=np.array(SCHEMA), case=np.array(case), ckpt_sha256=np.array(shard_sha256(ckpt)),
+        impl=np.array(f"{impl}@{device}" + (f" fault={fault}" if fault != "none" else "")),
+        kv_dtype=np.array(kv_dtype),
+        prompt=np.array(prompt, np.int32), tokens=np.array(tokens, np.int32),
+        last_logits=logits.float().cpu().numpy(), step_logits=np.stack(steps),
+    )
+    if all_experts is not None:
+        p0 = len(prompt) - 1
+        payload["chosen_experts"] = all_experts[p0 : p0 + n_out]
+        payload["step_experts"] = all_experts
+    np.savez(out, **payload)
     return out
 
 
@@ -282,6 +376,8 @@ def main(argv=None) -> int:
     p.add_argument("--impl", choices=("torch-fp32", "torch-fp32-bf16kv", "torch-bf16"), default="torch-bf16")
     p.add_argument("--fault", choices=FAULTS, default="none")
     p.add_argument("--device", default=None)
+    p.add_argument("--emit-experts", action="store_true", default=False,
+                   help="Emit optional chosen_experts [n_out, layers, top_k] and step_experts [P+n_out, layers, top_k]")
     k = sub.add_parser("check")
     k.add_argument("--ckpt", type=Path, required=True)
     k.add_argument("kernel_out", type=Path)
@@ -298,7 +394,8 @@ def main(argv=None) -> int:
                           "cases": case_matrix(vocab_of(a.ckpt))}))
         return 0
     if a.cmd == "produce":
-        print(produce(a.ckpt, a.case, a.out, a.impl, a.device or _default_device(), a.fault))
+        print(produce(a.ckpt, a.case, a.out, a.impl, a.device or _default_device(), a.fault,
+                      emit_experts=a.emit_experts))
         return 0
     device = a.ref_device or _default_device()
     if a.cmd == "check":
