@@ -181,3 +181,58 @@ Findings:
 Gated-run wall summary: tiny-2L INT4 on idle dusk 890M = **~90k prefill /
 ~470 decode tok/s**, reproducing the committed table; the committed
 numbers stand.
+
+## 8. Gated supersession of §1–§2 (mid-8L, 2026-11-19)
+
+Mid-8L re-profiled under the gated protocol (bench + profiler fire only
+after `gpu_busy < 5` for ≥1 s; driver `aip_gated_profile_driver.py`,
+single-run harness `aip_gated_profile_once.py`). Three gated profile runs
+(A, B, C) agree to **<1 ms on every stage** — the earlier ±2× run-to-run
+spread was contention, not the profiler. Gated bench wall: **497.3
+prefill / 2.24 decode tok/s** (committed: 498.2 / 2.25 ✓). Full dump:
+`aip-prep-raw-gated-mid-C.json` (plus A/B records in
+`aip-prep-raw-gated-mid.jsonl`, stdout-truncated but stage-complete).
+
+**Decode step: 451.2 ms** (down from 551–600 ms contended; = 2.22 tok/s ✓):
+
+| stage | ms | share | of which dequant |
+|---|---|---|---|
+| lm_head dequant | 225.8 | **50.1%** | all |
+| attention | 127.8 | 28.3% | 115.4 ms — **90% dequant** (25.6% pt) |
+| moe | 77.9 | 17.3% | expert_dq 35.9 + shared ~34.4 ≈ 90% (15.6% pt) |
+| mlp_dense (layer 0) | 10.0 | 2.2% | 9.6 ms — all |
+| rms_norm | 1.1 | 0.2% | — |
+| embed | 0.1 | 0.0% | — |
+| residual | 8.3 | 1.8% | — |
+
+**Total dequant = 421.1 ms = 93.3% of a gated decode step** (§1's 81%
+under-attributed attention dequant; corrected here). Attention math is
+~12 ms; the stage is essentially a dequant cost.
+
+**Prefill forward: ~994 ms exclusive** (515 tok/s implied; bench 497.3):
+
+| stage | ms | share | of which dequant |
+|---|---|---|---|
+| moe | 513.6 | **51.6%** | expert_dq 405.2 = **40.7% pt**; shared ~3–4% pt |
+| attention | 220.8 | 22.2% | 115.1 ms (11.6% pt) |
+| lm_head dequant | 225.8 | 22.7% | all |
+| rms_norm | 20.2 | 2.0% | — |
+| mlp_dense (layer 0) | 13.1 | 1.3% | — |
+| embed | 0.9 | 0.1% | — |
+| residual | ~49 | 4.7% | lm_head F.linear + adds |
+
+Total dequant ≈ 790 ms ≈ **76% of prefill**. Ranking vs §2 unchanged
+(moe > attention ≈ lm_head), but gated shares are cleaner: expert_dq is
+40.7% of prefill (was 28–37% contended), and lm_head dequant is a stable
+22.7% (run B's contended 9.5% was distortion).
+
+**Supersession summary:** §8 values replace §1–§2 absolute ms for all
+rec-aip quoting. §5's fusion order is unchanged and its evidence is now
+stronger: dequant is 93% of decode / 76% of prefill, and a single fused
+dequant-matmul primitive plus the lm_head fix addresses ~93% of the
+decode step. lm_head dequant moves at most ~0.72 GiB of unavoidable
+traffic (0.57 GiB bf16 out + 0.15 GiB packed reads) in 225.8 ms ≈ 3
+GiB/s — and far more than that actually moves once the fp32
+`repeat_interleave` intermediates materialize — versus tens of GiB/s the
+890M delivers on dense matmuls. The pure-torch broadcast fix (§4)
+remains step 1.
