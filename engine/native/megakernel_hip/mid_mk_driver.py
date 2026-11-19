@@ -361,9 +361,17 @@ def verify_run(npz_path: Path, ckpt_dir: Path) -> bool:
 
 def load_lib() -> ctypes.CDLL:
     lib = ctypes.CDLL(str(HERE / "flint_mid.so"))
+    lib.mid_query_occupancy.restype = ctypes.c_int
+    lib.mid_query_occupancy.argtypes = [
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
     lib.mid_session_create.restype = ctypes.c_void_p
     lib.mid_session_create.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
-    lib.mid_session_run.restype = None
+    lib.mid_session_run.restype = ctypes.c_int
     lib.mid_session_run.argtypes = [
         ctypes.c_void_p,
         ctypes.c_void_p,
@@ -373,7 +381,7 @@ def load_lib() -> ctypes.CDLL:
         ctypes.c_void_p,
         ctypes.c_int,
     ]
-    lib.mid_session_run_ex.restype = None
+    lib.mid_session_run_ex.restype = ctypes.c_int
     lib.mid_session_run_ex.argtypes = [
         ctypes.c_void_p,
         ctypes.c_void_p,
@@ -384,10 +392,33 @@ def load_lib() -> ctypes.CDLL:
         ctypes.c_void_p,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.c_void_p,
     ]
     lib.mid_session_free.restype = None
     lib.mid_session_free.argtypes = [ctypes.c_void_p]
     return lib
+
+
+def query_occupancy(lib: ctypes.CDLL, mode: int = 0) -> dict[str, int]:
+    cus = ctypes.c_int(0)
+    b_per_cu = ctypes.c_int(0)
+    max_active = ctypes.c_int(0)
+    wave = ctypes.c_int(0)
+    rc = lib.mid_query_occupancy(
+        ctypes.c_int(mode),
+        ctypes.byref(cus),
+        ctypes.byref(b_per_cu),
+        ctypes.byref(max_active),
+        ctypes.byref(wave),
+    )
+    assert rc == 0, f"mid_query_occupancy failed with {rc}"
+    return {
+        "cus": cus.value,
+        "max_blocks_per_cu": b_per_cu.value,
+        "max_co_resident_workers": max_active.value,
+        "wave_size": wave.value,
+        "compiled_hard_cap": 64,
+    }
 
 
 def shard_sha256(ckpt_dir: Path) -> str:
@@ -444,8 +475,9 @@ def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
             step_logits = np.zeros((n_out, MID_VOCAB), dtype=np.float32)
             last_logits = np.zeros(MID_VOCAB, dtype=np.float32)
 
+            ctrl = np.zeros(4, dtype=np.uint32)
             t0 = time.perf_counter()
-            lib.mid_session_run_ex(
+            rc = lib.mid_session_run_ex(
                 sess,
                 prompt_arr.ctypes.data,
                 ctypes.c_int(len(prompt_arr)),
@@ -455,8 +487,12 @@ def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
                 last_logits.ctypes.data,
                 ctypes.c_int(workers),
                 ctypes.c_int(mode),
+                ctrl.ctypes.data,
             )
             dt = time.perf_counter() - t0
+            assert rc == 0 and int(ctrl[2]) == 0, (
+                f"mid_session_run_ex failed: rc={rc}, control[2]={int(ctrl[2])} (phase={int(ctrl[1])})"
+            )
             out_path = out_dir / f"{cname}_{bname}.npz"
             np.savez(
                 out_path,
@@ -478,87 +514,231 @@ def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
     lib.mid_session_free(sess)
 
 
-def run_benchmark(ckpt_dir: Path, workers: int = 16) -> None:
-    """Measure mid-8L persistent megakernel decode32 tok/s and 512-token sequence throughput.
+def _probe_cotenants() -> list[str]:
+    """Return active GPU co-tenant processes (e.g. llama-server on :8080/:8090/:8091)."""
+    import subprocess
+    try:
+        out = subprocess.check_output(["ps", "-eo", "pid,pcpu,pmem,args"], text=True)
+    except Exception:
+        return []
+    tenants = []
+    for line in out.splitlines():
+        if any(k in line for k in ("llama-server", "rec-mlx")) and "grep" not in line:
+            tenants.append(line.strip())
+    return tenants
 
-    Since `mid_generate` is a persistent single-launch token-loop kernel, a run of
-    (prompt_len=P, n_out=N) executes P+N steps end-to-end in one kernel launch.
-    To isolate pure decode32 tok/s after a 512-token context (matching run-definitions.md:
-    512 prefill + 4 warmup decode + 32 timed decode steps), we measure:
-      - `t_516`: wall-clock for 512 prompt + 4 warmup decode steps (516 total positions)
-      - `t_548`: wall-clock for 512 prompt + 36 decode steps (548 total positions)
-      - `decode32_after_512_tok_s = 32 / (t_548 - t_516)`
-    And we also measure direct short-prompt decode32 (`prompt=4, n_out=32`) and
-    single-launch 512-token throughput (`512 / t_512`).
+
+def run_benchmark(ckpt_dir: Path, requested_workers: int = 64, mode: int = 0) -> None:
+    """Execute the corrected decode32 differential benchmark protocol (R1-R8).
+
+    - Starts with `requested_workers` (default 64, hard cap 64 per R3); queries
+      `hipOccupancyMaxActiveBlocksPerMultiprocessor` (R6) and probes whether
+      `requested_workers` completes without barrier abort (`control[2] == 0`, R2/R5).
+      Also runs at occupancy-clamped / CU-count workers when `requested_workers`
+      exceeds co-resident capacity or aborts.
+    - Uses alternating ABBA pair order over 4 pairs (`(A,B)`, `(B,A)`, `(A,B)`, `(B,A)`)
+      per R4 to cancel linear thermal/clock drift on shared iGPUs.
+    - Verifies row-validity conditions on every launch (R2/R5):
+        1. `rc == 0` and `control[2] == 0` (no barrier spin-timeout abort),
+        2. first 4 generated tokens of the 36-step run equal the 4 tokens of the
+           4-step baseline run (`prefix4_match == True`),
+        3. all token IDs in `[0, vocab)` and `per_pair_dt > 0`.
     """
+    if requested_workers < 1 or requested_workers > 64:
+        raise ValueError(f"R3 violation: workers={requested_workers} must be in [1, 64]")
+
+    sha = shard_sha256(ckpt_dir)
     t0_pack = time.perf_counter()
     bank, off, _ = pack_mid_bank(ckpt_dir)
     pack_s = time.perf_counter() - t0_pack
     bank_gib = bank.nbytes / (2 ** 30)
 
     lib = load_lib()
+    occ = query_occupancy(lib, mode=mode)
+    cotenants = _probe_cotenants()
+
     max_total = 600
     sess = lib.mid_session_create(bank.ctypes.data, off.ctypes.data, ctypes.c_int(max_total))
 
     rng = np.random.default_rng(0)
     prompt512 = rng.integers(3, MID_VOCAB, size=512, dtype=np.int32)
+    prompt512_sha256 = hashlib.sha256(prompt512.tobytes()).hexdigest()
     prompt4 = np.array([1, 5, 6, 7], dtype=np.int32)
-    out_buf = np.zeros(64, dtype=np.int32)
+    prompt4_sha256 = hashlib.sha256(prompt4.tobytes()).hexdigest()
 
-    # Warmup launches
-    for _ in range(2):
-        lib.mid_session_run(sess, prompt4.ctypes.data, 4, out_buf.ctypes.data, 8, None, workers)
+    build_names = {
+        0: "bf16-production (mid_generate, kv_dtype=bf16)",
+        1: "fp32-compute-bf16kv (mid_generate_fp32_bf16kv, kv_dtype=bf16)",
+        2: "fp32-validation (mid_generate_fp32kv, kv_dtype=fp32)",
+    }
 
-    # 1. Short-prompt decode32 (prompt=4, n_out=32 -> 36 steps, vs prompt=4, n_out=4 -> 8 steps)
-    t_short4_list, t_short36_list = [], []
-    for _ in range(3):
+    def run_one(p_arr: np.ndarray, n_out: int, w: int) -> tuple[float, list[int], list[int], int]:
+        out_buf = np.zeros(n_out, dtype=np.int32)
+        ctrl = np.zeros(4, dtype=np.uint32)
         t0 = time.perf_counter()
-        lib.mid_session_run(sess, prompt4.ctypes.data, 4, out_buf.ctypes.data, 4, None, workers)
-        t_short4_list.append(time.perf_counter() - t0)
+        rc = lib.mid_session_run_ex(
+            sess,
+            p_arr.ctypes.data,
+            ctypes.c_int(len(p_arr)),
+            out_buf.ctypes.data,
+            ctypes.c_int(n_out),
+            None,
+            None,
+            ctypes.c_int(w),
+            ctypes.c_int(mode),
+            ctrl.ctypes.data,
+        )
+        dt = time.perf_counter() - t0
+        return dt, out_buf.tolist(), [int(x) for x in ctrl], int(rc)
 
-        t0 = time.perf_counter()
-        lib.mid_session_run(sess, prompt4.ctypes.data, 4, out_buf.ctypes.data, 36, None, workers)
-        t_short36_list.append(time.perf_counter() - t0)
+    def bench_at_workers(w: int) -> dict:
+        # Probe / warmup: 2 short launches (prompt4, n_out=8)
+        for _ in range(2):
+            dt, toks, ctrl, rc = run_one(prompt4, 8, w)
+            if rc != 0 or ctrl[2] != 0:
+                return {
+                    "workers": w,
+                    "valid": False,
+                    "abort_reason": f"warmup barrier abort: rc={rc}, control={ctrl} (phase={ctrl[1]}, abort_flag={ctrl[2]})",
+                    "warmup_elapsed_s": round(dt, 4),
+                }
 
-    dt_short32 = (sum(t_short36_list) / 3.0) - (sum(t_short4_list) / 3.0)
-    decode32_short_tok_s = 32.0 / dt_short32
-    decode_all36_tok_s = 36.0 / (sum(t_short36_list) / 3.0)
+        # 1. Short-ctx ABBA over 4 pairs: A=(prompt4, n_out=4), B=(prompt4, n_out=36)
+        short_pairs = []
+        abba_orders = ["AB", "BA", "AB", "BA"]
+        for p_idx, order in enumerate(abba_orders):
+            if order == "AB":
+                t_a, tok_a, ctrl_a, rc_a = run_one(prompt4, 4, w)
+                t_b, tok_b, ctrl_b, rc_b = run_one(prompt4, 36, w)
+            else:
+                t_b, tok_b, ctrl_b, rc_b = run_one(prompt4, 36, w)
+                t_a, tok_a, ctrl_a, rc_a = run_one(prompt4, 4, w)
+            dt_pair = t_b - t_a
+            prefix_ok = (tok_a == tok_b[:4])
+            ids_ok = all(0 <= t < MID_VOCAB for t in tok_b)
+            no_abort = (rc_a == 0 and rc_b == 0 and ctrl_a[2] == 0 and ctrl_b[2] == 0)
+            pair_valid = no_abort and prefix_ok and ids_ok and (dt_pair > 0)
+            short_pairs.append({
+                "pair": p_idx,
+                "order": order,
+                "t8_s": round(t_a, 5),
+                "t40_s": round(t_b, 5),
+                "dt32_s": round(dt_pair, 5),
+                "decode32_tok_s": round(32.0 / dt_pair, 2) if dt_pair > 0 else 0.0,
+                "control_a_abort": ctrl_a[2],
+                "control_b_abort": ctrl_b[2],
+                "prefix4_match": prefix_ok,
+                "ids_in_vocab": ids_ok,
+                "valid": pair_valid,
+            })
 
-    # 2. Full 512-context protocol (512 prompt + 4 warmup vs 512 prompt + 36 decode)
-    # 1 warmup at 516
-    lib.mid_session_run(sess, prompt512.ctypes.data, 512, out_buf.ctypes.data, 4, None, workers)
-    t_516_list, t_548_list = [], []
-    for _ in range(3):
-        t0 = time.perf_counter()
-        lib.mid_session_run(sess, prompt512.ctypes.data, 512, out_buf.ctypes.data, 4, None, workers)
-        t_516_list.append(time.perf_counter() - t0)
+        # 2. 512-ctx ABBA over 4 pairs after 1 warmup at 516
+        w_dt, w_tok, w_ctrl, w_rc = run_one(prompt512, 4, w)
+        if w_rc != 0 or w_ctrl[2] != 0:
+            return {
+                "workers": w,
+                "valid": False,
+                "abort_reason": f"512-ctx warmup barrier abort: rc={w_rc}, control={w_ctrl}",
+            }
 
-        t0 = time.perf_counter()
-        lib.mid_session_run(sess, prompt512.ctypes.data, 512, out_buf.ctypes.data, 36, None, workers)
-        t_548_list.append(time.perf_counter() - t0)
+        ctx512_pairs = []
+        last_tok36 = []
+        for p_idx, order in enumerate(abba_orders):
+            if order == "AB":
+                t_a, tok_a, ctrl_a, rc_a = run_one(prompt512, 4, w)
+                t_b, tok_b, ctrl_b, rc_b = run_one(prompt512, 36, w)
+            else:
+                t_b, tok_b, ctrl_b, rc_b = run_one(prompt512, 36, w)
+                t_a, tok_a, ctrl_a, rc_a = run_one(prompt512, 4, w)
+            last_tok36 = tok_b
+            dt_pair = t_b - t_a
+            prefix_ok = (tok_a == tok_b[:4])
+            ids_ok = all(0 <= t < MID_VOCAB for t in tok_b)
+            no_abort = (rc_a == 0 and rc_b == 0 and ctrl_a[2] == 0 and ctrl_b[2] == 0)
+            pair_valid = no_abort and prefix_ok and ids_ok and (dt_pair > 0)
+            ctx512_pairs.append({
+                "pair": p_idx,
+                "order": order,
+                "t516_s": round(t_a, 5),
+                "t548_s": round(t_b, 5),
+                "dt32_s": round(dt_pair, 5),
+                "decode32_tok_s": round(32.0 / dt_pair, 2) if dt_pair > 0 else 0.0,
+                "control_a_abort": ctrl_a[2],
+                "control_b_abort": ctrl_b[2],
+                "prefix4_match": prefix_ok,
+                "ids_in_vocab": ids_ok,
+                "valid": pair_valid,
+            })
 
-    t516_mean = sum(t_516_list) / len(t_516_list)
-    t548_mean = sum(t_548_list) / len(t_548_list)
-    dt_ctx512_32 = t548_mean - t516_mean
-    decode32_ctx512_tok_s = 32.0 / dt_ctx512_32 if dt_ctx512_32 > 0 else 0.0
-    seq516_tok_s = 516.0 / t516_mean
+        all_valid = all(p["valid"] for p in short_pairs) and all(p["valid"] for p in ctx512_pairs)
+        t8_mean = sum(p["t8_s"] for p in short_pairs) / 4.0
+        t40_mean = sum(p["t40_s"] for p in short_pairs) / 4.0
+        dt_short_mean = t40_mean - t8_mean
+        short_rates = [p["decode32_tok_s"] for p in short_pairs]
+
+        t516_mean = sum(p["t516_s"] for p in ctx512_pairs) / 4.0
+        t548_mean = sum(p["t548_s"] for p in ctx512_pairs) / 4.0
+        dt_512_mean = t548_mean - t516_mean
+        ctx512_rates = [p["decode32_tok_s"] for p in ctx512_pairs]
+
+        return {
+            "workers": w,
+            "valid": all_valid,
+            "decode32_after_512_differential_tok_s": round(32.0 / dt_512_mean, 2) if dt_512_mean > 0 else 0.0,
+            "decode32_after_512_pair_min_tok_s": round(min(ctx512_rates), 2),
+            "decode32_after_512_pair_max_tok_s": round(max(ctx512_rates), 2),
+            "decode32_short_ctx_differential_tok_s": round(32.0 / dt_short_mean, 2) if dt_short_mean > 0 else 0.0,
+            "decode32_short_ctx_pair_min_tok_s": round(min(short_rates), 2),
+            "decode32_short_ctx_pair_max_tok_s": round(max(short_rates), 2),
+            "end_to_end_516_pos_tok_s": round(516.0 / t516_mean, 2),
+            "t516_mean_s": round(t516_mean, 4),
+            "t548_mean_s": round(t548_mean, 4),
+            "dt512_mean_s": round(dt_512_mean, 4),
+            "t8_mean_s": round(t8_mean, 4),
+            "t40_mean_s": round(t40_mean, 4),
+            "dt_short_mean_s": round(dt_short_mean, 4),
+            "ctx512_pairs": ctx512_pairs,
+            "short_pairs": short_pairs,
+            "generated_tokens_sample": last_tok36[:12],
+        }
+
+    runs = []
+    # 1. Run at requested_workers (e.g. 64)
+    r_req = bench_at_workers(requested_workers)
+    runs.append(r_req)
+
+    # 2. If requested_workers > max_co_resident_workers or > cus, also run at clamped occupancy & CU count
+    clamped_w = min(requested_workers, occ["max_co_resident_workers"])
+    if clamped_w != requested_workers:
+        runs.append(bench_at_workers(clamped_w))
+    if occ["cus"] not in (requested_workers, clamped_w):
+        runs.append(bench_at_workers(occ["cus"]))
 
     lib.mid_session_free(sess)
 
+    # Session peak memory: bank + sliding KV (bf16) + full KV@600 (bf16) + ws_f + logits
+    session_peak_gib = bank_gib + (
+        4 * 2 * MID_NKV * MID_WIN * MID_HDIM * 2
+        + 4 * 2 * MID_NKV * max_total * MID_HDIM * 2
+        + (32768 + 128 + MID_VOCAB) * 4
+        + MID_VOCAB * 4
+    ) / (2 ** 30)
+
     res = {
+        "protocol": "rec-definitions-R1-R8 differential ABBA (4 pairs)",
         "ckpt": str(ckpt_dir),
-        "kernel": "flint_mid_megakernel.hip (mid_generate, single-launch persistent INT4/INT8+BF16)",
-        "workers": workers,
-        "threads_per_worker": 256,
+        "ckpt_sha256": sha,
+        "build_tier": build_names.get(mode, f"mode={mode}"),
+        "prompt512_expr": "np.random.default_rng(0).integers(3, 150144, size=512, dtype=np.int32)",
+        "prompt512_int32_sha256": prompt512_sha256,
+        "prompt4": [1, 5, 6, 7],
+        "prompt4_int32_sha256": prompt4_sha256,
+        "occupancy": occ,
+        "co_tenants": cotenants,
         "resident_bank_gib": round(bank_gib, 3),
+        "session_peak_gib": round(session_peak_gib, 3),
         "pack_seconds": round(pack_s, 3),
-        "decode32_short_ctx_tok_s": round(decode32_short_tok_s, 2),
-        "decode36_end_to_end_tok_s": round(decode_all36_tok_s, 2),
-        "decode32_after_512_prefill_tok_s": round(decode32_ctx512_tok_s, 2),
-        "serial_516_step_mean_tok_s": round(seq516_tok_s, 2),
-        "t516_s": round(t516_mean, 4),
-        "t548_s": round(t548_mean, 4),
-        "generated_tokens_sample": out_buf[:12].tolist(),
+        "runs": runs,
     }
     print(json.dumps(res, indent=2))
 
@@ -645,10 +825,11 @@ def run_q4_bench() -> bool:
 
 
 def main(argv: list[str]) -> int:
-    ckpt = Path("/home/dusk/rec-ve/ckpt/cpu-baseline-mid")
+    ckpt: Path | None = None
     prompt = [1, 5, 6, 7]
     n_out = 16
-    workers = 16
+    workers = 64
+    mode = 0
     out = HERE / "mid_mk_io.npz"
     verify_path: Path | None = None
     emit_suite_dir: Path | None = None
@@ -681,6 +862,8 @@ def main(argv: list[str]) -> int:
             n_out = int(val)
         elif key == "--workers":
             workers = int(val)
+        elif key == "--mode":
+            mode = int(val)
         elif key == "--out":
             out = Path(val)
         elif key == "--verify":
@@ -693,40 +876,48 @@ def main(argv: list[str]) -> int:
             raise SystemExit(f"unknown arg {a}")
         i += 1
 
+    if q4_bench:
+        return 0 if run_q4_bench() else 1
+
+    if ckpt is None:
+        raise SystemExit("--ckpt <checkpoint_dir> is required (no host-specific default)")
+
     if emit_suite_dir is not None:
         emit_conformance_suite(ckpt, emit_suite_dir, workers=workers, builds=suite_builds)
         return 0
-
-    if q4_bench:
-        return 0 if run_q4_bench() else 1
 
     if verify_path is not None:
         return 0 if verify_run(verify_path, ckpt) else 1
 
     if bench:
-        run_benchmark(ckpt, workers=workers)
+        run_benchmark(ckpt, requested_workers=workers, mode=mode)
         return 0
 
     bank, off, _ = pack_mid_bank(ckpt)
     prompt_arr = np.array(prompt, dtype=np.int32)
     out_tokens = np.zeros(n_out, dtype=np.int32)
     out_logits = np.zeros(MID_VOCAB, dtype=np.float32)
+    ctrl = np.zeros(4, dtype=np.uint32)
 
     lib = load_lib()
     max_total = max(len(prompt) + n_out + 16, 64)
     sess = lib.mid_session_create(bank.ctypes.data, off.ctypes.data, ctypes.c_int(max_total))
     t0 = time.perf_counter()
-    lib.mid_session_run(
+    rc = lib.mid_session_run_ex(
         sess,
         prompt_arr.ctypes.data,
         ctypes.c_int(len(prompt)),
         out_tokens.ctypes.data,
         ctypes.c_int(n_out),
+        None,
         out_logits.ctypes.data,
         ctypes.c_int(workers),
+        ctypes.c_int(mode),
+        ctrl.ctypes.data,
     )
     elapsed = time.perf_counter() - t0
     lib.mid_session_free(sess)
+    assert rc == 0 and int(ctrl[2]) == 0, f"launch failed: rc={rc}, control={ctrl.tolist()}"
 
     out.parent.mkdir(parents=True, exist_ok=True)
     np.savez(

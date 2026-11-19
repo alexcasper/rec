@@ -5,16 +5,133 @@ arm (env_aup, w14:p4). Keep all numbers comparable to these definitions.
 
 ## Metric definitions
 
-- **prefill tok/s** = prefill_tokens / wall-clock seconds, where
+- **Canonical prefill tok/s** = prefill_tokens / wall-clock seconds, where
   prefill_tokens = 512 and wall-clock = time from kernel start to
   device-synchronize completion, averaged over 3 runs after 3 warmup runs on
   the same process/weights.
-- **decode tok/s** = generated_tokens / wall-clock seconds, single stream,
-  greedy (temperature 0), after the same 512-token prefill; measured over 32
-  generated tokens after 4 warmup decode steps; device-synchronize before
-  starting and after ending the timing window.
+- **Canonical decode tok/s** = generated_tokens / wall-clock seconds, single
+  stream, greedy (temperature 0), after the same 512-token prefill; measured
+  over 32 generated tokens after 4 warmup decode steps; device-synchronize
+  before starting and after ending the timing window.
 - No batching, single request, no speculative decoding, no prefix-cache reuse
   within the timed window.
+
+### Persistent-Kernel Decode32 Protocol (Adopted Differential Protocol, R1–R8)
+
+A single-launch persistent megakernel (`mid_generate` in
+`engine/native/megakernel_hip/flint_mid_megakernel.hip`) executes the entire
+token loop (`pos = 0 .. P+N-1`) inside one kernel launch and cannot perform a
+mid-launch host synchronize. It runs the identical full forward — including
+`lm_head` and device argmax — at every position (no prefill guard).
+
+1. **Differential `decode32_after_512` (A1 + R4 + R5)**:
+   - Launch A (`t516`): `prompt_len=512, n_out=4` (`516` positions: `512`
+     prefill + `4` warmup-equivalent decode steps).
+   - Launch B (`t548`): `prompt_len=512, n_out=36` (`548` positions: `512`
+     prefill + `4` warmup-equivalent + `32` timed decode steps).
+   - Both launches are bounded by `hipDeviceSynchronize()` inside
+     `mid_session_run_ex`. Because greedy decode is deterministic, positions
+     `0..515` (and all host `hipMemset` / prompt `hipMemcpy` work) are
+     identical and cancel in `t548 - t516`, isolating the 32 forwards at
+     positions `516..547`.
+   - **Alternating ABBA pair order (R4)**: Execute 1 warmup launch at `516`
+     positions, followed by **4 timed pairs in alternating `ABBA` order**
+     (`(A,B)`, `(B,A)`, `(A,B)`, `(B,A)`). Alternating order cancels linear
+     thermal and clock drift on shared/thermally-limited GPUs. Report each
+     pair's `t516`, `t548`, `dt32 = t548 - t516`, per-pair `32 / dt32`, min/max
+     spread across the 4 pairs, and active GPU co-tenants.
+   - `decode32_after_512 = 32 / (mean(t548) - mean(t516))` over the 4 ABBA
+     pairs. Always label rows produced by this method **`differential`**.
+2. **Short-context differential `decode32_short_ctx` (A1 + R4)**:
+   - Launch A (`t8`): `prompt_len=4, n_out=4` (`8` positions).
+   - Launch B (`t40`): `prompt_len=4, n_out=36` (`40` positions).
+   - Execute 2 warmup launches (`prompt_len=4, n_out=8`), then 4 timed pairs in
+     alternating `ABBA` order. `decode32_short_ctx = 32 / (mean(t40) - mean(t8))`.
+3. **End-to-end 516-position throughput (A2)**:
+   - `end_to_end_516_pos_tok_s = 516 / mean(t516)`. Because the persistent
+     kernel runs a serial per-token forward including the `150144×2048`
+     `lm_head` at every prompt position, this metric approximates the serial
+     decode rate and is **not** a canonical batch prefill measure. Do not
+     compare it like-for-like with canonical `prefill512` or `decode32` rows.
+4. **Pinned benchmark prompts (A3 + R1)**:
+   - `prompt512` (512 `int32` tokens):
+     `np.random.default_rng(0).integers(3, 150144, size=512, dtype=np.int32)`
+     - **`int32` little-endian `sha256`**:
+       `4090cfe16f28a7deee8eadde2edf21ba8eb06655b5ad0f61c46b1f05164b4814`
+     - First 8 tokens: `[127716, 95637, 76745, 40509, 46220, 6154, 11299, 2484]`.
+     - *Note (R1)*: This NumPy PCG64 sequence is **not** identical to
+       `engine/tests/torch_rocm_bench.py`, which draws from
+       `torch.Generator().manual_seed(0)` (`torch.randint(3, vocab)`). Because
+       MoE routing depends on token values, record which RNG generated the
+       prompt.
+   - `prompt4` (short-context 4 `int32` tokens): `[1, 5, 6, 7]` (note: token
+     `5` is `<|assistant|>` in the synthetic tokenizer; `int32` `sha256`:
+     `e8a26640d83fcc702f9fb94350c62e3da6bee25ad44c60aa882b712c0803d16d`).
+   - These benchmark prompts are distinct from the `rec-pp2` correctness cases
+     (`short4`, `chat`, `wrap512` in
+     `engine/validation/megakernel_mid/mid_mk_check.py`).
+5. **Session KV reuse & row-validity conditions (A5 + R2 + R5)**:
+   - `mid_session_run_ex` reuses the session's `d_kv_sliding` and `d_kv_full`
+     buffers without zeroing them between launches. Because every launch
+     restarts at `pos = 0` and writes slot `pos % 513` (sliding) or `pos`
+     (full) behind `SYNC_ALL` before causal attention reads `t in [t_start, pos]`,
+     stale KV from prior launches is never read.
+   - **Mandatory row-validity conditions (all required for a valid row)**:
+     1. **No barrier abort (`R2`, `R5`)**: `sync_all` spins up to `50,000,000`
+        iterations (`flint_mid_megakernel.hip` L63); on timeout it sets device
+        abort flag `control[2] = phase + 1` and returns early from the kernel.
+        `mid_session_run_ex` **must** copy `d_control` back to host after
+        `hipDeviceSynchronize()` and verify `control[2] == 0`. Any launch with
+        `control[2] != 0` or nonzero HIP return code is an aborted launch and
+        **invalidates the benchmark row**.
+     2. **Trajectory prefix invariance (`R5`)**: In every differential pair,
+        the 4 generated tokens of the baseline launch (`n_out=4`) must equal
+        the first 4 generated tokens of the extended launch (`n_out=36`):
+        `tok_a == tok_b[:4]`.
+     3. **Bounds & positive delta**: `prompt_len + n_out <= max_total`
+        (enforced in `mid_session_run_ex`), every output token ID in
+        `[0, vocab)`, and `dt32 > 0` for every pair.
+6. **Workers cap, occupancy clamping, and co-residency (A6 + R3 + R6)**:
+   - **Compiled hard cap (`R3`)**: `workers <= 64` (`MID_MAX_WORKERS = 64`).
+     `ws_f_maxval` allocates 64 `float` slots (`ws_f_scores + 64 .. + 128`,
+     immediately before `ws_f_logits`); `workers > 64` would overwrite
+     `ws_f_logits` during the parallel argmax reduction. Both
+     `mid_session_run_ex` and `mid_mk_driver.py` reject `workers < 1` or
+     `workers > 64` loudly.
+   - **Co-residency & occupancy clamping (`R6`)**: Because `sync_all` is a
+     device-wide spin barrier across all `workers` blocks, every block must be
+     co-resident simultaneously. Before launching, query
+     `hipOccupancyMaxActiveBlocksPerMultiprocessor(&blocks_per_cu, kernel, 256, 0)`
+     and `hipGetDeviceProperties(&prop, 0)` (exposed via `mid_query_occupancy`).
+     The maximum co-resident worker count is
+     `min(64, prop.multiProcessorCount * blocks_per_cu)`. Launching with
+     `workers > max_co_resident_workers` triggers `control[2] != 0` barrier
+     abort.
+
+| Arch | GPU | Physical CUs (`prop.multiProcessorCount`) | Wave Size | Max Blocks/CU (`256` threads) | Max Co-Resident `workers` | Status |
+|---|---|---|---|---|---|---|
+| `gfx1150` | dusk Radeon 890M (RDNA 3.5, 8 WGPs / 16 CUs) | 8 WGPs (16 CUs) | 32 | 2 | **16** (`8` at 1/WGP) | Perf measured + `rec-pp2` `fp32`-KV 3/3 PASS (`045c72f`), `bf16`-KV 2/3 PASS (not yet signed off on `chat` `bf16`-KV) |
+| `gfx1201` | albion R9700 (RDNA 4, Navi 48) | 32 WGPs (64 CUs) | 32 | query on host | $\le 64$ (hard cap 64) | Host offline (`rec-109` / `rec-a4w`) |
+| `gfx906` | albion MI50 (CDNA 1, Vega 20) | 60 CUs | 64 | query on host | $\le 60$ (hard cap 64) | Host offline; requires ROCm 6.3 toolchain with `gfx906` device libs |
+
+7. **Conformance gates and adopted sign-off policy (A7 + R7 + R8)**:
+
+| Artifact | Checker / Reference | Near-Tie Margin (`TIE_TOL`) | Logit Relative Error Gate (`LOGIT_RTOL`) | Role |
+|---|---|---|---|---|
+| `tiny` matrix (`tiny_mk_driver.py` + `tiny_mk_np_reference.py`) | `fp64` NumPy mirror, pinned to MLX by `test_tiny_mk_reference.py` | `5e-3` | `2e-2` (script); `1e-3` (`rec-109` target) | Phase 2a tiny-2L gate |
+| `mid` driver smoke (`mid_mk_driver.py --verify`) | `fp64` NumPy mirror `forward_mid_np` | `5e-2` | `2e-2` | Legacy driver smoke check (not sign-off) |
+| **`mid` validation target (`rec-pp2`, `mid_mk_check.py`)** | `rec_mlx.torch_rocm` in `fp32` compute, teacher-forced; pinned to MLX by `test_torch_rocm.py` (`1.6e-6`) + `test_mid_mk_harness.py` | **`5e-3`** | **Two-tier: `fp32`-KV $\le 10^{-4}$ / `bf16`-KV $\le 10^{-3}$** over `last_logits` and all 24 `step_logits` rows | **THE mid-8L sign-off gate** |
+
+   - **Adopted sign-off policy (`R7`)**:
+     - Production kernels sign off via an **`fp32`-intermediate validation
+       build** that passes all 3 cases (`short4`, `chat`, `wrap512`) in **both
+       KV tiers** (`fp32`-KV $\le 10^{-4}$, `bf16`-KV $\le 10^{-3}$).
+     - A direct `bf16`-activation run is not a substitute for sign-off.
+   - *(Note per `R8`: `tiny` tiering item 3 from the draft proposal is dropped;
+     any future `tiny` two-tier gate requires dedicated fault-injection
+     calibration at tiny scale.)*
+
+---
 
 ## Model configs
 
@@ -24,7 +141,7 @@ architecture family — identical shapes on every arm:
 | Config | Layers | hidden | heads/kv | head_dim | experts (top-k) | moe_inter | shared_inter | dense_inter | vocab | weights |
 |--------|--------|--------|----------|----------|-----------------|-----------|--------------|-------------|-------|---------|
 | tiny-2L | 2 | 128 | 4/2 | 64 | 8 (2) | 64 | 64 | 256 | 512 | fp32 (~1 MiB) |
-| mid-8L | 8 | 2048 | 32/4 | 128 | 32 (2) | 512 | 1024 | 2048 | 150144 | bf16 (2.85 GiB) |
+| mid-8L | 8 | 2048 | 32/4 | 128 | 32 (2) | 512 | 1024 | 2048 | 150144 | bf16 (2.85 GiB) / INT4 packed (0.944 GiB) |
 
 Common details: sliding_window=513 (alternating sliding/full layers in mid-8L:
 sliding on even layers), rope_theta=10000, RMSNorm eps=1e-6, attention sinks
@@ -34,8 +151,12 @@ whole run; no host→device copies inside timed regions.
 
 ## Environment matrix to report
 
-gpu_model, gpu_arch, driver/runtime stack + version, torch/llama.cpp version,
-weight dtype, kv dtype, context used, host RAM, any HSA/arch overrides.
+gpu_model, gpu_arch, CU/WGP count, wave size, workers, threads/workgroup,
+occupancy clamp, driver/runtime stack + version, full build command + env
+sourcing + runtime `LD_LIBRARY_PATH`, `HSA_OVERRIDE_GFX_VERSION` status,
+python/numpy/torch versions, weight dtype, kv dtype, build tier, checkpoint
+generator + `sha256`, prompt `sha256`, protocol (canonical vs differential
+ABBA), active co-tenants, resident bank GiB, and session peak GiB.
 
 ## Reference numbers (dusk, Radeon 890M gfx1150, 2026-11-17)
 
@@ -81,47 +202,93 @@ packed** on device (INT8 embedding) and are dequantized inside every matmul
 by `rec_mlx.torch_rocm`, with no fused kernel. Routed experts only are
 dequantized. bf16 activations and KV. Checkpoints come from
 `python -m rec_mlx.synthetic --preset {tiny,mid}` (seed 0, seeded router).
-Script: `engine/tests/torch_rocm_bench.py` (same prefill/decode protocol as
-above). Stack: torch 2.9.1+rocm6.4, HIP 6.4.43484, HSA_OVERRIDE_GFX_VERSION=11.0.0.
+Script: `engine/tests/torch_rocm_bench.py` (same canonical prefill/decode
+protocol as above). Stack: torch 2.9.1+rocm6.4, HIP 6.4.43484,
+HSA_OVERRIDE_GFX_VERSION=11.0.0.
 
 | config | resident weights | prefill512 tok/s | decode32 tok/s | peak |
 |---|---|---|---|---|
 | tiny-2L INT4 | <0.01 GiB | 91,963.6 | 495.1 | 0.05 GiB |
 | mid-8L INT4 | 1.03 GiB | 498.2 | 2.25 | 7.1 GiB |
 
-## Reference numbers — rec-tan Phase 2b HIP Persistent Megakernel & Fused INT4 Matmul (dusk, Radeon 890M gfx1150, 2026-11-18)
+## Reference numbers — rec-tan Phase 2b HIP Persistent Megakernel (dusk, Radeon 890M gfx1150, 2026-11-19, Corrected R1–R8 Protocol)
 
-Multi-workgroup persistent single-launch greedy decode megakernel
-(`engine/native/megakernel_hip/flint_mid_megakernel.hip` +
-`mid_mk_driver.py`), consuming the exact zero-copy layout in
-`docs/rocm-model-layer.md` s2 & s4 (U8 INT4 packed nibbles, BF16 scales/biases
-with element-unit expert strides, INT8 affine embeddings, head-major BF16 KV
-with 513-slot ring on even sliding layers and linear growth on odd full
-layers). Compiled with TheRock ROCm 10.0.0 (`hipcc -O2 --offload-arch=gfx1150`),
-launched with `workers=16` workgroups × 256 threads (128 wave32s across 16 CUs)
-synchronized via device-wide `sync_all`.
+### Environment & Reproducibility Matrix (A8)
+- **Host / GPU**: `dusk` — AMD Ryzen AI 9 HX 370 w/ Radeon 890M (`gfx1150`, RDNA 3.5, 8 WGPs / 16 CUs, `wave32`, 46 GiB host RAM shared GTT).
+- **Toolchain & Runtime**: TheRock ROCm 10.0.0 (`~/opt/rocm-10.0.0`), sourced via `source ~/opt/rocm-env.sh` (`PATH=$HOME/opt/rocm-wrappers:$HOME/opt/rocm/bin:$PATH`, `LD_LIBRARY_PATH=$HOME/opt/rocm/lib:$HOME/opt/rocm-hostlibs`, resolving `libamdhip64.so.7` and `gcc-15.3.0-lib/libstdc++.so.6`). **No `HSA_OVERRIDE_GFX_VERSION`** (TheRock targets `gfx1150` natively).
+- **Exact Build Command** (output `flint_mid.so` next to `mid_mk_driver.py` in `engine/native/megakernel_hip/`):
+  ```bash
+  source ~/opt/rocm-env.sh
+  cd engine/native/megakernel_hip
+  hipcc -shared -fPIC -O2 -Wall --offload-arch=gfx1150 flint_mid_megakernel.hip -o flint_mid.so
+  ```
+- **Driver & Python Env**: Torch-free driver process (`~/rec-ve/.venv/bin/python`, Python 3.12, NumPy 2.5.5):
+  ```bash
+  ~/rec-ve/.venv/bin/python mid_mk_driver.py --bench --ckpt ~/rec-ve/ckpt-pp2/mid-prod --workers=64 --mode=0
+  ```
+- **Checkpoint Pinned**: `~/rec-ve/ckpt-pp2/mid-prod`, generated via `python -m rec_mlx.synthetic --preset mid --format production` (U8 INT4 packed weights, INT8 embedding, BF16 scales/biases/norms/router/sinks, no `expert_bias`).
+  - `model-00001.safetensors` `sha256`: `f494e7885d10bdedf5d885faef826a27fdbe4bfb1fb11781fac12c7cabbd92ad`
+- **Build Tier Measured**: `mode=0` (`bf16-production`, `mid_generate`, `kv_dtype=bf16`).
+- **Occupancy Query (`mid_query_occupancy`)**: `prop.multiProcessorCount = 8` (8 WGPs = 16 CUs on `gfx1150`), `max_blocks_per_cu = 2` (at 256 threads/block), **`max_co_resident_workers = 16`**, `wave_size = 32`, `compiled_hard_cap = 64`.
+- **Active Co-Tenants on `dusk` iGPU during run (0.0% CPU / idle)**:
+  1. `PID 2269`: `llama-server` Vulkan (`flint-preview-UD-Q3_K_XL.gguf`, `:8080`, `-c 131072 -ngl 99`)
+  2. `PID 2300`: `llama-server` Vulkan (`google_gemma-4-E4B-it-Q4_K_M.gguf`, `:8090`, `-c 8192 -ngl 99`)
+  3. `PID 2301`: `llama-server` Vulkan (`Qwen_Qwen3.5-4B-Q4_K_M.gguf`, `:8091`, `-c 32768 -ngl 99`)
+- **Memory**: Resident weight bank = **`0.944 GiB`**; megakernel session peak (bank + sliding KV `0.0039 GiB` + full KV@600 `0.0046 GiB` + workspace/logits `0.0013 GiB`) = **`0.954 GiB`**.
 
-| Config / Kernel | Resident Bank | Decode32 (after 512 ctx) | Decode32 (short ctx) | End-to-End 516-step Serial | Conformance vs fp64 Reference |
+### Decode32 Differential ABBA Results (`ckpt: f494e788…`, 4 ABBA pairs)
+
+| Requested `workers` | Co-Resident Valid? | `control[2]` Abort Flag | `prefix4_match` (8/8 pairs) | Differential `decode32_after_512` (`tok/s`) [4-pair min..max] | Differential `decode32_short_ctx` (`tok/s`) [4-pair min..max] | End-to-End 516-pos (`512` prefill + `4` decode) (`tok/s`) | Mean `t516` / `t548` / `dt32` (`s`) |
+|---|---|---|---|---|---|---|---|
+| **`64`** (start cap) | **INVALID (Rejected)** | **`control[2] = 2`** (abort at phase 1, arrived=2 after 8.87s spin timeout) | — | — (exceeds `max_co_resident_workers = 16`) | — | — | — |
+| **`16`** (`max_co_resident_workers`, 2 blocks/WGP = 1/CU) | **VALID (PASS)** | **`0`** (all 19 launches) | **`True`** (4/4 `ctx512` + 4/4 `short`) | **`111.67 tok/s`** [`105.34 .. 118.83`] | **`157.01 tok/s`** [`156.76 .. 157.34`] | **`131.67 tok/s`** | `3.9190s` / `4.2056s` / `0.2866s` |
+| **`8`** (`prop.multiProcessorCount`, 1 block/WGP) | **VALID (PASS)** | **`0`** (all 19 launches) | **`True`** (4/4 `ctx512` + 4/4 `short`) | **`92.99 tok/s`** [`92.74 .. 93.33`] | **`122.05 tok/s`** [`121.96 .. 122.11`] | **`106.54 tok/s`** | `4.8434s` / `5.1875s` / `0.3441s` |
+
+#### Per-Pair ABBA Breakdown (`workers = 16` and `workers = 8`)
+
+- **`workers = 16` (`ctx512`: `prompt512` `sha256: 4090cfe1…`, `n_out=4` vs `36`)**:
+  - Pair 0 (`AB`): `t516 = 3.89843s`, `t548 = 4.18575s`, `dt32 = 0.28732s` -> **`111.37 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+  - Pair 1 (`BA`): `t516 = 3.91490s`, `t548 = 4.18419s`, `dt32 = 0.26929s` -> **`118.83 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+  - Pair 2 (`AB`): `t516 = 3.91974s`, `t548 = 4.22351s`, `dt32 = 0.30377s` -> **`105.34 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+  - Pair 3 (`BA`): `t516 = 3.94293s`, `t548 = 4.22882s`, `dt32 = 0.28589s` -> **`111.93 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+- **`workers = 16` (`short_ctx`: `prompt4 = [1, 5, 6, 7]`, `n_out=4` vs `36`)**:
+  - Pair 0 (`AB`): `t8 = 0.04978s`, `t40 = 0.25351s`, `dt32 = 0.20373s` -> **`157.07 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+  - Pair 1 (`BA`): `t8 = 0.05012s`, `t40 = 0.25425s`, `dt32 = 0.20413s` -> **`156.76 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+  - Pair 2 (`AB`): `t8 = 0.04968s`, `t40 = 0.25306s`, `dt32 = 0.20338s` -> **`157.34 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+  - Pair 3 (`BA`): `t8 = 0.05007s`, `t40 = 0.25408s`, `dt32 = 0.20401s` -> **`156.86 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+- **`workers = 8` (`ctx512`: `prompt512` `sha256: 4090cfe1…`, `n_out=4` vs `36`)**:
+  - Pair 0 (`AB`): `t516 = 4.84223s`, `t548 = 5.18727s`, `dt32 = 0.34504s` -> **`92.74 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+  - Pair 1 (`BA`): `t516 = 4.84254s`, `t548 = 5.18657s`, `dt32 = 0.34402s` -> **`93.02 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+  - Pair 2 (`AB`): `t516 = 4.84325s`, `t548 = 5.18773s`, `dt32 = 0.34448s` -> **`92.89 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+  - Pair 3 (`BA`): `t516 = 4.84552s`, `t548 = 5.18840s`, `dt32 = 0.34288s` -> **`93.33 tok/s`** (`ctrl_a=0, ctrl_b=0, prefix4=True`)
+
+### Cross-Config Comparisons & Memory Labeling (A10)
+- **vs. Unfused Torch INT4 reference (`rec-9na`, same host `dusk` `gfx1150`, same mid-8L INT4 architecture, different prompt RNG [Torch vs NumPy] and differential vs canonical protocol)**:
+  - Throughput: **`111.67 tok/s`** (`workers=16`) / **`92.99 tok/s`** (`workers=8`) vs `2.25 tok/s` = **`49.6×`** / **`41.3×` faster**.
+  - Memory (resident-vs-resident and peak-vs-peak):
+    - **Resident weights**: `0.944 GiB` (megakernel) vs `1.03 GiB` (torch INT4) = **`1.09×` smaller**.
+    - **Peak allocated GPU memory**: `0.954 GiB` (megakernel session peak) vs `7.1 GiB` (torch INT4 peak from per-step full-tensor dequant buffers) = **`7.44×` lower peak**.
+- **vs. Eager Torch Dense-BF16 floor (same host `dusk` `gfx1150`, cross-config: INT4 persistent fused megakernel vs dense BF16 eager torch)**:
+  - Throughput: `111.67 tok/s` vs `37.2 tok/s` = **`3.00×` faster** (`2.50×` at `workers=8`).
+  - Memory: `0.944 GiB` resident / `0.954 GiB` peak vs `2.85 GiB` resident / `3.31 GiB` peak.
+- **vs. Eager Torch Dense-BF16 on discrete R9700 (`albion` `gfx1201`, cross-GPU AND cross-path: fused INT4 megakernel on 890M iGPU vs eager dense-BF16 torch on discrete RDNA4 dGPU)**:
+  - Throughput: `111.67 tok/s` vs `58.7 tok/s` = **`1.90×` faster** (`1.58×` at `workers=8`), because the single-launch megakernel eliminates per-op host launch overhead and reads only 2 routed experts + 1 shared expert in INT4.
+- **vs. Incumbent `llama.cpp` Vulkan (`28.5 tok/s` on `dusk` `:8080`, NOT like-for-like — cross-model & cross-context caveat)**:
+  - `111.67 / 28.5 = 3.92×` (`3.26×` at `workers=8`), **caveat**: compares synthetic **mid-8L INT4 at 512-token context** against the real **Flint 49-layer `Q3_K_XL` GGUF at 131k context** cumulative `/metrics` decode rate. Must not be read as a like-for-like 49L comparison.
+
+### Standalone Fused INT4-Affine Dequant-Matmul (`flint_q4_gemv_kernel`, A9)
+- **Method**: `flint_q4_gemv_host` wraps `iters=50` back-to-back `flint_q4_gemv_device` launches in `hipEventRecord` after `warmup=10` launches (`per_iter_ms = total_ms / 50`). Effective bandwidth formula counts weight+scale+bias+input reads plus fp32 output writes:
+  `GB/s = (N*(K/2) + 2*N*(K/64)*2 + K*2 + N*4) / (per_iter_ms * 1e6)`.
+- **Designated Run of Record** (`2026-11-18T23:36:35Z` commit-adjacent run on `dusk` `gfx1150`, with spread from the `23:35:01Z` build+run noted):
+
+| Projection Shape (`[N, K]`) | Run-of-Record Latency (`ms`) | Run-of-Record Effective BW (`GB/s`) | Prior Run (`23:35Z`) Latency / BW | Max Abs Error vs `fp64` | Relative MaxAbs Error |
 |---|---|---|---|---|---|
-| `mid-8L` INT4 persistent megakernel (`mid_generate`) | **0.944 GiB** | **99.00 tok/s** | **139.60 tok/s** | **124.08 tok/s** | **MATCH** (16/16 & 24/24 tokens exact, rel maxabs err ≤ 5.84e-3) |
-| `tiny-2L` INT4 persistent megakernel (`tiny_generate`, `workers=4..8`) | <0.01 GiB | — | — | — | **11/11 MATCH** (seeds 0..4 × prompts 4,6 × 24 tok + legacy, rel err ≤ 9.12e-4) |
-
-Standalone fused INT4-affine dequant-matmul (`flint_q4_gemv_kernel`, zero-copy U8+BF16 s/b, MSL period-4 pre-scale) on `dusk` `gfx1150`:
-
-| Projection Shape (`[N, K]`) | Latency (ms) | Effective Bandwidth (GB/s) | Max Abs Error vs fp64 | Relative MaxAbs Error |
-|---|---|---|---|---|
-| `expert_gate` `[512, 2048]` | 0.010 ms | 60.69 GB/s | `1.788e-07` | `8.847e-08` |
-| `q_proj` `[4096, 2048]` | 0.149 ms | 31.88 GB/s | `2.384e-07` | `8.931e-08` |
-| `o_proj` `[2048, 4096]` | 0.166 ms | 28.47 GB/s | `2.384e-07` | `1.146e-07` |
-| `lm_head` `[150144, 2048]` | 2.572 ms | **67.48 GB/s** | `2.384e-07` | `8.647e-08` |
-
-Speedups on `dusk` `gfx1150` (`mid-8L` decode32 after 512-token prefill = **99.0 tok/s**, short-context decode32 = **139.6 tok/s**):
-- **44.0×** faster than unfused torch INT4 reference (`2.25 tok/s`, and `0.944 GiB` vs `7.1 GiB` peak memory)
-- **3.47×** faster than incumbent llama.cpp Vulkan (`28.5 tok/s`)
-- **2.66×** faster than eager torch dense-bf16 floor (`37.2 tok/s`)
-- **1.69×** faster on the 890M iGPU than the discrete R9700 eager torch dense-bf16 baseline (`58.7 tok/s`), because the single-launch persistent megakernel eliminates all per-op host dispatch and only touches the 2 routed experts + shared expert in packed INT4.
+| `expert_gate` `[512, 2048]` | **`0.010 ms`** | **`61.23 GB/s`** | `0.010 ms` / `60.69 GB/s` | `1.788e-07` | `8.847e-08` |
+| `q_proj` `[4096, 2048]` | **`0.139 ms`** | **`34.04 GB/s`** | `0.149 ms` / `31.88 GB/s` | `2.384e-07` | `8.931e-08` |
+| `o_proj` `[2048, 4096]` | **`0.138 ms`** | **`34.25 GB/s`** | `0.166 ms` / `28.47 GB/s` | `2.384e-07` | `1.146e-07` |
+| `lm_head` `[150144, 2048]` | **`2.264 ms`** | **`76.67 GB/s`** | `2.572 ms` / `67.48 GB/s` | `2.384e-07` | `8.647e-08` |
 
 Scripts: `engine/.build/torch_conformance.py` (conformance + tiny bench),
-`engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0).
-AUP arm: replicate the mid-8L shapes exactly; report both configs if compute
-allows, mid-8L minimum.
+`engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0),
+`engine/native/megakernel_hip/mid_mk_driver.py` (megakernel differential ABBA bench + `rec-mk-out/1` conformance emitter).
+AUP arm: replicate the mid-8L shapes and pinned `prompt512` (`sha256: 4090cfe1…`) exactly; report both configs if compute allows, mid-8L minimum.

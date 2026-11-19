@@ -617,74 +617,73 @@ __device__ inline void mid_generate_impl(
         mid_rmsnorm_2048(ws_x, B(MID_OFF_FINAL_NORM), sh_xn, sh_red);
 
         // ---- 11. LM Head Q4 Matmul (150144 x 2048) -> ws_f_logits ----
-        int step_slot = pos - prompt_len + 1;
-        // Skip LM head on early prompt positions before prompt_len - 1 to save compute during prefill!
-        if (step_slot >= 0) {
-            q4_block512<MID_HID>(Q_W(MID_OFF_LM_HEAD), Q_S(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID), Q_B(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID),
-                                 sh_xn, nullptr, ws_f_logits, MID_VOCAB, lane, sg, groups);
-            SYNC_ALL();
+        // Always execute lm_head + argmax at every position so persistent decode32
+        // differential cancellation holds identically across prefill and decode steps.
+        q4_block512<MID_HID>(Q_W(MID_OFF_LM_HEAD), Q_S(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID), Q_B(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID),
+                             sh_xn, nullptr, ws_f_logits, MID_VOCAB, lane, sg, groups);
+        SYNC_ALL();
 
-            // ---- 12. Parallel Device Argmax over 150,144 vocab ----
-            float local_max = -1e30f;
-            int local_idx = 0;
-            for (int i = gtid; i < MID_VOCAB; i += gthreads) {
-                float val = ws_f_logits[i];
-                if (val > local_max || (val == local_max && i < local_idx)) {
-                    local_max = val;
-                    local_idx = i;
-                }
+        // ---- 12. Parallel Device Argmax over 150,144 vocab ----
+        float local_max = -1e30f;
+        int local_idx = 0;
+        for (int i = gtid; i < MID_VOCAB; i += gthreads) {
+            float val = ws_f_logits[i];
+            if (val > local_max || (val == local_max && i < local_idx)) {
+                local_max = val;
+                local_idx = i;
             }
-            #pragma unroll
-            for (int off_lane = 16; off_lane >= 1; off_lane >>= 1) {
-                float other_max = __shfl_xor_sync(0xffffffffffffffffull, local_max, off_lane);
-                int   other_idx = __shfl_xor_sync(0xffffffffffffffffull, local_idx, off_lane);
-                if (other_max > local_max || (other_max == local_max && other_idx < local_idx)) {
-                    local_max = other_max;
-                    local_idx = other_idx;
-                }
-            }
-            __shared__ float sh_bmax[8];
-            __shared__ int   sh_bidx[8];
-            if (lane == 0) {
-                sh_bmax[tid >> 5] = local_max;
-                sh_bidx[tid >> 5] = local_idx;
-            }
-            __syncthreads();
-            if (tid == 0) {
-                float bmax = sh_bmax[0];
-                int   bidx = sh_bidx[0];
-                for (int w = 1; w < 8; ++w) {
-                    if (sh_bmax[w] > bmax || (sh_bmax[w] == bmax && sh_bidx[w] < bidx)) {
-                        bmax = sh_bmax[w];
-                        bidx = sh_bidx[w];
-                    }
-                }
-                ws_f_maxval[group] = bmax;
-                ws_i_maxidx[group] = bidx;
-            }
-            SYNC_ALL();
-            if (group == 0 && tid == 0) {
-                float gmax = ws_f_maxval[0];
-                int   gidx = ws_i_maxidx[0];
-                for (int w = 1; w < workers; ++w) {
-                    if (ws_f_maxval[w] > gmax || (ws_f_maxval[w] == gmax && ws_i_maxidx[w] < gidx)) {
-                        gmax = ws_f_maxval[w];
-                        gidx = ws_i_maxidx[w];
-                    }
-                }
-                if (step_slot < n_out) out_tokens[step_slot] = gidx;
-            }
-            if (step_slot < n_out && out_step_logits) {
-                float* dst = out_step_logits + (size_t)step_slot * MID_VOCAB;
-                for (int i = gtid; i < MID_VOCAB; i += gthreads)
-                    dst[i] = ws_f_logits[i];
-            }
-            if (pos == total - 1 && out_last_logits) {
-                for (int i = gtid; i < MID_VOCAB; i += gthreads)
-                    out_last_logits[i] = ws_f_logits[i];
-            }
-            SYNC_ALL();
         }
+        #pragma unroll
+        for (int off_lane = 16; off_lane >= 1; off_lane >>= 1) {
+            float other_max = __shfl_xor_sync(0xffffffffffffffffull, local_max, off_lane);
+            int   other_idx = __shfl_xor_sync(0xffffffffffffffffull, local_idx, off_lane);
+            if (other_max > local_max || (other_max == local_max && other_idx < local_idx)) {
+                local_max = other_max;
+                local_idx = other_idx;
+            }
+        }
+        __shared__ float sh_bmax[8];
+        __shared__ int   sh_bidx[8];
+        if (lane == 0) {
+            sh_bmax[tid >> 5] = local_max;
+            sh_bidx[tid >> 5] = local_idx;
+        }
+        __syncthreads();
+        if (tid == 0) {
+            float bmax = sh_bmax[0];
+            int   bidx = sh_bidx[0];
+            for (int w = 1; w < 8; ++w) {
+                if (sh_bmax[w] > bmax || (sh_bmax[w] == bmax && sh_bidx[w] < bidx)) {
+                    bmax = sh_bmax[w];
+                    bidx = sh_bidx[w];
+                }
+            }
+            ws_f_maxval[group] = bmax;
+            ws_i_maxidx[group] = bidx;
+        }
+        SYNC_ALL();
+        int step_slot = pos - prompt_len + 1;
+        if (group == 0 && tid == 0) {
+            float gmax = ws_f_maxval[0];
+            int   gidx = ws_i_maxidx[0];
+            for (int w = 1; w < workers; ++w) {
+                if (ws_f_maxval[w] > gmax || (ws_f_maxval[w] == gmax && ws_i_maxidx[w] < gidx)) {
+                    gmax = ws_f_maxval[w];
+                    gidx = ws_i_maxidx[w];
+                }
+            }
+            if (step_slot >= 0 && step_slot < n_out) out_tokens[step_slot] = gidx;
+        }
+        if (step_slot >= 0 && step_slot < n_out && out_step_logits) {
+            float* dst = out_step_logits + (size_t)step_slot * MID_VOCAB;
+            for (int i = gtid; i < MID_VOCAB; i += gthreads)
+                dst[i] = ws_f_logits[i];
+        }
+        if (pos == total - 1 && out_last_logits) {
+            for (int i = gtid; i < MID_VOCAB; i += gthreads)
+                out_last_logits[i] = ws_f_logits[i];
+        }
+        SYNC_ALL();
     }
     #undef SYNC_ALL
 }
@@ -863,6 +862,25 @@ struct MidSession {
 };
 
 constexpr int MID_MAX_STEP_OUT = 64;
+constexpr int MID_MAX_WORKERS = 64; // R3 hard cap: ws_f_maxval has 64 slots
+
+extern "C" int mid_query_occupancy(int mode, int* out_cus, int* out_max_blocks_per_cu,
+                                   int* out_max_active_workers, int* out_wave_size) {
+    hipDeviceProp_t prop;
+    if (hipGetDeviceProperties(&prop, 0) != hipSuccess) return -1;
+    int blocks_per_cu = 0;
+    const void* fn = (mode == 2) ? (const void*)mid_generate_fp32kv
+                   : (mode == 1) ? (const void*)mid_generate_fp32_bf16kv
+                                 : (const void*)mid_generate;
+    if (hipOccupancyMaxActiveBlocksPerMultiprocessor(&blocks_per_cu, fn, 256, 0) != hipSuccess) return -2;
+    int max_active = prop.multiProcessorCount * blocks_per_cu;
+    if (max_active > MID_MAX_WORKERS) max_active = MID_MAX_WORKERS;
+    if (out_cus) *out_cus = prop.multiProcessorCount;
+    if (out_max_blocks_per_cu) *out_max_blocks_per_cu = blocks_per_cu;
+    if (out_max_active_workers) *out_max_active_workers = max_active;
+    if (out_wave_size) *out_wave_size = prop.warpSize;
+    return 0;
+}
 
 extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off, int max_total) {
     MidSession* s = new MidSession();
@@ -899,12 +917,24 @@ extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off,
 //   0 = production bf16-KV build (`mid_generate`, KVT=bf16, PURE_FP32=false)
 //   1 = pure-fp32 compute + bf16-KV build (`mid_generate_fp32_bf16kv`, KVT=bf16, PURE_FP32=true)
 //   2 = pure-fp32 compute + fp32-KV validation build (`mid_generate_fp32kv`, KVT=float, PURE_FP32=true)
-extern "C" void mid_session_run_ex(void* handle, const int* h_prompt, int prompt_len,
-                                   int* h_out_tokens, int n_out,
-                                   float* h_out_step_logits, float* h_out_last_logits,
-                                   int workers, int mode) {
+// Returns 0 on success (with control[2] == 0), nonzero on invalid arguments, HIP error, or barrier abort.
+extern "C" int mid_session_run_ex(void* handle, const int* h_prompt, int prompt_len,
+                                  int* h_out_tokens, int n_out,
+                                  float* h_out_step_logits, float* h_out_last_logits,
+                                  int workers, int mode, uint32_t* out_control) {
     MidSession* s = (MidSession*)handle;
-    if (workers < 1) workers = 16;
+    if (!s) return -1;
+    // R3: reject invalid workers loudly (no silent default to 16; enforce compiled cap <= 64)
+    if (workers < 1 || workers > MID_MAX_WORKERS) {
+        fprintf(stderr, "flint_mid error: workers=%d outside valid range [1, %d]\n", workers, MID_MAX_WORKERS);
+        return -2;
+    }
+    // A5(a): enforce full-layer KV capacity >= P + N
+    if (prompt_len + n_out > s->max_total) {
+        fprintf(stderr, "flint_mid error: prompt_len(%d)+n_out(%d) > max_total(%d)\n",
+                prompt_len, n_out, s->max_total);
+        return -3;
+    }
     chk_hip(hipMemset(s->d_control, 0, 16 * sizeof(uint32_t)), "hipMemset control");
     chk_hip(hipMemcpy(s->d_prompt, h_prompt, (size_t)prompt_len * sizeof(int), hipMemcpyHostToDevice), "hipMemcpy prompt");
     chk_hip(hipMemset(s->d_out, 0, (size_t)n_out * sizeof(int)), "hipMemset out");
@@ -937,19 +967,37 @@ extern "C" void mid_session_run_ex(void* handle, const int* h_prompt, int prompt
                            s->d_ws_bf, s->d_ws_f, s->d_ws_i,
                            s->d_control, workers);
     }
-    chk_hip(hipDeviceSynchronize(), "mid_generate sync");
+    hipError_t sync_err = hipDeviceSynchronize();
+    if (sync_err != hipSuccess) {
+        fprintf(stderr, "flint_mid mid_generate sync error: %s\n", hipGetErrorString(sync_err));
+        return -4;
+    }
+    // R2 & R5: always read back control[0..2] and check control[2] (barrier abort flag)
+    uint32_t h_ctrl[4] = {0, 0, 0, 0};
+    chk_hip(hipMemcpy(h_ctrl, s->d_control, 4 * sizeof(uint32_t), hipMemcpyDeviceToHost), "hipMemcpy control D2H");
+    if (out_control) {
+        out_control[0] = h_ctrl[0];
+        out_control[1] = h_ctrl[1];
+        out_control[2] = h_ctrl[2];
+    }
+    if (h_ctrl[2] != 0u) {
+        fprintf(stderr, "flint_mid BARRIER ABORT: control[2]=%u (phase=%u, arrived=%u, workers=%d)\n",
+                h_ctrl[2], h_ctrl[1], h_ctrl[0], workers);
+        return -5;
+    }
     if (h_out_tokens && n_out > 0)
         chk_hip(hipMemcpy(h_out_tokens, s->d_out, (size_t)n_out * sizeof(int), hipMemcpyDeviceToHost), "hipMemcpy out D2H");
     if (d_step)
         chk_hip(hipMemcpy(h_out_step_logits, s->d_step_logits, (size_t)n_out * MID_VOCAB * sizeof(float), hipMemcpyDeviceToHost), "hipMemcpy step_logits D2H");
     if (d_last)
         chk_hip(hipMemcpy(h_out_last_logits, s->d_logits, (size_t)MID_VOCAB * sizeof(float), hipMemcpyDeviceToHost), "hipMemcpy logits D2H");
+    return 0;
 }
 
-extern "C" void mid_session_run(void* handle, const int* h_prompt, int prompt_len,
-                                int* h_out_tokens, int n_out, float* h_out_last_logits,
-                                int workers) {
-    mid_session_run_ex(handle, h_prompt, prompt_len, h_out_tokens, n_out, nullptr, h_out_last_logits, workers, 0);
+extern "C" int mid_session_run(void* handle, const int* h_prompt, int prompt_len,
+                               int* h_out_tokens, int n_out, float* h_out_last_logits,
+                               int workers) {
+    return mid_session_run_ex(handle, h_prompt, prompt_len, h_out_tokens, n_out, nullptr, h_out_last_logits, workers, 0, nullptr);
 }
 
 extern "C" void mid_session_free(void* handle) {
