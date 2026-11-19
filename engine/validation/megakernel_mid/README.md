@@ -99,11 +99,14 @@ This is stricter than `docs/rocm-model-layer.md` §3 ("inter-op activations
 bf16"). If Phase B needs bf16 activations for speed, keep an fp32 validation
 build, as the tiny kernel does with float shared buffers.
 
-### 4a. MoE router near-ties: PROPOSED amendment, NOT in force
+### 4a. MoE router near-ties (ADOPTED 2026-11-19, threshold PROVISIONAL)
 
-**Status.** This section is proposed and awaits coordinator adoption. Until
-it is adopted, the gate in section 4 applies unchanged: a router near-tie
-flip is a FAIL. The checker does not implement this amendment yet.
+**Status.** The coordinator adopted this rule on 2026-11-19, and the checker
+implements it (`router_substitution` in `mid_mk_check.py`). It is the
+**interim** gate. The long-term fix is exact routing teacher-forcing from
+kernel-emitted `step_experts` (Gemini lane). **ROUTER_TIE_TOL = 2.5e-4 is
+PROVISIONAL.** Recalibrating it across cases and seeds is the required bead
+rec-tan.3, and the results go in section 4b.
 
 **Why it is needed.** The near-tie rule in section 4 (fp32 margin ≤ 5e-3)
 covers only the output-token argmax. The other discrete decision in the
@@ -132,7 +135,7 @@ Evidence (rec-tan, kernel 045c72f, `chat`, fp32 compute + bf16 KV, dusk; see
   observed boundary gap is 6.3e-5, about 17× that tier's logit floor
   (3.65e-6). Its semantics are validated by that tier.
 
-**Proposed wording (replaces nothing; adds a rule to section 4):**
+**Rule in force (adds to section 4):**
 
 > **Router near-tie substitution (bf16-KV tier only).** If a run fails the
 > bf16-KV tier, the checker may re-run the teacher-forced reference with at
@@ -159,6 +162,21 @@ Evidence (rec-tan, kernel 045c72f, `chat`, fp32 compute + bf16 KV, dusk; see
 >   about 70× its floor (section 6).
 > - More than one substitution, or one at a gap > ROUTER_TIE_TOL, is a FAIL.
 > - A bf16-activation production run remains no substitute for sign-off.
+
+**Checker behaviour.**
+- The rule runs only when the bf16-KV tier fails on tokens or logits; schema,
+  shape and non-finite failures are not rescued.
+- Candidates are the reference's boundary gaps ≤ ROUTER_TIE_TOL at positions
+  ≤ the first failing row (a bad token or a row over the tier; last_logits
+  counts as row n). They are tried smallest gap first, at most
+  `MAX_ROUTER_CANDIDATES` = 8, each as a **single** swap.
+- The first swap whose substituted reference meets the full criteria is
+  accepted. It is reported as `router_near_tie`, appended to
+  `near_ties_accepted`, and shown in the `matrix` line, with the stock failure
+  kept in `stock_problems`.
+
+**Matrix coverage.** Per the adopted policy, `matrix` now exits 0 only if
+**every case passes in both KV tiers**; it reports missing (case, tier) pairs.
 
 **Calibration caveat.** ROUTER_TIE_TOL rests on one observed flip (gap 4.1e-5)
 and on boundary gaps up to 2.4e-4 that did not flip. It is a heuristic about

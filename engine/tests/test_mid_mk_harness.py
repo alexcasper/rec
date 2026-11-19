@@ -77,3 +77,107 @@ def test_case_prompts_valid_for_any_vocab():
         for spec in H.case_matrix(vocab).values():
             assert max(spec["prompt"]) < vocab and spec["n_out"] == H.N_OUT
     assert len(H.case_matrix(512)["wrap512"]["prompt"]) + H.N_OUT > 513  # crosses the sliding window
+
+
+# ---------------------------------------------------------------- router near-tie rule (README 4a)
+def _forced_kernel(ckpt, out, kv, swaps, case="short4"):
+    """A 'kernel' that is the exact reference except for the given routing swaps:
+    greedy decode with the swaps applied, written as rec-mk-out/1."""
+    ref = H.Reference(ckpt, "cpu", kv)
+    prompt = H.case_matrix(H.vocab_of(ckpt))[case]["prompt"]
+    tokens = []
+    for _ in range(H.N_OUT):
+        tokens.append(int(ref.run(prompt, tokens, swaps)[0][-1].argmax()))
+    logits, _ = ref.run(prompt, tokens, swaps)
+    np.savez(out, schema=np.array(H.SCHEMA), case=np.array(case), ckpt_sha256=np.array(H.shard_sha256(ckpt)),
+             impl=np.array(f"forced-routing {swaps}"), kv_dtype=np.array(kv),
+             prompt=np.array(prompt, np.int32), tokens=np.array(tokens, np.int32),
+             last_logits=logits[-1], step_logits=logits[:-1])
+    return out
+
+
+def _swap(g):
+    return {"layer": g["layer"], "pos": g["pos"], "drop": g["kth"], "add": g["next"]}
+
+
+@pytest.fixture(scope="module")
+def router_ties(prod_ckpt):
+    """Two boundary swaps that each break the bf16-KV tier on their own. Tiny's natural
+    gaps are >= ~2e-3, so the tests scale ROUTER_TIE_TOL to the measured gap."""
+    ref = H.Reference(prod_ckpt, "cpu", "bf16")
+    prompt = H.case_matrix(H.vocab_of(prod_ckpt))["short4"]["prompt"]
+    p0 = len(prompt) - 1
+    tokens = []
+    for _ in range(H.N_OUT):
+        tokens.append(int(ref.run(prompt, tokens)[0][-1].argmax()))
+    base, gaps = ref.run(prompt, tokens)
+    picked = []
+    for g in sorted((g for g in gaps if p0 + 2 <= g["pos"] <= p0 + 18), key=lambda g: g["gap"]):
+        t = list(tokens[: g["pos"] - p0])  # same trajectory up to the swap
+        for _ in range(H.N_OUT - len(t)):
+            t.append(int(ref.run(prompt, t, [_swap(g)])[0][-1].argmax()))
+        lg = ref.run(prompt, t, [_swap(g)])[0]
+        if float((np.abs(lg - base).max(-1) / np.abs(base).max(-1)).max()) > 1e-2:
+            picked.append(g)
+        if len(picked) == 2:
+            return picked
+    pytest.skip("no two disruptive router boundaries on this checkpoint")
+
+
+def test_router_rule_constants():
+    assert H.ROUTER_TIE_TOL == 2.5e-4 and H.ROUTER_TIE_TIERS == ("bf16",) and H.MAX_ROUTER_SWAPS == 1
+
+
+def test_single_router_flip_passes_bf16_tier_and_is_logged(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    g = router_ties[0]
+    out = _forced_kernel(prod_ckpt, tmp_path / "one.npz", "bf16", [_swap(g)])
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", g["gap"] * 0.99)  # just below: rule cannot apply
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and r["router_near_tie"] is None
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", g["gap"] * 1.01)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert r["pass"], r
+    rt = r["router_near_tie"]
+    assert (rt["layer"], rt["pos"], rt["drop"], rt["add"]) == (g["layer"], g["pos"], g["kth"], g["next"])
+    assert rt in r["near_ties_accepted"] and r["stock_problems"]
+    assert r["step_logits_max_rel"] < 1e-6  # substituted reference reproduces the kernel
+
+
+def test_two_router_flips_fail(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    a, _ = router_ties
+    # second swap chosen on the trajectory that already carries the first one
+    ref = H.Reference(prod_ckpt, "cpu", "bf16")
+    prompt = H.case_matrix(H.vocab_of(prod_ckpt))["short4"]["prompt"]
+    first = np.load(_forced_kernel(prod_ckpt, tmp_path / "a.npz", "bf16", [_swap(a)]))
+    _, gaps = ref.run(prompt, first["tokens"].tolist(), [_swap(a)])
+    later = [g for g in gaps if g["pos"] > a["pos"] and g["layer"] == a["layer"]]
+    b = min(later, key=lambda g: g["gap"])
+    out = _forced_kernel(prod_ckpt, tmp_path / "two.npz", "bf16", [_swap(a), _swap(b)])
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", 1.0)  # any single swap is eligible
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and r["router_near_tie"] is None and r["router_candidates_tried"] >= 1
+
+
+def test_router_flip_gets_no_allowance_in_fp32_tier(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    g = router_ties[0]
+    out = _forced_kernel(prod_ckpt, tmp_path / "fp32.npz", "fp32", [_swap(g)])
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", 1.0)
+    r = H.check(prod_ckpt, out, "cpu", verbose=False)
+    assert not r["pass"] and r["router_near_tie"] is None and r["router_candidates_tried"] == 0
+
+
+def test_semantic_fault_not_rescued_by_router_rule(prod_ckpt, tmp_path, monkeypatch):
+    monkeypatch.setattr(H, "ROUTER_TIE_TOL", 1.0)
+    r = run(prod_ckpt, tmp_path, "short4", "torch-fp32-bf16kv", "no-silu")
+    assert not r["pass"] and r["router_near_tie"] is None
+
+
+def test_matrix_requires_both_kv_tiers_per_case(prod_ckpt, tmp_path):
+    d = tmp_path / "mx"
+    d.mkdir()
+    for case in H.case_matrix(H.vocab_of(prod_ckpt)):
+        H.produce(prod_ckpt, case, d / f"{case}_fp32.npz", "torch-fp32", "cpu")
+    assert H.main(["matrix", "--ckpt", str(prod_ckpt), str(d), "--ref-device", "cpu"]) == 1
+    for case in H.case_matrix(H.vocab_of(prod_ckpt)):
+        H.produce(prod_ckpt, case, d / f"{case}_bf16kv.npz", "torch-fp32-bf16kv", "cpu")
+    assert H.main(["matrix", "--ckpt", str(prod_ckpt), str(d), "--ref-device", "cpu"]) == 0
