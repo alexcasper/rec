@@ -1,0 +1,52 @@
+spot skipped: done in first launch, see spot.txt
+RUN cpu-baseline-mid old gemini=0 flint=0 qwen=0 09:09:48
+{"ckpt": "/home/dusk/rec-ve/ckpt/cpu-baseline-mid", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 1.032, "prefill512_tok_s": 743.7, "decode32_tok_s": 3.71, "decode32_short_ctx_tok_s": 3.75, "serial_516_tok_s": 292.05, "t516_s": 1.7668, "protocol": "canonical sync-bounded windows", "peak_gib": 3.09, "logits_finite": true}
+RUN cpu-baseline-mid new gemini=0 flint=0 qwen=0 09:10:56
+{"ckpt": "/home/dusk/rec-ve/ckpt/cpu-baseline-mid", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 1.032, "prefill512_tok_s": 915.3, "decode32_tok_s": 7.31, "decode32_short_ctx_tok_s": 7.48, "serial_516_tok_s": 467.1, "t516_s": 1.1047, "protocol": "canonical sync-bounded windows", "peak_gib": 2.8, "logits_finite": true}
+RUN cpu-baseline-mid new gemini=0 flint=0 qwen=0 09:11:37
+{"ckpt": "/home/dusk/rec-ve/ckpt/cpu-baseline-mid", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 1.032, "prefill512_tok_s": 915.6, "decode32_tok_s": 7.32, "decode32_short_ctx_tok_s": 7.49, "serial_516_tok_s": 467.43, "t516_s": 1.1039, "protocol": "canonical sync-bounded windows", "peak_gib": 2.8, "logits_finite": true}
+RUN cpu-baseline-mid old gemini=0 flint=0 qwen=0 09:12:17
+{"ckpt": "/home/dusk/rec-ve/ckpt/cpu-baseline-mid", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 1.032, "prefill512_tok_s": 719.7, "decode32_tok_s": 3.71, "decode32_short_ctx_tok_s": 3.75, "serial_516_tok_s": 292.4, "t516_s": 1.7647, "protocol": "canonical sync-bounded windows", "peak_gib": 3.09, "logits_finite": true}
+RUN cpu-baseline-mid old gemini=0 flint=0 qwen=0 09:13:26
+{"ckpt": "/home/dusk/rec-ve/ckpt/cpu-baseline-mid", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 1.032, "prefill512_tok_s": 738.3, "decode32_tok_s": 3.71, "decode32_short_ctx_tok_s": 3.75, "serial_516_tok_s": 292.8, "t516_s": 1.7623, "protocol": "canonical sync-bounded windows", "peak_gib": 3.09, "logits_finite": true}
+RUN cpu-baseline-mid new gemini=0 flint=0 qwen=0 09:14:34
+{"ckpt": "/home/dusk/rec-ve/ckpt/cpu-baseline-mid", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 1.032, "prefill512_tok_s": 918.8, "decode32_tok_s": 7.3, "decode32_short_ctx_tok_s": 7.47, "serial_516_tok_s": 468.32, "t516_s": 1.1018, "protocol": "canonical sync-bounded windows", "peak_gib": 2.8, "logits_finite": true}
+RUN cpu-baseline-mid new gemini=0 flint=0 qwen=0 09:15:15
+{"ckpt": "/home/dusk/rec-ve/ckpt/cpu-baseline-mid", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 1.032, "prefill512_tok_s": 915.7, "decode32_tok_s": 7.33, "decode32_short_ctx_tok_s": 7.47, "serial_516_tok_s": 469.85, "t516_s": 1.0982, "protocol": "canonical sync-bounded windows", "peak_gib": 2.8, "logits_finite": true}
+RUN cpu-baseline-mid old gemini=0 flint=0 qwen=0 09:15:55
+{"ckpt": "/home/dusk/rec-ve/ckpt/cpu-baseline-mid", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 1.032, "prefill512_tok_s": 738.7, "decode32_tok_s": 3.71, "decode32_short_ctx_tok_s": 3.75, "serial_516_tok_s": 291.94, "t516_s": 1.7675, "protocol": "canonical sync-bounded windows", "peak_gib": 3.09, "logits_finite": true}
+RUN mid-prod old gemini=0 flint=0 qwen=0 09:17:03
+{"ckpt": "/home/dusk/rec-ve/ckpt-pp2/mid-prod", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 0.943, "prefill512_tok_s": 753.5, "decode32_tok_s": 3.69, "decode32_short_ctx_tok_s": 3.73, "serial_516_tok_s": 293.1, "t516_s": 1.7605, "protocol": "canonical sync-bounded windows", "peak_gib": 3.0, "logits_finite": true}
+RUN mid-prod new gemini=0 flint=0 qwen=0 09:18:12
+{"ckpt": "/home/dusk/rec-ve/ckpt-pp2/mid-prod", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 0.943, "prefill512_tok_s": 930.1, "decode32_tok_s": 7.27, "decode32_short_ctx_tok_s": 7.42, "serial_516_tok_s": 472.93, "t516_s": 1.0911, "protocol": "canonical sync-bounded windows", "peak_gib": 2.71, "logits_finite": true}
+RUN mid-prod new gemini=0 flint=0 qwen=0 09:18:53
+{"ckpt": "/home/dusk/rec-ve/ckpt-pp2/mid-prod", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 0.943, "prefill512_tok_s": 934.7, "decode32_tok_s": 7.26, "decode32_short_ctx_tok_s": 7.41, "serial_516_tok_s": 472.09, "t516_s": 1.093, "protocol": "canonical sync-bounded windows", "peak_gib": 2.71, "logits_finite": true}
+RUN mid-prod old gemini=0 flint=0 qwen=0 09:19:33
+{"ckpt": "/home/dusk/rec-ve/ckpt-pp2/mid-prod", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 0.943, "prefill512_tok_s": 737.0, "decode32_tok_s": 3.62, "decode32_short_ctx_tok_s": 3.67, "serial_516_tok_s": 287.66, "t516_s": 1.7938, "protocol": "canonical sync-bounded windows", "peak_gib": 3.0, "logits_finite": true}
+RUN mid-prod old gemini=0 flint=0 qwen=0 09:20:47
+{"ckpt": "/home/dusk/rec-ve/ckpt-pp2/mid-prod", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 0.943, "prefill512_tok_s": 753.8, "decode32_tok_s": 3.68, "decode32_short_ctx_tok_s": 3.72, "serial_516_tok_s": 293.21, "t516_s": 1.7598, "protocol": "canonical sync-bounded windows", "peak_gib": 3.0, "logits_finite": true}
+RUN mid-prod new gemini=0 flint=0 qwen=0 09:21:56
+{"ckpt": "/home/dusk/rec-ve/ckpt-pp2/mid-prod", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 0.943, "prefill512_tok_s": 934.6, "decode32_tok_s": 7.25, "decode32_short_ctx_tok_s": 7.42, "serial_516_tok_s": 472.38, "t516_s": 1.0923, "protocol": "canonical sync-bounded windows", "peak_gib": 2.71, "logits_finite": true}
+RUN mid-prod new gemini=0 flint=0 qwen=0 09:22:37
+{"ckpt": "/home/dusk/rec-ve/ckpt-pp2/mid-prod", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 0.943, "prefill512_tok_s": 933.0, "decode32_tok_s": 7.25, "decode32_short_ctx_tok_s": 7.4, "serial_516_tok_s": 471.48, "t516_s": 1.0944, "protocol": "canonical sync-bounded windows", "peak_gib": 2.71, "logits_finite": true}
+RUN mid-prod old gemini=0 flint=0 qwen=0 09:23:17
+{"ckpt": "/home/dusk/rec-ve/ckpt-pp2/mid-prod", "layers": 8, "device": "cuda", "gpu": "AMD Radeon 890M", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "act_dtype": "bf16", "kv_dtype": "bf16", "weights": "int4-affine packed (int8 embed), dequant per matmul", "resident_weight_gib": 0.943, "prefill512_tok_s": 753.5, "decode32_tok_s": 3.69, "decode32_short_ctx_tok_s": 3.72, "serial_516_tok_s": 292.28, "t516_s": 1.7654, "protocol": "canonical sync-bounded windows", "peak_gib": 3.0, "logits_finite": true}
+[878s] DONE
+
+# GPU spot checks (gpu_step2.py, mid-prod):
+lm_head cache torch.bfloat16 reused bit-identical 0.573 GiB
+lm_head cache torch.float32 reused bit-identical 1.146 GiB
+expert 0 True True
+expert 17 True True
+expert 31 True True
+embed rows True
+model prefill512+16 decode, new vs old paths: bit-identical
+decode32 cache_lm_head=False moe_sync_free=False: 2.28 tok/s  [3.34, 1.23]
+decode32 cache_lm_head=True  moe_sync_free=False: 4.39 tok/s  [6.62, 2.17]
+decode32 cache_lm_head=False moe_sync_free=True : 2.32 tok/s  [3.39, 1.24]
+decode32 cache_lm_head=True  moe_sync_free=True : 3.25 tok/s  [4.32, 2.19]
+
+# MoE sync removal isolated (sync_ab.py, mid-prod, lm_head cache on in both arms, ABBA x3):
+{"sync_free": {"ctx512": [7.259369830951733, 7.263837601733024, 7.264698649740986, 7.289965544420278, 7.262281528829362, 7.264039316618157], "short": [7.391997580413394, 7.407908027659726, 7.410168207942888, 7.402418679273187, 7.411748241887241, 7.401093433526403]}, "synced": {"ctx512": [7.2517308436251575, 7.251523994561315, 7.254484986494594, 7.27263135664015, 7.2501763571400515, 7.251771899990595], "short": [7.390614789504778, 7.390163813300159, 7.389663909203247, 7.385594307645991, 7.3895581520608005, 7.396252258195214]}}
+synced    {'ctx512': 7.255, 'short': 7.39}
+sync_free {'ctx512': 7.267, 'short': 7.404}

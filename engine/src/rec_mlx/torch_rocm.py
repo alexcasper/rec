@@ -153,18 +153,51 @@ def dequant(packed: torch.Tensor, scales: torch.Tensor, biases: torch.Tensor,
 class QLinear:
     """Affine-quantized linear / switch-linear kept packed on device."""
 
-    def __init__(self, packed, scales, biases, bits: int):
+    def __init__(self, packed, scales, biases, bits: int, cache_dense: bool = False):
         self.packed = packed  # int32 [..., out, K*bits/32] (same bytes as the U8/U32 export)
         self.scales = scales  # checkpoint dtype (bf16 in production) [..., out, K/g]
         self.biases = biases
         self.bits = bits
+        # rec-aip step 2: keep the dense() result (lm_head) instead of re-dequantizing it
+        # every forward. The cached tensor IS the dense() output, so it is bit-identical;
+        # it is keyed on the weight tensors (identity + in-place version) and the dtype.
+        self.cache_dense = cache_dense
+        self._cache_key = None
+        self._cached: torch.Tensor | None = None
+
+    def _key(self, dtype):
+        """Tensor identity + in-place version. Inference-mode tensors (a model
+        loaded under torch.inference_mode) track no version counter, so for them
+        only identity is keyed: replace the tensor (or call invalidate()) after
+        editing such weights in place."""
+        ts = (self.packed, self.scales, self.biases)
+        return (dtype,) + tuple(t.data_ptr() for t in ts) + tuple(
+            None if t.is_inference() else t._version for t in ts)
+
+    def invalidate(self) -> None:
+        self._cached, self._cache_key = None, None
 
     def dense(self, dtype: torch.dtype) -> torch.Tensor:
-        return dequant(self.packed, self.scales, self.biases, self.bits, dtype)
+        if not self.cache_dense:
+            return dequant(self.packed, self.scales, self.biases, self.bits, dtype)
+        key = self._key(dtype)
+        if self._cache_key != key:
+            self._cached = None  # free the old entry before building the new one
+            self._cached = dequant(self.packed, self.scales, self.biases, self.bits, dtype)
+            self._cache_key = key
+        return self._cached
+
+    def cached_nbytes(self) -> int:
+        return self._cached.nbytes if self._cached is not None else 0
 
     def expert(self, e: int, dtype: torch.dtype) -> torch.Tensor:
         """Dequantize one expert of a stacked [E, out, ...] switch linear."""
         return dequant(self.packed[e], self.scales[e], self.biases[e], self.bits, dtype)
+
+    def expert_at(self, e: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
+        """Same as :meth:`expert` with the id as a 1-element device tensor (no host sync)."""
+        return dequant(self.packed.index_select(0, e)[0], self.scales.index_select(0, e)[0],
+                       self.biases.index_select(0, e)[0], self.bits, dtype)
 
     def rows(self, ids: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
         """Dequantize only the rows named by ``ids`` (embedding lookup)."""
@@ -250,6 +283,12 @@ class Model:
         self.embed = embed
         self.device = device
         self.dtype = dtype
+        # rec-aip step 2: single-token decode takes the routed experts straight from the
+        # device top-k (sorted ascending, as torch.unique does) instead of syncing the
+        # expert set to the host per MoE layer. Same ops, shapes and order: bit-identical.
+        # Prefill (more than one token) keeps the synced path: a sync-free version would
+        # change GEMM shapes and therefore possibly reduction order.
+        self.moe_sync_free_decode = True
         # Validation knob: round K/V to this dtype at the KV-cache storage points
         # (K after k_norm + RoPE, V after projection) while computing in `dtype`.
         # None = store in `dtype`. Used by engine/validation/megakernel_mid to
@@ -333,8 +372,19 @@ class Model:
         wg = self.q[f"{pre}.switch_mlp.gate_proj"]  # [E, I, H]
         wu = self.q[f"{pre}.switch_mlp.up_proj"]
         wd = self.q[f"{pre}.switch_mlp.down_proj"]  # [E, H, I]
-        # Dequantize only routed experts (decode touches top-k of E; one host
-        # sync for the expert set per MoE layer).
+        if self.moe_sync_free_decode and flat_idx.shape[0] == 1:
+            rows = torch.zeros(1, dtype=torch.long, device=flat_x.device)
+            experts = torch.sort(flat_idx[0]).values  # ascending id order, like torch.unique
+            h = flat_x[rows]
+            for j in range(cfg.topk):
+                e = experts[j:j + 1]
+                d = F.linear(F.silu(F.linear(h, wg.expert_at(e, self.dtype))) * F.linear(h, wu.expert_at(e, self.dtype)),
+                             wd.expert_at(e, self.dtype))
+                wght = (flat_w[rows] * (flat_idx[rows] == e)).sum(-1, keepdim=True)
+                out.index_add_(0, rows, d.float() * wght)
+            out = out.to(self.dtype).view(B, L, cfg.hidden)
+            return out + self._mlp(x, f"{pre}.shared_expert")
+        # Dequantize only routed experts (one host sync for the expert set per MoE layer).
         for e in torch.unique(flat_idx).tolist():
             hit = flat_idx == e  # [N, topk]
             rows = hit.any(-1).nonzero(as_tuple=True)[0]
@@ -370,11 +420,15 @@ class Model:
         return KVCache(self.cfg)
 
 
-def load_model(ckpt: Path, device: str = "cpu", dtype: torch.dtype = torch.bfloat16) -> Model:
+def load_model(ckpt: Path, device: str = "cpu", dtype: torch.dtype = torch.bfloat16,
+               cache_lm_head: bool = True) -> Model:
     """Load an MLX affine-quantized checkpoint dir (config.json + model-*.safetensors).
 
     Device layout is the contract in docs/rocm-model-layer.md: packed weights
     as int32 words, scales/biases in checkpoint dtype, dense params fp32.
+    ``cache_lm_head`` keeps the dequantized lm_head resident after first use
+    (+V*H*itemsize: 0.57 GiB bf16 / 1.15 GiB fp32 on mid) instead of
+    re-dequantizing it every forward; outputs are bit-identical either way.
     """
     ckpt = Path(ckpt)
     config = json.loads((ckpt / "config.json").read_text())
@@ -425,4 +479,6 @@ def load_model(ckpt: Path, device: str = "cpu", dtype: torch.dtype = torch.bfloa
         if i not in cfg.dense_layers:
             dense.setdefault(f"model.layers.{i}.mlp.gate.expert_bias",
                              torch.zeros(cfg.num_experts, dtype=torch.float32, device=dev))
+    if "lm_head" in qlin:
+        qlin["lm_head"].cache_dense = cache_lm_head
     return Model(cfg, dense, qlin, embed, dev, dtype)

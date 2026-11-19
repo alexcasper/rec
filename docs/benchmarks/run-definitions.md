@@ -105,8 +105,8 @@ run.
 
 ## Re-baseline: rec-9na torch layer after the dequant fix (dusk, Radeon 890M gfx1150, 2026-11-19, rec-aip step 1)
 
-**This is the gate the kernel lane measures fused-kernel wins against. It
-supersedes the 2.25 tok/s row above.**
+**Superseded by Re-baseline 2 below.** This was the gate after step 1. It
+superseded the 2.25 tok/s row above.
 
 **Change.** `rec_mlx.torch_rocm.dequant` no longer materialises full-size
 int32 unpack temporaries or `repeat_interleave`d fp32 scale and bias arrays
@@ -177,6 +177,81 @@ reproduce the committed 9c87cf3 numbers (2.25 tok/s, 7.1 GiB).
 - This is the eager torch path (canonical windows); the persistent-kernel
   rows use the A1 differential. State the protocol when comparing.
 - gfx1150 only; albion was not run.
+
+## Re-baseline 2: lm_head cache + sync-free decode MoE (dusk, Radeon 890M gfx1150, 2026-11-19, rec-aip step 2)
+
+**This supersedes the step-1 re-baseline above as the eager-torch gate.**
+
+**Changes in `rec_mlx.torch_rocm`:**
+1. **lm_head cache.** `QLinear.dense()` keeps its result for the lm_head
+   (`load_model(cache_lm_head=True)`, the default). The key is dtype plus
+   tensor identity, plus the in-place version for tensors that track one. The
+   cached tensor *is* the `dense()` output, so it is bit-identical. It costs
+   +0.57 GiB resident in bf16 (1.15 GiB in fp32) and removes about 134 ms
+   per forward.
+2. **Sync-free single-token MoE.** For a single token, the routed experts
+   come from the device top-k, sorted ascending as `torch.unique` returns
+   them, and are dequantized via `index_select`. This drops the per-MoE-layer
+   `unique().tolist()` / `nonzero()` host syncs, 7 per decode step, with the
+   same ops, shapes and accumulation order. Prefill (more than one token)
+   keeps the synced path: a sync-free version would change the GEMM M
+   dimension, and so possibly the reduction order. That path is flagged, not
+   changed.
+
+**Bit-identity.**
+- CPU: the 25 dequant cases are unchanged. `test_torch_rocm_decode_paths.py`
+  compares whole-model logits, new paths against old, with `torch.equal` at
+  every step. It covers bf16 and fp32, production and synthetic formats, and
+  a run past the 513 window; it also tests cache reuse and invalidation,
+  models loaded under inference mode, and that decode never calls
+  `torch.unique`.
+- dusk GPU, mid-prod (`engine/tests/torch_rocm_step2_gpu_check.py`): the
+  cached lm_head in bf16 and fp32, routed experts 0/17/31 via device and host
+  ids, and INT8 embed rows are all identical to the original dequant. The
+  whole model, prefill 512 plus 16 decode steps, has identical logits at
+  every step between new and old paths.
+
+**Bench.** `torch_rocm_bench.py`, same recipe as step 1, ABBA ×2 per
+checkpoint, old = `56ea8b7`. Before every run a wait loop held the run while
+any Gemini megakernel process or busy flint/qwen slot existed; none was seen.
+The run used torch 2.9.1+rocm6.4. Values are medians [min–max of 4]; the raw
+log, spot checks and sync A/B are in `rec-aip-step2-dusk-2026-11-19.log`.
+
+| ckpt | code | prefill512 tok/s | decode32 tok/s | short-ctx decode32 tok/s | serial-516 tok/s | peak |
+|---|---|---|---|---|---|---|
+| `cpu-baseline-mid` | 56ea8b7 | 738.5 [719.7–743.7] | 3.71 [3.71–3.71] | 3.75 [3.75–3.75] | 292.2 [291.9–292.8] | 3.09 GiB |
+| `cpu-baseline-mid` | **step 2** | **915.7** [915.3–918.8] | **7.31** [7.30–7.33] | **7.47** [7.47–7.49] | **467.9** [467.1–469.9] | **2.80 GiB** |
+| `mid-prod` | 56ea8b7 | 753.5 [737.0–753.8] | 3.69 [3.62–3.69] | 3.72 [3.67–3.73] | 292.7 [287.7–293.2] | 3.00 GiB |
+| `mid-prod` | **step 2** | **933.8** [930.1–934.7] | **7.25** [7.25–7.27] | **7.42** [7.40–7.42] | **472.2** [471.5–472.9] | **2.71 GiB** |
+
+Ratio step 2 / step 1: decode32 ×1.97, short-ctx ×1.99, serial-516 ×1.61,
+prefill512 ×1.24, peak ×0.90. From the original 9c87cf3 baseline (2.25 tok/s,
+7.1 GiB), decode is ×3.2 and peak ×0.38.
+
+**Attribution.** In `engine/tests/torch_rocm_sync_ab.py` (mid-prod, cache on
+in both arms, ABBA ×3), the MoE sync removal alone moves decode32 from
+7.255 to 7.267 tok/s and short-ctx from 7.390 to 7.404 tok/s. That is about
++0.2%, with overlapping ranges, so it is **negligible**. At about 137 ms per
+step, the 7 small syncs are hidden behind GPU work, and the bench's own
+per-step `argmax().item()` syncs anyway. Effectively **all of the step-2 gain
+is the lm_head cache.** The sync-free path stays in because it is
+bit-identical and free, and it will matter once steps are short (fused
+kernels).
+
+**Caveats.**
+- The prefill512 and serial-516 gains assume a warm cache. The bench repeats
+  prefill, so only the first warmup pays the one-time lm_head dequant
+  (~134 ms); a cold first request still pays it once per process.
+- Resident weights grow 1.03 → 1.60 GiB with the bf16 cache, yet peak still
+  drops because the per-step 1.72 GiB lm_head dequant transient is gone.
+- The dense projections and routed experts are still dequantized every step.
+  Those, plus a fused dequant-matmul, are the kernel lane's.
+- An earlier launch crashed on `_version` of inference tensors (the bench
+  loads under `inference_mode`). It was fixed, now covered by a test, and
+  produced no numbers.
+- The aborted strided attempt in the step-1 caveat overlapped a Gemini bench
+  that finished at 07:54 (`bench_aip_w16.json`), which is the likely cause
+  of its 0.48 tok/s reading. The step-1 run of record started afterwards.
 
 ## Engine end-to-end, `REC_BACKEND=rocm` (dusk, Radeon 890M gfx1150, 2026-11-18, rec-ju9)
 
