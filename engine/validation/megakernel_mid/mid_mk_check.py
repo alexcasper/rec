@@ -22,6 +22,9 @@ Kernel-output npz schema "rec-mk-out/1":
   tokens       int32 [n_out]   greedy tokens, tokens[i] chosen from step_logits[i]
   last_logits  f32   [V]       logits after consuming tokens[-1] (picks token n_out+1)
   step_logits  f32   [n_out,V] logits that picked tokens[i] (required)
+  step_experts int32 [P+n_out, layers, k] optional: the kernel's chosen experts at every
+                     position (dense layers -1). When present, the router near-tie rule
+                     (README 4a) uses it instead of searching.
   kv_dtype     str   optional "fp32" (default) | "bf16": KV-cache storage precision.
                      Selects the reference: fp32 compute with K/V rounded to this
                      dtype at the storage points. Compute must be fp32 either way.
@@ -56,6 +59,12 @@ ROUTER_TIE_TOL = 2.5e-4
 ROUTER_TIE_TIERS = ("bf16",)
 MAX_ROUTER_SWAPS = 1
 MAX_ROUTER_CANDIDATES = 8  # bound on replays tried (each is a single swap)
+# step_experts path policy. "single" = adopted rule (one deviation at or before the
+# first failing row). "all-declared" = PROPOSED (README 4c, coordinator decision):
+# every kernel-declared deviation must be a k/(k+1) exchange at gap <= ROUTER_TIE_TOL,
+# then the full criteria against the reference forced to the kernel's routing; in the
+# fp32-KV tier any declared deviation is a FAIL.
+ROUTER_EXPERTS_POLICY = "single"
 N_OUT = 24
 
 
@@ -106,13 +115,18 @@ class Reference:
         self.k = self.model.cfg.topk
         self.scores: dict[int, np.ndarray] = {}  # last run: layer -> selection scores [L, E]
 
-    def run(self, prompt: list[int], tokens: list[int], swaps: list[dict] | None = None):
+    def run(self, prompt: list[int], tokens: list[int], swaps: list[dict] | None = None,
+            force: np.ndarray | None = None):
         """Row i (i < n) = logits that should pick tokens[i]; row n = after tokens[-1].
         Returns (logits [n+1, V], gaps). gaps: one dict per (layer, position) with the
         selection-score gap between rank k and rank k+1 and those two experts.
         swaps = [{"layer", "pos", "drop", "add"}]: the reference takes `add` instead of
         `drop` at that (layer, absolute position). The gate uses at most one; more
-        are accepted here so tests can build multi-flip negative controls."""
+        are accepted here so tests can build multi-flip negative controls.
+        force = int [P+n, layers, k]: use exactly these experts at every MoE
+        (layer, position) (kernel-emitted `step_experts`); gaps still describe the
+        reference's own ranking, so each boundary is compared on a trajectory
+        whose upstream routing equals the kernel's."""
         import types
 
         import torch
@@ -120,6 +134,8 @@ class Reference:
 
         model, K, gaps, swaps = self.model, self.k, [], swaps or []
         self.scores = {}
+        cfg = model.cfg
+        self.used = np.full((len(prompt) + len(tokens), cfg.layers, K), -1, np.int32)  # experts actually used
         real_topk = torch.topk
 
         def moe(m, x, i):
@@ -130,16 +146,17 @@ class Reference:
             top = real_topk(sel[0], K + 1, dim=-1)
             for p in range(sel.shape[1]):
                 gaps.append({"layer": i, "pos": p, "gap": float(top.values[p, K - 1] - top.values[p, K]),
-                             "kth": int(top.indices[p, K - 1]), "next": int(top.indices[p, K])})
+                             "kth": int(top.indices[p, K - 1]), "next": int(top.indices[p, K]),
+                             "top": sorted(int(e) for e in top.indices[p, :K])})
             mine = [sw for sw in swaps if sw["layer"] == i]
-            if not mine:
-                return type(m)._moe(m, x, i)
 
             def topk(t, k, dim=-1, **kw):
                 r = real_topk(t, k, dim=dim, **kw)
                 if k != K or t.dim() != 3:
                     return r
                 idx = r.indices.clone()
+                if force is not None:
+                    idx[0] = torch.as_tensor(force[: idx.shape[1], i, :], device=idx.device, dtype=idx.dtype)
                 for sw in mine:
                     if sw["pos"] >= idx.shape[1]:  # position not in this sequence (yet)
                         continue
@@ -147,6 +164,7 @@ class Reference:
                     if sw["drop"] not in row.tolist() or sw["add"] in row.tolist():
                         raise ValueError(f"swap {sw} does not apply to {row.tolist()}")
                     row[row == sw["drop"]] = sw["add"]
+                self.used[: idx.shape[1], i] = idx[0].cpu().numpy()
                 return torch.return_types.topk((torch.gather(t, dim, idx), idx))
 
             torch.topk = topk
@@ -212,6 +230,104 @@ def _evaluate(d, ref: np.ndarray, kv_dtype: str, vocab: int) -> dict:
             "step_rel": step_rel, "first_fail": first_fail, "structural": structural}
 
 
+def step_experts_of(d, reference: Reference, total: int) -> tuple[np.ndarray | None, list[str]]:
+    """Optional rec-mk-out/1 key step_experts int32 [P+n_out, layers, k]: the kernel's
+    chosen experts at every position (dense layers -1). Returns (array | None, problems)."""
+    if "step_experts" not in d.files:
+        return None, []
+    se = np.asarray(d["step_experts"])
+    cfg = reference.model.cfg
+    want = (total, cfg.layers, cfg.topk)
+    if se.shape != want:
+        return None, [f"step_experts shape {se.shape} != {want}"]
+    moe = [i for i in range(cfg.layers) if i not in cfg.dense_layers]
+    probs = []
+    if (se[:, [i for i in range(cfg.layers) if i in cfg.dense_layers]] != -1).any():
+        probs.append("step_experts: dense layers must be -1")
+    m = se[:, moe]
+    if (m < 0).any() or (m >= cfg.num_experts).any():
+        probs.append("step_experts: expert id outside [0, experts)")
+    elif any(len(set(r)) != cfg.topk for r in m.reshape(-1, cfg.topk).tolist()):
+        probs.append("step_experts: repeated expert within a top-k row")
+    return (None if probs else se), probs
+
+
+def routing_deviations(reference: Reference, prompt, tokens, step_experts) -> tuple[list[dict], np.ndarray]:
+    """Clean per-boundary comparison: run the reference with the kernel's routing
+    forced everywhere, and list each (layer, pos) where the kernel's expert set
+    differs from the reference's own top-k there. Upstream routing is identical by
+    construction, so no deviation is a downstream consequence of another."""
+    ref_f, gaps = reference.run(prompt, tokens, force=step_experts)
+    dev = []
+    for g in gaps:
+        ks = sorted(int(e) for e in step_experts[g["pos"], g["layer"]])
+        if ks != g["top"]:
+            exch = sorted(set(g["top"]) - {g["kth"]} | {g["next"]}) == ks
+            dev.append({**{k: g[k] for k in ("layer", "pos", "gap", "kth", "next")},
+                        "kernel": ks, "ref": g["top"], "k_k1_exchange": exch})
+    return dev, ref_f
+
+
+def router_substitution_from_experts(reference: Reference, d, prompt, tokens, kv_dtype, vocab, ev,
+                                     step_experts):
+    """README 4a with kernel-emitted routing (preferred path): the kernel names the
+    swap, so nothing is searched. Same limits as the search path: bf16-KV tier, the
+    only routing deviation at or before the first failing row, a k-th/(k+1)-th
+    exchange at gap <= ROUTER_TIE_TOL; then the full criteria against the reference
+    with that single swap. Returns (router_record | None, ref, ev, deviations, note)."""
+    dev, ref_f = routing_deviations(reference, prompt, tokens, step_experts)
+    p0 = len(prompt) - 1
+    if ROUTER_EXPERTS_POLICY == "all-declared":
+        return _all_declared(d, kv_dtype, vocab, ev, dev, ref_f, p0)
+    if not ev["problems"] or ev["structural"] or kv_dtype not in ROUTER_TIE_TIERS:
+        return None, None, None, dev, None
+    early = [x for x in dev if x["pos"] <= p0 + ev["first_fail"]]
+    if not early:
+        return None, None, None, dev, "no kernel routing deviation at or before the first failing row"
+    if len(early) > MAX_ROUTER_SWAPS:
+        return None, None, None, dev, f"{len(early)} routing deviations at or before the first failing row"
+    x = early[0]
+    if not x["k_k1_exchange"]:
+        return None, None, None, dev, f"routing deviation L{x['layer']}@{x['pos']} is not a k/(k+1) exchange"
+    if x["gap"] > ROUTER_TIE_TOL:
+        return None, None, None, dev, (f"routing deviation L{x['layer']}@{x['pos']} at gap {x['gap']:.2e} "
+                                       f"> ROUTER_TIE_TOL {ROUTER_TIE_TOL}")
+    swap = {"layer": x["layer"], "pos": x["pos"], "drop": x["kth"], "add": x["next"]}
+    ref_s, _ = reference.run(prompt, tokens, [swap])
+    ev_s = _evaluate(d, ref_s, kv_dtype, vocab)
+    if ev_s["problems"]:
+        return None, None, None, dev, "substituted reference still fails: " + "; ".join(ev_s["problems"])
+    rec = {"kind": "router", "source": "step_experts", **swap, "step": x["pos"] - p0, "gap": x["gap"]}
+    return rec, ref_s, ev_s, dev, None
+
+
+def _all_declared(d, kv_dtype, vocab, ev, dev, ref_f, p0):
+    """PROPOSED policy (README 4c). Returns like router_substitution_from_experts; a
+    returned ev with problems signals FAIL even if the stock evaluation passed."""
+    if ev["structural"]:
+        return None, None, None, dev, None
+    if dev and kv_dtype not in ROUTER_TIE_TIERS:
+        fail = dict(ev, problems=ev["problems"] + [f"{len(dev)} routing deviation(s) in the {kv_dtype}-KV tier"])
+        return None, None, fail, dev, "the fp32-KV tier allows no routing deviation"
+    if not ev["problems"] and not dev:
+        return None, None, None, dev, None
+    bad = [x for x in dev if not x["k_k1_exchange"] or x["gap"] > ROUTER_TIE_TOL]
+    if bad:
+        x = bad[0]
+        note = (f"routing deviation L{x['layer']}@{x['pos']} gap {x['gap']:.2e} "
+                f"({'k/(k+1)' if x['k_k1_exchange'] else 'not a k/(k+1) exchange'}) exceeds the rule")
+        return None, None, dict(ev, problems=ev["problems"] or [note]), dev, note
+    ev_f = _evaluate(d, ref_f, kv_dtype, vocab)
+    if ev_f["problems"]:
+        return None, None, ev_f, dev, "reference forced to the kernel's routing still fails"
+    rec = {"kind": "router", "source": "step_experts", "policy": "all-declared", "n": len(dev),
+           "deviations": [{k: x[k] for k in ("layer", "pos", "gap", "kth", "next")} for x in dev]}
+    if dev:
+        rec.update({k: dev[0][k] for k in ("layer", "pos", "gap")})
+        rec.update(drop=dev[0]["kth"], add=dev[0]["next"], step=dev[0]["pos"] - p0)
+    return (rec if dev else None), ref_f, ev_f, dev, None
+
+
 def router_substitution(reference: Reference, d, prompt, tokens, kv_dtype, vocab, ev, gaps):
     """README 4a (adopted): if the stock evaluation fails the bf16-KV tier, try single
     k-th/(k+1)-th swaps at reference gaps <= ROUTER_TIE_TOL, at or before the first
@@ -271,9 +387,19 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
     ref, gaps = reference.run(prompt, tokens)
     ev = _evaluate(d, ref, kv_dtype, vocab)
     stock_problems = list(ev["problems"])
-    router, tried, ref_s, ev_s = router_substitution(reference, d, prompt, tokens, kv_dtype, vocab, ev, gaps)
+    se, se_problems = step_experts_of(d, reference, len(prompt) + len(tokens))
+    if se_problems:
+        return _report(path, {"case": case, "pass": False, "problems": se_problems}, verbose)
+    deviations, note, tried = None, None, 0
+    if se is not None:  # preferred: the kernel names its routing; no search
+        router, ref_s, ev_s, deviations, note = router_substitution_from_experts(
+            reference, d, prompt, tokens, kv_dtype, vocab, ev, se)
+    else:
+        router, tried, ref_s, ev_s = router_substitution(reference, d, prompt, tokens, kv_dtype, vocab, ev, gaps)
     if router:
         ref, ev = ref_s, ev_s
+    elif ev_s is not None and ev_s["problems"]:  # all-declared policy: a failing verdict
+        ev = ev_s
     flips, bad, problems = ev["flips"], ev["bad"], ev["problems"]
     last_rel, step_rel = ev["last_rel"], ev["step_rel"]
     ref_tokens = [int(r.argmax()) for r in ref[:-1]]
@@ -289,6 +415,12 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
         "router_near_tie": router, "router_candidates_tried": tried,
         "min_router_gap": min((g["gap"] for g in gaps), default=None),
     }
+    result["router_path"] = "step_experts" if se is not None else "search"
+    if deviations is not None:
+        result["routing_deviations"] = deviations[:10]
+        result["n_routing_deviations"] = len(deviations)
+    if note and problems:
+        result["router_note"] = note
     if router:
         result["stock_problems"] = stock_problems
     if len(set(ref_tokens)) <= 2:
