@@ -216,7 +216,12 @@ bit-exact, device fp32 drift 2.1e-6, bf16 teacher-forced with 1 near-tie flip).
 
 This is a correctness reference path, **not a speed claim**. Mid decode is
 bound by dequantizing the full 150144×2048 lm_head plus the dense
-projections every step, which is also why peak memory is 7.1 GiB. The first
+projections every step, which is also why peak memory is 7.1 GiB.
+**Superseded 2026-11-19 by the torch dequant re-baseline (rec-9na / rec-aip
+step 1, rec/claude-correctness `56ea8b7`): decode32 3.69–3.71 tok/s,
+short-ctx 3.73–3.75, serial-516 292.0–292.9, peak 3.0–3.1 GiB, bit-identical
+numerics. The 2.25 tok/s / 7.1 GiB row above is the pre-fix historical
+reference.** The first
 version, which dequantized all 32 experts, measured 1.06 tok/s. Do not
 compare these numbers with the dense-bf16 rows above (58.7 / 37.2 / 12.2) as
 like-for-like. The fused dequant-matmul (rec-aip) and the megakernel
@@ -302,7 +307,7 @@ and must be rebuilt; the weights are unchanged.
   ```
 - **Driver & Python Env**: Torch-free driver process (`~/rec-ve/.venv/bin/python`, Python 3.12, NumPy 2.5.5):
   ```bash
-  ~/rec-ve/.venv/bin/python mid_mk_driver.py --bench --ckpt ~/rec-ve/ckpt-pp2/mid-prod --workers=64 --mode=0
+  ~/rec-ve/.venv/bin/python mid_mk_driver.py --bench --ckpt ~/rec-ve/ckpt-pp2/mid-prod --workers=16 --mode=0
   ```
 - **Checkpoint Pinned**: `~/rec-ve/ckpt-pp2/mid-prod`, generated via `python -m rec_mlx.synthetic --preset mid --format production` (U8 INT4 packed weights, INT8 embedding, BF16 scales/biases/norms/router/sinks, no `expert_bias`).
   - `model-00001.safetensors` `sha256`: `f494e7885d10bdedf5d885faef826a27fdbe4bfb1fb11781fac12c7cabbd92ad`
@@ -342,17 +347,17 @@ and must be rebuilt; the weights are unchanged.
 
 ### Cross-Config Comparisons & Memory Labeling (A10)
 - **vs. Unfused Torch INT4 reference (`rec-9na`, same host `dusk` `gfx1150`, same mid-8L INT4 architecture, different prompt RNG [Torch vs NumPy] and differential vs canonical protocol)**:
-  - Throughput: **`111.67 tok/s`** (`workers=16`) / **`92.99 tok/s`** (`workers=8`) vs `2.25 tok/s` = **`49.6×`** / **`41.3×` faster**.
+  - Throughput (current, post-`flint_q4_gemv_op` integration `d1f6208`): **`120.78 tok/s`** (`workers=16`) vs **`3.71 tok/s`** re-baselined unfused torch INT4 (`56ea8b7`; `3.69 tok/s` on the same mid-prod ckpt) = **`32.6×`** (**`32.7×`** same-ckpt). Historical pre-integration: `111.67` / `92.99 tok/s` (`workers=16`/`8`) vs the then-baseline `2.25 tok/s` = `49.6×` / `41.3×` — superseded. `workers=8` post-integration not yet measured.
   - Memory (resident-vs-resident and peak-vs-peak):
-    - **Resident weights**: `0.944 GiB` (megakernel) vs `1.03 GiB` (torch INT4) = **`1.09×` smaller**.
-    - **Peak allocated GPU memory**: `0.954 GiB` (megakernel session peak) vs `7.1 GiB` (torch INT4 peak from per-step full-tensor dequant buffers) = **`7.44×` lower peak**.
+    - **Resident weights** (same mid-prod ckpt `f494e788`): `0.944 GiB` (megakernel) vs `0.943 GiB` (torch INT4) ≈ **`1.00×`** (identical packed weights). The former `1.09×` compared against cpu-baseline-mid's `1.03 GiB` — cross-checkpoint, superseded.
+    - **Peak allocated GPU memory**: `0.954 GiB` (megakernel session peak) vs **`3.00 GiB`** (torch INT4 mid-prod peak after the dequant fix, `56ea8b7`; `3.09 GiB` on cpu-baseline-mid) = **`3.14×` lower peak** (`3.24×` vs cpu-baseline-mid). The `7.1 GiB` / `7.44×` figure was pre-fix — superseded.
 - **vs. Eager Torch Dense-BF16 floor (same host `dusk` `gfx1150`, cross-config: INT4 persistent fused megakernel vs dense BF16 eager torch)**:
-  - Throughput: `111.67 tok/s` vs `37.2 tok/s` = **`3.00×` faster** (`2.50×` at `workers=8`).
+  - Throughput: `120.78 tok/s` (post-integration `d1f6208`) vs `37.2 tok/s` = **`3.25×` faster** (pre-integration `111.67 tok/s` = `3.00×`; `2.50×` at `workers=8` — historical, `workers=8` post-integration not yet measured).
   - Memory: `0.944 GiB` resident / `0.954 GiB` peak vs `2.85 GiB` resident / `3.31 GiB` peak.
 - **vs. Eager Torch Dense-BF16 on discrete R9700 (`albion` `gfx1201`, cross-GPU AND cross-path: fused INT4 megakernel on 890M iGPU vs eager dense-BF16 torch on discrete RDNA4 dGPU)**:
-  - Throughput: `111.67 tok/s` vs `58.7 tok/s` = **`1.90×` faster** (`1.58×` at `workers=8`), because the single-launch megakernel eliminates per-op host launch overhead and reads only 2 routed experts + 1 shared expert in INT4.
+  - Throughput: `120.78 tok/s` (post-integration `d1f6208`) vs `58.7 tok/s` = **`2.06×` faster** (pre-integration `111.67 tok/s` = `1.90×`; `1.58×` at `workers=8` — historical, `workers=8` post-integration not yet measured), because the single-launch megakernel eliminates per-op host launch overhead and reads only 2 routed experts + 1 shared expert in INT4.
 - **vs. Incumbent `llama.cpp` Vulkan (`28.5 tok/s` on `dusk` `:8080`, NOT like-for-like — cross-model & cross-context caveat)**:
-  - `111.67 / 28.5 = 3.92×` (`3.26×` at `workers=8`), **caveat**: compares synthetic **mid-8L INT4 at 512-token context** against the real **Flint 49-layer `Q3_K_XL` GGUF at 131k context** cumulative `/metrics` decode rate. Must not be read as a like-for-like 49L comparison.
+  - `120.78 / 28.5 = 4.24×` (post-integration `d1f6208`; pre-integration `111.67 / 28.5 = 3.92×`, `3.26×` at `workers=8` — historical, `workers=8` post-integration not yet measured), **caveat**: compares synthetic **mid-8L INT4 at 512-token context** against the real **Flint 49-layer `Q3_K_XL` GGUF at 131k context** cumulative `/metrics` decode rate. Must not be read as a like-for-like 49L comparison.
 
 ### Standalone Fused INT4-Affine Dequant-Matmul (`flint_q4_gemv_kernel`, A9) & Integrated `flint_q4_gemv_op` Decode Delta (`rec-aip`)
 - **Method**: `flint_q4_gemv_host` wraps `iters=50` back-to-back `flint_q4_gemv_device` launches in `hipEventRecord` after `warmup=10` launches (`per_iter_ms = total_ms / 50`). Effective bandwidth formula counts weight+scale+bias+input reads plus fp32 output writes:
@@ -371,7 +376,7 @@ and must be rebuilt; the weights are unchanged.
 - **Integration into Mid-8L Megakernel Decode Path (`flint_q4_gemv_op<2048>`, `rec-aip`)**:
   - Unified `flint_q4_gemv_op<K>` across `flint_q4_gemv_kernel` and `mid_generate_impl`, consuming the zero-copy layout in `docs/rocm-model-layer.md` §2 (`U8 [.., out, K/2]`, `BF16` scales/biases `[.., out, K/64]`). For `K == 2048` (`lm_head` `[150144, 2048]`, which accounts for 40–50% of a mid decode step per `rec-ebj` profiling, plus `K=2048` layer projections), each lane preloads its 4×16 pre-scaled input slices (`v0..v3`) and 4 group sums (`sum0..sum3`) into registers once before the row loop and reads packed weights via 32-bit `uint32_t` loads in `dot16`.
   - **Before vs. After Decode Throughput (`workers = 16`, 4-pair ABBA differential recipe on `dusk` `gfx1150`, `ckpt: f494e788…`; JSON: `docs/benchmarks/bench_mid_prod_aip_q4_dusk_gfx1150.json`)**:
-    - `decode32_after_512` (differential): **`111.67 tok/s` $\to$ `120.78 tok/s`** (**`+8.16%`**, `+9.11 tok/s`; 4-pair min..max `117.08 .. 123.49 tok/s`, `t516_mean = 3.5655s`, `t548_mean = 3.8304s`, `dt32_mean = 0.2649s` vs `0.2866s` before; **`53.7×`** vs current unfused torch INT4 `2.25 tok/s` baseline — note: the `2.25 tok/s` torch broadcast-dequant baseline is being re-baselined separately by the Claude lane per `rec-ebj`).
+    - `decode32_after_512` (differential): **`111.67 tok/s` $\to$ `120.78 tok/s`** (**`+8.16%`**, `+9.11 tok/s`; 4-pair min..max `117.08 .. 123.49 tok/s`, `t516_mean = 3.5655s`, `t548_mean = 3.8304s`, `dt32_mean = 0.2649s` vs `0.2866s` before; **`32.7×`** vs the re-baselined unfused torch INT4 baseline **`3.69 tok/s`** decode32 on the same mid-prod ckpt `f494e788` (rec/claude-correctness `56ea8b7`, 2026-11-19 ABBA run of record; **`32.6×`** vs the `3.71 tok/s` cpu-baseline-mid headline). The former `2.25 tok/s` baseline (`53.7×`) is superseded. Protocol caveat unchanged: megakernel differential vs torch canonical sync-bounded windows).
     - `decode32_short_ctx` (differential): **`157.01 tok/s` $\to$ `175.67 tok/s`** (**`+11.88%`**, `+18.66 tok/s`; 4-pair min..max `174.17 .. 176.99 tok/s`, `dt_short_mean = 0.1822s` vs `0.2038s` before).
     - `end_to_end_516_pos_tok_s` (`512` prefill + `4` decode): **`131.67 tok/s` $\to$ `144.72 tok/s`** (**`+9.91%`**).
   - **Conformance (`rec-pp2` under `00c74a6` `all-declared` default policy)**: **6/6 PASS** (`exit 0`, both with `--emit-experts` on the `all-declared` `step_experts` path and without `--emit-experts` on the search fallback; see `engine/validation/megakernel_mid/results-rec-aip-matrix-all-declared.txt`).
