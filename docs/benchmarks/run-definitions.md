@@ -211,6 +211,84 @@ HSA_OVERRIDE_GFX_VERSION=11.0.0.
 | tiny-2L INT4 | <0.01 GiB | 91,963.6 | 495.1 | 0.05 GiB |
 | mid-8L INT4 | 1.03 GiB | 498.2 | 2.25 | 7.1 GiB |
 
+Conformance on the same run: `torch_rocm_tiny_check.py` PASS (dequant
+bit-exact, device fp32 drift 2.1e-6, bf16 teacher-forced with 1 near-tie flip).
+
+This is a correctness reference path, **not a speed claim**. Mid decode is
+bound by dequantizing the full 150144×2048 lm_head plus the dense
+projections every step, which is also why peak memory is 7.1 GiB. The first
+version, which dequantized all 32 experts, measured 1.06 tok/s. Do not
+compare these numbers with the dense-bf16 rows above (58.7 / 37.2 / 12.2) as
+like-for-like. The fused dequant-matmul (rec-aip) and the megakernel
+(rec-tan) are the speed paths. Albion (R9700 / MI50) was unreachable for this
+run.
+
+## Engine end-to-end, `REC_BACKEND=rocm` (dusk, Radeon 890M gfx1150, 2026-11-18, rec-ju9)
+
+**Env (user-space, separate venv; the older `~/rec-ve/.venv` was left untouched):**
+
+```bash
+cd ~/rec-ve && uv venv --python 3.12 .venv-e2e
+VIRTUAL_ENV=~/rec-ve/.venv-e2e uv pip install --index-strategy unsafe-best-match \
+  --extra-index-url https://download.pytorch.org/whl/rocm6.4 \
+  "torch==2.9.1+rocm6.4" "mlx[cpu]==0.32.0" "mlx-lm==0.31.3" \
+  "transformers==5.16.1" "xgrammar==0.2.1" "pytest==8.4.2"
+# ~/rec-ve/e2e-env.sh (NixOS: pip wheels need libstdc++/zstd/zlib from the store)
+export LD_LIBRARY_PATH=<gcc-15.3.0-lib>/lib:<zstd-1.5.7>/lib:<zlib-1.3.2>/lib
+export HSA_OVERRIDE_GFX_VERSION=11.0.0 PYTHONPATH=$HOME/rec-ve/engine/src
+python -m rec_mlx.synthetic --preset tiny --out ckpt-e2e/tiny   # 3 s
+python -m rec_mlx.synthetic --preset mid  --out ckpt-e2e/mid    # 16 s, 1.1 GiB
+REC_TORCH_DEVICE=cuda python engine/tests/rocm_engine_e2e.py --ckpt ckpt-e2e/<tiny|mid>
+```
+
+The engine is run from source (`PYTHONPATH`), not pip-installed, so the
+native hatch build is not needed. The tiny checkpoint built on dusk is
+byte-identical (sha256 `75168d28…`) to the one built on dawn. The engine
+suite in this venv with `REC_TORCH_DEVICE=cuda`: 53 passed, 1 skipped (the
+skipped test asserts that a missing GPU raises an error).
+
+**Protocol** (`engine/tests/rocm_engine_e2e.py`): 512-token seeded prompt,
+32 greedy tokens through `Engine.generate_tokens`, one 4-token warmup request
+per engine. Timings are the engine's own metrics, so they include sampling,
+detokenize and the per-step host copy of the logits. That is not the
+bare-model protocol above. Conformance: the rocm engine in fp32
+(`REC_TORCH_DTYPE=fp32`) must be greedy-identical to the MLX model
+teacher-forced. Each bf16 flip must be explained by precision, meaning its
+margin is at most the measured |bf16 − fp32| logit perturbation at that step.
+
+| ckpt | engine | prefill512 tok/s | decode32 tok/s | conformance |
+|---|---|---|---|---|
+| tiny-2L | cpu (MLX-CPU) | 2,443.2 | 1,027.4 | reference |
+| tiny-2L | rocm fp32 | 78,335.4 | 418.0 | 32/32 tokens identical to cpu engine |
+| tiny-2L | rocm bf16 | 80,526.0 | 384.2 | 0 flips |
+| mid-8L | cpu (MLX-CPU) | 5.9 | 2.60 | reference |
+| mid-8L | rocm fp32 | 481.1 | 2.05 | 32/32 tokens identical to cpu engine |
+| mid-8L | rocm bf16 | 517.2 | 2.16 | 2 flips (margins 5.8e-3, 7.4e-4 vs perturbation 0.32, 0.43): explained |
+
+Overall result: **PASS** on both checkpoints. GPU prefill is 88× the MLX-CPU
+engine on mid. GPU **decode is slower than MLX-CPU on mid** (2.16 vs 2.60
+tok/s), because the INT4 reference path dequantizes the full lm_head every
+step (see the rec-9na rows). This is a functional end-to-end validation, not
+a speed result. The first rocm engine pays about 5 s of HIP init in
+`load_seconds`.
+
+**Served path** (`python -m rec_mlx.cli serve flint --model-dir D --manifest
+D/manifest.json --grammar none --port 18099 --metrics m.jsonl`, with
+`REC_BACKEND=rocm REC_TORCH_DEVICE=cuda`). Use `--grammar none`, because the
+flint grammar is Metal-only, and a non-default port, because 8080 is the
+shared flint llama-server. A `/v1/chat/completions` request with 16 tokens
+at temperature 0 returns 200 on tiny and mid. The server log reports engine
+decode of 386.4 tok/s on tiny and 2.12 tok/s on mid. The tiny completion
+text is identical to the dawn cpu-backend server.
+
+The first served attempt returned 200 with an empty body and then died with
+`HSA_STATUS_ERROR_EXCEPTION`. The synthetic tokenizer had placed
+specials and chat tokens at ids ≥ vocab_size, so the chat template fed the GPU
+an out-of-bounds embedding gather. That is fixed in `rec_mlx.synthetic`, and
+Engine now rejects such tokenizers at load and such ids per request
+(commit 92f9bc2). Checkpoints built before that commit have bad tokenizers
+and must be rebuilt; the weights are unchanged.
+
 ## Reference numbers — rec-tan Phase 2b HIP Persistent Megakernel (dusk, Radeon 890M gfx1150, 2026-11-19, Corrected R1–R8 Protocol)
 
 ### Environment & Reproducibility Matrix (A8)

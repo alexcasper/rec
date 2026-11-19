@@ -7,8 +7,10 @@ Three backends are recognised:
 - ``cpu``: MLX CPU backend (Linux/macOS). Runs the portable pure-MLX model
   (``rec_mlx.native_runtime``); no resident megakernel, no grammar-constrained
   decode, no prefix preparation.
-- ``rocm``: reserved for the torch-ROCm port (see docs/amd-port-assessment.md).
-  Selectable explicitly; not yet implemented behind Engine.
+- ``rocm``: torch model layer (``rec_mlx.torch_rocm`` via
+  ``rec_mlx.torch_runtime``) on a torch GPU device (ROCm torch exposes HIP as
+  ``cuda``; ``REC_TORCH_DEVICE`` overrides, ``cpu`` allowed for testing).
+  Same feature subset as ``cpu``. Layout contract: docs/rocm-model-layer.md.
 
 The backend is auto-detected from the MLX runtime and can be forced with the
 ``REC_BACKEND`` environment variable.
@@ -69,7 +71,7 @@ def detect_backend() -> Backend:
         return Backend("metal", system, machine, memory)
     import mlx.core as mx
 
-    if mx.default_device().device_type == mx.DeviceType.gpu:
+    if mx.default_device().type == mx.DeviceType.gpu:
         # Linux MLX GPU builds are CUDA today; a ROCm backend would surface here.
         return Backend("rocm", system, machine, memory)
     return Backend("cpu", system, machine, memory)

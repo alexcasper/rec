@@ -76,9 +76,35 @@ def test_context_limit_still_enforced(tiny_checkpoint):
         list(engine.generate_tokens(list(range(1, 60)), Sampling(temperature=0, max_tokens=16)))
 
 
-def test_rocm_backend_selectable_but_unimplemented(tiny_checkpoint, monkeypatch):
+def test_rocm_backend_requires_torch_gpu(tiny_checkpoint, monkeypatch):
+    torch = pytest.importorskip("torch")
+    if torch.cuda.is_available():
+        pytest.skip("a torch GPU is present; rocm backend would load")
     monkeypatch.setenv("REC_BACKEND", "rocm")
+    monkeypatch.delenv("REC_TORCH_DEVICE", raising=False)
     from rec_mlx.backends import BackendError
 
-    with pytest.raises(BackendError):
+    with pytest.raises(BackendError, match="torch GPU"):
         Engine(tiny_checkpoint, tiny_checkpoint / "manifest.json", context_limit=4096)
+
+
+def test_out_of_vocab_prompt_ids_are_rejected(engine):
+    for ids in ([1, 5, 512], [1, -1, 5]):
+        with pytest.raises(ValueError, match="Token ids must be in"):
+            list(engine.generate_tokens(ids, Sampling(temperature=0, max_tokens=2)))
+
+
+def test_synthetic_tokenizer_ids_fit_the_vocab(tiny_checkpoint, tmp_path):
+    """Specials and chat-template output must stay < vocab_size and be deterministic."""
+    from rec_mlx.engine import load_tokenizer
+    from rec_mlx.synthetic import build_checkpoint
+
+    tokenizer = load_tokenizer(tiny_checkpoint)
+    assert len(tokenizer) == 512
+    specials = ["<|begin_of_text|>", "<|end_of_text|>", "<|system|>", "<|user|>", "<|assistant|>"]
+    assert max(tokenizer.convert_tokens_to_ids(specials)) < 512
+    ids = tokenizer.apply_chat_template([{"role": "user", "content": "tok7 tok8"}], add_generation_prompt=True)
+    ids = list(ids["input_ids"]) if not isinstance(ids, list) else ids  # BatchEncoding is not a dict
+    assert max(ids) < 512
+    again = build_checkpoint(tmp_path / "again", "tiny")
+    assert (again / "tokenizer.json").read_bytes() == (tiny_checkpoint / "tokenizer.json").read_bytes()

@@ -48,6 +48,14 @@ SCHEMA = "rec-mk-out/1"
 # builds (README "Pass criteria").
 LOGIT_RTOL = {"fp32": 1e-4, "bf16": 1e-3}
 TIE_TOL = 5e-3      # a token may differ from the fp32 argmax only if the fp32 margin <= this
+# MoE router near-tie substitution (README 4a, adopted 2026-11-19), bf16-KV tier
+# only: one k-th/(k+1)-th expert swap at a selection-score gap <= this, at or
+# before the first failing step, then the full unchanged criteria. PROVISIONAL:
+# rests on one observed flip (gap 4.1e-5); recalibration is bead rec-tan.3.
+ROUTER_TIE_TOL = 2.5e-4
+ROUTER_TIE_TIERS = ("bf16",)
+MAX_ROUTER_SWAPS = 1
+MAX_ROUTER_CANDIDATES = 8  # bound on replays tried (each is a single swap)
 N_OUT = 24
 
 
@@ -83,69 +91,145 @@ def vocab_of(ckpt: Path) -> int:
 
 
 # ---------------------------------------------------------------- reference
-def reference_logits_and_experts(ckpt: Path, prompt: list[int], tokens: list[int], device: str,
-                                 kv_dtype: str = "fp32") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """fp32-compute torch-layer logits AND selected top-k MoE experts teacher-forced
-    along `tokens`, with K/V stored at `kv_dtype`.
-    Returns:
-      logits         : float32 [n_out + 1, V]
-      chosen_experts : int32   [n_out, NL, top_k]     (decode steps 0..n_out-1, at pos P-1..P+n_out-2)
-      step_experts   : int32   [P + n_out, NL, top_k] (all positions 0..P+n_out-1; dense layers = -1)
-    """
-    import types
+class Reference:
+    """fp32-compute torch layer, teacher-forced, K/V stored at `kv_dtype` (exact
+    rounding at the contract's storage points). Loaded once; each run can record
+    the MoE top-k boundary gap at every (layer, position) and force one swap."""
 
-    import torch
+    def __init__(self, ckpt: Path, device: str, kv_dtype: str = "fp32"):
+        import torch
 
-    from rec_mlx.torch_rocm import load_model
+        from rec_mlx.torch_rocm import load_model
 
-    model = load_model(ckpt, device=device, dtype=torch.float32)
-    model.kv_store_dtype = {"fp32": None, "bf16": torch.bfloat16}[kv_dtype]
-    total = len(prompt) + len(tokens)
-    nl = model.cfg.layers
-    k_top = model.cfg.topk
-    step_experts = np.full((total, nl, k_top), -1, dtype=np.int32)
-    real_topk = torch.topk
-    cur_layer = [0]
+        self.model = load_model(ckpt, device=device, dtype=torch.float32)
+        self.model.kv_store_dtype = {"fp32": None, "bf16": torch.bfloat16}[kv_dtype]
+        self.k = self.model.cfg.topk
+        self.scores: dict[int, np.ndarray] = {}  # last run: layer -> selection scores [L, E]
 
-    def moe_hook(self, x, i):
-        cur_layer[0] = i
+    def run(self, prompt: list[int], tokens: list[int], swaps: list[dict] | None = None):
+        """Row i (i < n) = logits that should pick tokens[i]; row n = after tokens[-1].
+        Returns (logits [n+1, V], gaps). gaps: one dict per (layer, position) with the
+        selection-score gap between rank k and rank k+1 and those two experts.
+        swaps = [{"layer", "pos", "drop", "add"}]: the reference takes `add` instead of
+        `drop` at that (layer, absolute position). The gate uses at most one; more
+        are accepted here so tests can build multi-flip negative controls."""
+        import types
 
-        def topk_hook(t, k, dim=-1, **kw):
-            r = real_topk(t, k, dim=dim, **kw)
-            if k == k_top and t.dim() == 3:
-                step_experts[:, cur_layer[0], :] = r.indices[0].detach().cpu().numpy().astype(np.int32)
-            return r
+        import torch
+        import torch.nn.functional as F
 
-        torch.topk = topk_hook
+        model, K, gaps, swaps = self.model, self.k, [], swaps or []
+        self.scores = {}
+        real_topk = torch.topk
+
+        def moe(m, x, i):
+            pre = f"model.layers.{i}.mlp"
+            sel = torch.sigmoid(F.linear(x.float(), m.t[f"{pre}.gate.weight"].float())) \
+                + m.t[f"{pre}.gate.expert_bias"].float().view(1, 1, -1)  # same as _moe
+            self.scores[i] = sel[0].cpu().numpy()
+            top = real_topk(sel[0], K + 1, dim=-1)
+            for p in range(sel.shape[1]):
+                gaps.append({"layer": i, "pos": p, "gap": float(top.values[p, K - 1] - top.values[p, K]),
+                             "kth": int(top.indices[p, K - 1]), "next": int(top.indices[p, K])})
+            mine = [sw for sw in swaps if sw["layer"] == i]
+            if not mine:
+                return type(m)._moe(m, x, i)
+
+            def topk(t, k, dim=-1, **kw):
+                r = real_topk(t, k, dim=dim, **kw)
+                if k != K or t.dim() != 3:
+                    return r
+                idx = r.indices.clone()
+                for sw in mine:
+                    if sw["pos"] >= idx.shape[1]:  # position not in this sequence (yet)
+                        continue
+                    row = idx[0, sw["pos"]]
+                    if sw["drop"] not in row.tolist() or sw["add"] in row.tolist():
+                        raise ValueError(f"swap {sw} does not apply to {row.tolist()}")
+                    row[row == sw["drop"]] = sw["add"]
+                return torch.return_types.topk((torch.gather(t, dim, idx), idx))
+
+            torch.topk = topk
+            try:
+                return type(m)._moe(m, x, i)
+            finally:
+                torch.topk = real_topk
+
+        model._moe = types.MethodType(moe, model)
         try:
-            return type(self)._moe(self, x, i)
+            with torch.inference_mode():
+                ids = torch.tensor([prompt + tokens], device=model.device)
+                out = model.forward(ids)[0, len(prompt) - 1:]
         finally:
-            torch.topk = real_topk
-
-    model._moe = types.MethodType(moe_hook, model)
-    with torch.inference_mode():
-        ids = torch.tensor([prompt + tokens], device=model.device)
-        out = model.forward(ids)[0, len(prompt) - 1:]
-    p0 = len(prompt) - 1
-    chosen_experts = step_experts[p0 : p0 + len(tokens)].copy()
-    return out.float().cpu().numpy(), chosen_experts, step_experts
+            del model._moe
+        return out.float().cpu().numpy(), gaps
 
 
 def reference_logits(ckpt: Path, prompt: list[int], tokens: list[int], device: str,
                      kv_dtype: str = "fp32"):
-    """fp32-compute torch-layer logits teacher-forced along `tokens`, with K/V
-    stored at `kv_dtype` (exact rounding at the contract's storage points).
-    Row i (i < n) = logits that should pick tokens[i]; row n = after tokens[-1]."""
-    import torch
+    """Teacher-forced reference logits (see Reference.run)."""
+    return Reference(ckpt, device, kv_dtype).run(prompt, tokens)[0]
 
-    from rec_mlx.torch_rocm import load_model
 
-    model = load_model(ckpt, device=device, dtype=torch.float32)
-    model.kv_store_dtype = {"fp32": None, "bf16": torch.bfloat16}[kv_dtype]
-    with torch.inference_mode():
-        ids = torch.tensor([prompt + tokens], device=model.device)
-        out = model.forward(ids)[0, len(prompt) - 1:]
-    return out.float().cpu().numpy()
+def _evaluate(d, ref: np.ndarray, kv_dtype: str, vocab: int) -> dict:
+    """The unchanged section-4 criteria for one kernel output against one reference."""
+    tokens = d["tokens"].tolist()
+    rtol = LOGIT_RTOL[kv_dtype]
+    problems, flips, bad = [], [], []
+    for i, tok in enumerate(tokens):
+        best = int(ref[i].argmax())
+        if best != tok:
+            margin = float(ref[i, best] - ref[i, tok])
+            (flips if margin <= TIE_TOL else bad).append({"step": i, "ref": best, "kernel": tok,
+                                                          "margin": margin})
+    kl = d["last_logits"].astype(np.float64)
+    last_rel = float(np.abs(kl - ref[-1]).max() / max(np.abs(ref[-1]).max(), 1e-6))
+    step_rel, rows, structural = None, None, False
+    sl = d["step_logits"].astype(np.float64)
+    if sl.shape != (len(tokens), vocab):
+        problems.append(f"step_logits shape {sl.shape} != ({len(tokens)}, {vocab})")
+        structural = True
+    else:
+        rows = np.abs(sl - ref[:-1]).max(-1) / np.maximum(np.abs(ref[:-1]).max(-1), 1e-6)
+        step_rel = float(rows.max())
+        if not np.isfinite(sl).all():
+            problems.append("non-finite step_logits")
+            structural = True
+    if not np.isfinite(kl).all():
+        problems.append("non-finite last_logits")
+        structural = True
+    if bad:
+        problems.append(f"{len(bad)} token(s) differ from the fp32 reference beyond the near-tie margin")
+    if last_rel > rtol:
+        problems.append(f"last_logits rel err {last_rel:.3e} > {rtol} ({kv_dtype}-KV tier)")
+    if step_rel is not None and step_rel > rtol:
+        problems.append(f"step_logits max rel err {step_rel:.3e} > {rtol} ({kv_dtype}-KV tier)")
+    # first failing row: a bad token or a row over the tier; row n = last_logits
+    fails = [b["step"] for b in bad] + ([int(np.argmax(rows > rtol))] if rows is not None and
+                                         (rows > rtol).any() else [])
+    first_fail = min(fails) if fails else (len(tokens) if last_rel > rtol else None)
+    return {"problems": problems, "flips": flips, "bad": bad, "last_rel": last_rel,
+            "step_rel": step_rel, "first_fail": first_fail, "structural": structural}
+
+
+def router_substitution(reference: Reference, d, prompt, tokens, kv_dtype, vocab, ev, gaps):
+    """README 4a (adopted): if the stock evaluation fails the bf16-KV tier, try single
+    k-th/(k+1)-th swaps at reference gaps <= ROUTER_TIE_TOL, at or before the first
+    failing row, smallest gap first; accept the first whose substituted reference meets
+    the full unchanged criteria. Returns (router_record | None, n_tried, ref, ev)."""
+    if not ev["problems"] or ev["structural"] or kv_dtype not in ROUTER_TIE_TIERS:
+        return None, 0, None, None
+    p0 = len(prompt) - 1
+    last_pos = p0 + ev["first_fail"]
+    cands = sorted((g for g in gaps if g["gap"] <= ROUTER_TIE_TOL and g["pos"] <= last_pos),
+                   key=lambda g: g["gap"])[:MAX_ROUTER_CANDIDATES]
+    for n, g in enumerate(cands, 1):
+        swap = {"layer": g["layer"], "pos": g["pos"], "drop": g["kth"], "add": g["next"]}
+        ref_s, _ = reference.run(prompt, tokens, [swap])  # MAX_ROUTER_SWAPS == 1
+        ev_s = _evaluate(d, ref_s, kv_dtype, vocab)
+        if not ev_s["problems"]:
+            return {"kind": "router", **swap, "step": g["pos"] - p0, "gap": g["gap"]}, n, ref_s, ev_s
+    return None, len(cands), None, None
 
 
 def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: bool = True,
@@ -183,45 +267,30 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
     kv_dtype = ref_kv if ref_kv != "auto" else (str(d["kv_dtype"]) if "kv_dtype" in d.files else "fp32")
     if kv_dtype not in ("fp32", "bf16"):
         return _report(path, {"case": case, "pass": False, "problems": [f"kv_dtype {kv_dtype!r}"]}, verbose)
-    ref = reference_logits(ckpt, prompt, tokens, device, kv_dtype)
-    scale = float(np.abs(ref).max())
-    flips, bad = [], []
-    for i, tok in enumerate(tokens):
-        best = int(ref[i].argmax())
-        if best != tok:
-            margin = float(ref[i, best] - ref[i, tok])
-            (flips if margin <= TIE_TOL else bad).append({"step": i, "ref": best, "kernel": tok,
-                                                          "margin": margin})
-    kl = d["last_logits"].astype(np.float64)
-    last_rel = float(np.abs(kl - ref[-1]).max() / max(np.abs(ref[-1]).max(), 1e-6))
-    step_rel = None
-    rtol = LOGIT_RTOL[kv_dtype]
-    if True:  # step_logits is required (schema check above)
-        sl = d["step_logits"].astype(np.float64)
-        if sl.shape != (len(tokens), vocab):
-            problems.append(f"step_logits shape {sl.shape} != ({len(tokens)}, {vocab})")
-        else:
-            rows = np.abs(sl - ref[:-1]).max(-1) / np.maximum(np.abs(ref[:-1]).max(-1), 1e-6)
-            step_rel = float(rows.max())
-            if not np.isfinite(sl).all():
-                problems.append("non-finite step_logits")
-    if not np.isfinite(kl).all():
-        problems.append("non-finite last_logits")
-    if bad:
-        problems.append(f"{len(bad)} token(s) differ from the fp32 reference beyond the near-tie margin")
-    if last_rel > rtol:
-        problems.append(f"last_logits rel err {last_rel:.3e} > {rtol} ({kv_dtype}-KV tier)")
-    if step_rel is not None and step_rel > rtol:
-        problems.append(f"step_logits max rel err {step_rel:.3e} > {rtol} ({kv_dtype}-KV tier)")
+    reference = Reference(ckpt, device, kv_dtype)
+    ref, gaps = reference.run(prompt, tokens)
+    ev = _evaluate(d, ref, kv_dtype, vocab)
+    stock_problems = list(ev["problems"])
+    router, tried, ref_s, ev_s = router_substitution(reference, d, prompt, tokens, kv_dtype, vocab, ev, gaps)
+    if router:
+        ref, ev = ref_s, ev_s
+    flips, bad, problems = ev["flips"], ev["bad"], ev["problems"]
+    last_rel, step_rel = ev["last_rel"], ev["step_rel"]
     ref_tokens = [int(r.argmax()) for r in ref[:-1]]
+    scale = float(np.abs(ref).max())
     result = {
         "case": case, "impl": str(d["impl"]) if "impl" in d.files else "?", "ref_kv": kv_dtype,
-        "logit_rtol": rtol,
+        "logit_rtol": LOGIT_RTOL[kv_dtype],
         "pass": not problems, "problems": problems,
-        "tokens_exact": not bad and not flips, "near_ties_accepted": flips, "bad_tokens": bad[:5],
+        "tokens_exact": not bad and not flips, "near_ties_accepted": flips + ([router] if router else []),
+        "bad_tokens": bad[:5],
         "last_logits_rel": last_rel, "step_logits_max_rel": step_rel,
         "ref_logit_absmax": scale, "distinct_ref_tokens": len(set(ref_tokens)),
+        "router_near_tie": router, "router_candidates_tried": tried,
+        "min_router_gap": min((g["gap"] for g in gaps), default=None),
     }
+    if router:
+        result["stock_problems"] = stock_problems
     if len(set(ref_tokens)) <= 2:
         result["warning"] = "reference trajectory nearly constant: degenerate case"
     return _report(path, result, verbose)
@@ -279,10 +348,7 @@ def _apply_fault(model, fault: str):
     return model
 
 
-def produce(ckpt: Path, case: str, out: Path, impl: str, device: str, fault: str = "none",
-            emit_experts: bool = False) -> Path:
-    import types
-
+def produce(ckpt: Path, case: str, out: Path, impl: str, device: str, fault: str = "none") -> Path:
     import torch
 
     from rec_mlx.torch_rocm import load_model
@@ -295,62 +361,19 @@ def produce(ckpt: Path, case: str, out: Path, impl: str, device: str, fault: str
     if impl == "torch-fp32-bf16kv":
         model.kv_store_dtype = torch.bfloat16  # fp32 compute, bf16 KV storage
     prompt = spec["prompt"]
-    n_out = spec["n_out"]
-    nl = model.cfg.layers
-    k_top = model.cfg.topk
-    all_experts = np.full((len(prompt) + n_out, nl, k_top), -1, dtype=np.int32) if emit_experts else None
-
-    if all_experts is not None:
-        bound_moe = model._moe
-        real_topk = torch.topk
-        pos_cursor = [0]
-        cur_layer = [0]
-
-        def moe_record(self, x, i):
-            cur_layer[0] = i
-            seq_len = x.shape[1]
-
-            def topk_record(t, k, dim=-1, **kw):
-                r = real_topk(t, k, dim=dim, **kw)
-                if k == k_top and t.dim() == 3:
-                    p0 = pos_cursor[0]
-                    all_experts[p0 : p0 + seq_len, cur_layer[0], :] = (
-                        r.indices[0].detach().cpu().numpy().astype(np.int32)
-                    )
-                return r
-
-            torch.topk = topk_record
-            try:
-                return bound_moe(x, i)
-            finally:
-                torch.topk = real_topk
-
-        model._moe = types.MethodType(moe_record, model)
-
     with torch.inference_mode():  # kernel-shaped flow: prefill, then one token per step
         kv = model.new_cache()
-        if all_experts is not None:
-            pos_cursor[0] = 0
         logits = model.forward(torch.tensor([prompt], device=model.device), kv)[0, -1]
         tokens, steps = [], []
-        for step_idx in range(n_out):
+        for _ in range(spec["n_out"]):
             steps.append(logits.float().cpu().numpy())
             tokens.append(int(logits.argmax()))
-            if all_experts is not None:
-                pos_cursor[0] = len(prompt) + step_idx
             logits = model.forward(torch.tensor([[tokens[-1]]], device=model.device), kv)[0, -1]
-    payload = dict(
-        schema=np.array(SCHEMA), case=np.array(case), ckpt_sha256=np.array(shard_sha256(ckpt)),
-        impl=np.array(f"{impl}@{device}" + (f" fault={fault}" if fault != "none" else "")),
-        kv_dtype=np.array(kv_dtype),
-        prompt=np.array(prompt, np.int32), tokens=np.array(tokens, np.int32),
-        last_logits=logits.float().cpu().numpy(), step_logits=np.stack(steps),
-    )
-    if all_experts is not None:
-        p0 = len(prompt) - 1
-        payload["chosen_experts"] = all_experts[p0 : p0 + n_out]
-        payload["step_experts"] = all_experts
-    np.savez(out, **payload)
+    np.savez(out, schema=np.array(SCHEMA), case=np.array(case), ckpt_sha256=np.array(shard_sha256(ckpt)),
+             impl=np.array(f"{impl}@{device}" + (f" fault={fault}" if fault != "none" else "")),
+             kv_dtype=np.array(kv_dtype),
+             prompt=np.array(prompt, np.int32), tokens=np.array(tokens, np.int32),
+             last_logits=logits.float().cpu().numpy(), step_logits=np.stack(steps))
     return out
 
 
@@ -376,8 +399,6 @@ def main(argv=None) -> int:
     p.add_argument("--impl", choices=("torch-fp32", "torch-fp32-bf16kv", "torch-bf16"), default="torch-bf16")
     p.add_argument("--fault", choices=FAULTS, default="none")
     p.add_argument("--device", default=None)
-    p.add_argument("--emit-experts", action="store_true", default=False,
-                   help="Emit optional chosen_experts [n_out, layers, top_k] and step_experts [P+n_out, layers, top_k]")
     k = sub.add_parser("check")
     k.add_argument("--ckpt", type=Path, required=True)
     k.add_argument("kernel_out", type=Path)
@@ -394,8 +415,7 @@ def main(argv=None) -> int:
                           "cases": case_matrix(vocab_of(a.ckpt))}))
         return 0
     if a.cmd == "produce":
-        print(produce(a.ckpt, a.case, a.out, a.impl, a.device or _default_device(), a.fault,
-                      emit_experts=a.emit_experts))
+        print(produce(a.ckpt, a.case, a.out, a.impl, a.device or _default_device(), a.fault))
         return 0
     device = a.ref_device or _default_device()
     if a.cmd == "check":
@@ -408,10 +428,13 @@ def main(argv=None) -> int:
               f"ref_kv={r.get('ref_kv', '?'):4} "
               f"tokens_exact={r.get('tokens_exact')} ties={len(r.get('near_ties_accepted', []))} "
               f"last_rel={r.get('last_logits_rel', float('nan')):.2e} "
-              f"step_rel={r.get('step_logits_max_rel') or float('nan'):.2e}  {'; '.join(r['problems'])}")
-    covered = {r.get("case") for r in results if r["pass"]}
-    missing = set(case_matrix(vocab_of(a.ckpt))) - covered
-    print(f"{sum(r['pass'] for r in results)}/{len(results)} PASS; cases without a passing run: "
+              f"step_rel={r.get('step_logits_max_rel') or float('nan'):.2e}  {'; '.join(r['problems'])}"
+              + (f"router-tie L{rt['layer']}@pos{rt['pos']} {rt['drop']}->{rt['add']} gap {rt['gap']:.2e}"
+                 if (rt := r.get("router_near_tie")) else ""))
+    # sign-off coverage (adopted policy): every case must pass in BOTH KV tiers
+    covered = {(r.get("case"), r.get("ref_kv")) for r in results if r["pass"]}
+    missing = {(c, t) for c in case_matrix(vocab_of(a.ckpt)) for t in LOGIT_RTOL} - covered
+    print(f"{sum(r['pass'] for r in results)}/{len(results)} PASS; (case, kv tier) without a passing run: "
           f"{sorted(missing) or 'none'}")
     return 0 if results and all(r["pass"] for r in results) and not missing else 1
 

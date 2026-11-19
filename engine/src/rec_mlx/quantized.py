@@ -3,8 +3,10 @@ from types import SimpleNamespace
 
 import mlx.core as mx
 import mlx.nn as nn
+import numpy as np
 
 from .cache import FixedKVCache, FixedSlidingKVCache
+from .checkpoint import assert_router_nondegenerate
 from .model import Model, ModelArgs
 from .prefix import PrefillCancelled, PromptCache, select_prefix
 
@@ -39,6 +41,10 @@ class QATModel:
             shard = mx.load(str(path))
             assert not weights.keys() & shard.keys(), f"Duplicate tensor in {path}"
             weights.update(shard)
+        assert_router_nondegenerate(
+            {k: np.array(v.astype(mx.float32)) for k, v in weights.items() if k.endswith(".mlp.gate.weight")},
+            self.config,
+        )
         native.load_weights(list(native.sanitize(weights).items()), strict=True)
         native.eval()
         mx.eval(native.parameters())

@@ -1,0 +1,8 @@
+FAIL  chat_fp32_bf16kv.npz               case=chat     ref_kv=bf16 tokens_exact=False ties=0 last_rel=1.37e-02 step_rel=2.04e-01  1 token(s) differ from the fp32 reference beyond the near-tie margin; last_logits rel err 1.368e-02 > 0.001 (bf16-KV tier); step_logits max rel err 2.036e-01 > 0.001 (bf16-KV tier)
+PASS  chat_fp32kv.npz                    case=chat     ref_kv=fp32 tokens_exact=True ties=0 last_rel=3.00e-06 step_rel=3.59e-06  
+PASS  short4_fp32_bf16kv.npz             case=short4   ref_kv=bf16 tokens_exact=True ties=0 last_rel=4.35e-04 step_rel=6.22e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref_kv=fp32 tokens_exact=True ties=0 last_rel=2.69e-06 step_rel=3.65e-06  
+PASS  wrap512_fp32_bf16kv.npz            case=wrap512  ref_kv=bf16 tokens_exact=True ties=0 last_rel=5.56e-04 step_rel=7.87e-04  
+PASS  wrap512_fp32kv.npz                 case=wrap512  ref_kv=fp32 tokens_exact=True ties=0 last_rel=2.61e-06 step_rel=3.19e-06  
+5/6 PASS; cases without a passing run: none
+matrix exit 1

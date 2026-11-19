@@ -1,0 +1,338 @@
+{
+ "chat_fp32_bf16kv.npz": {
+  "case": "chat",
+  "kv": "bf16",
+  "stock": {
+   "step_rel_max": 0.20360912839650663,
+   "worst_step": 15,
+   "last_rel": 0.013683187785605656,
+   "token_mismatches": [
+    {
+     "step": 15,
+     "ref": 23162,
+     "kernel": 68977,
+     "fp32_margin": 0.08124041557312012
+    }
+   ]
+  },
+  "min_router_gaps_decode": [
+   {
+    "layer": 2,
+    "pos": 19,
+    "step": 15,
+    "gap": 4.100799560546875e-05,
+    "kth": 12,
+    "next": 7
+   },
+   {
+    "layer": 6,
+    "pos": 25,
+    "step": 21,
+    "gap": 9.34600830078125e-05,
+    "kth": 20,
+    "next": 30
+   },
+   {
+    "layer": 4,
+    "pos": 26,
+    "step": 22,
+    "gap": 0.00016647577285766602,
+    "kth": 9,
+    "next": 31
+   },
+   {
+    "layer": 6,
+    "pos": 13,
+    "step": 9,
+    "gap": 0.00018173456192016602,
+    "kth": 23,
+    "next": 16
+   }
+  ],
+  "first_bad_step": 15,
+  "forced": [
+   {
+    "layer": 2,
+    "pos": 19,
+    "step": 15,
+    "gap": 4.100799560546875e-05,
+    "swap": [
+     12,
+     7
+    ],
+    "result": {
+     "step_rel_max": 0.0006873679302135767,
+     "worst_step": 0,
+     "last_rel": 0.0004169627677471932,
+     "token_mismatches": []
+    }
+   },
+   {
+    "layer": 6,
+    "pos": 13,
+    "step": 9,
+    "gap": 0.00018173456192016602,
+    "swap": [
+     23,
+     16
+    ],
+    "result": {
+     "step_rel_max": 0.20450140549560375,
+     "worst_step": 15,
+     "last_rel": 0.01401766918289834,
+     "token_mismatches": [
+      {
+       "step": 15,
+       "ref": 23162,
+       "kernel": 68977,
+       "fp32_margin": 0.08471012115478516
+      }
+     ]
+    }
+   },
+   {
+    "layer": 7,
+    "pos": 0,
+    "step": -4,
+    "gap": 0.00024276971817016602,
+    "swap": [
+     19,
+     3
+    ],
+    "result": {
+     "step_rel_max": 0.20360912839650663,
+     "worst_step": 15,
+     "last_rel": 0.013683187785605656,
+     "token_mismatches": [
+      {
+       "step": 15,
+       "ref": 23162,
+       "kernel": 68977,
+       "fp32_margin": 0.08124041557312012
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "chat_fp32kv.npz": {
+  "case": "chat",
+  "kv": "fp32",
+  "stock": {
+   "step_rel_max": 3.591743286673778e-06,
+   "worst_step": 0,
+   "last_rel": 3.003596964269031e-06,
+   "token_mismatches": []
+  },
+  "min_router_gaps_decode": [
+   {
+    "layer": 1,
+    "pos": 26,
+    "step": 22,
+    "gap": 6.335973739624023e-05,
+    "kth": 7,
+    "next": 29
+   },
+   {
+    "layer": 1,
+    "pos": 10,
+    "step": 6,
+    "gap": 8.791685104370117e-05,
+    "kth": 8,
+    "next": 17
+   },
+   {
+    "layer": 7,
+    "pos": 16,
+    "step": 12,
+    "gap": 0.0001150965690612793,
+    "kth": 23,
+    "next": 16
+   },
+   {
+    "layer": 6,
+    "pos": 24,
+    "step": 20,
+    "gap": 0.00018918514251708984,
+    "kth": 16,
+    "next": 30
+   }
+  ]
+ },
+ "short4_fp32_bf16kv.npz": {
+  "case": "short4",
+  "kv": "bf16",
+  "stock": {
+   "step_rel_max": 0.0006215062210856609,
+   "worst_step": 1,
+   "last_rel": 0.00043548986838099196,
+   "token_mismatches": []
+  },
+  "min_router_gaps_decode": [
+   {
+    "layer": 4,
+    "pos": 7,
+    "step": 4,
+    "gap": 0.0005963444709777832,
+    "kth": 1,
+    "next": 25
+   },
+   {
+    "layer": 3,
+    "pos": 20,
+    "step": 17,
+    "gap": 0.0005998015403747559,
+    "kth": 25,
+    "next": 8
+   },
+   {
+    "layer": 4,
+    "pos": 3,
+    "step": 0,
+    "gap": 0.000659942626953125,
+    "kth": 2,
+    "next": 7
+   },
+   {
+    "layer": 2,
+    "pos": 7,
+    "step": 4,
+    "gap": 0.0006650686264038086,
+    "kth": 12,
+    "next": 24
+   }
+  ]
+ },
+ "short4_fp32kv.npz": {
+  "case": "short4",
+  "kv": "fp32",
+  "stock": {
+   "step_rel_max": 3.6492082248516746e-06,
+   "worst_step": 13,
+   "last_rel": 2.6938525476706393e-06,
+   "token_mismatches": []
+  },
+  "min_router_gaps_decode": [
+   {
+    "layer": 3,
+    "pos": 20,
+    "step": 17,
+    "gap": 0.0002905726432800293,
+    "kth": 25,
+    "next": 8
+   },
+   {
+    "layer": 4,
+    "pos": 3,
+    "step": 0,
+    "gap": 0.00041860342025756836,
+    "kth": 2,
+    "next": 7
+   },
+   {
+    "layer": 2,
+    "pos": 17,
+    "step": 14,
+    "gap": 0.0004779696464538574,
+    "kth": 14,
+    "next": 18
+   },
+   {
+    "layer": 6,
+    "pos": 7,
+    "step": 4,
+    "gap": 0.0006163120269775391,
+    "kth": 6,
+    "next": 16
+   }
+  ]
+ },
+ "wrap512_fp32_bf16kv.npz": {
+  "case": "wrap512",
+  "kv": "bf16",
+  "stock": {
+   "step_rel_max": 0.0007868576698155096,
+   "worst_step": 6,
+   "last_rel": 0.0005560221059731234,
+   "token_mismatches": []
+  },
+  "min_router_gaps_decode": [
+   {
+    "layer": 2,
+    "pos": 521,
+    "step": 10,
+    "gap": 3.8683414459228516e-05,
+    "kth": 30,
+    "next": 2
+   },
+   {
+    "layer": 6,
+    "pos": 523,
+    "step": 12,
+    "gap": 4.9591064453125e-05,
+    "kth": 12,
+    "next": 1
+   },
+   {
+    "layer": 7,
+    "pos": 523,
+    "step": 12,
+    "gap": 0.0004054903984069824,
+    "kth": 30,
+    "next": 8
+   },
+   {
+    "layer": 1,
+    "pos": 519,
+    "step": 8,
+    "gap": 0.0005298852920532227,
+    "kth": 6,
+    "next": 23
+   }
+  ]
+ },
+ "wrap512_fp32kv.npz": {
+  "case": "wrap512",
+  "kv": "fp32",
+  "stock": {
+   "step_rel_max": 3.1877142940934205e-06,
+   "worst_step": 0,
+   "last_rel": 2.606368090562368e-06,
+   "token_mismatches": []
+  },
+  "min_router_gaps_decode": [
+   {
+    "layer": 6,
+    "pos": 523,
+    "step": 12,
+    "gap": 0.00011724233627319336,
+    "kth": 12,
+    "next": 1
+   },
+   {
+    "layer": 2,
+    "pos": 521,
+    "step": 10,
+    "gap": 0.0003120899200439453,
+    "kth": 30,
+    "next": 2
+   },
+   {
+    "layer": 7,
+    "pos": 523,
+    "step": 12,
+    "gap": 0.0004283785820007324,
+    "kth": 30,
+    "next": 8
+   },
+   {
+    "layer": 4,
+    "pos": 518,
+    "step": 7,
+    "gap": 0.0005347132682800293,
+    "kth": 13,
+    "next": 23
+   }
+  ]
+ }
+}

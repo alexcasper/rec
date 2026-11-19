@@ -77,6 +77,11 @@ form.
   The output adds the shared expert unconditionally. Expert MLP is
   `down(silu(gate(x)) * up(x))`. Do not drop the SiLU (rec-qib).
 - Logits are returned to the engine as fp32.
+- Validation exception (rec-pp2): a kernel's **validation build** must keep
+  fp32 intermediates. bf16 inter-op activations measure 1.5e-2 to 2.2e-1 logit
+  error on mid-8L, which cannot meet the megakernel gate. Production builds
+  may use bf16 activations only if a fp32-intermediate validation build of the
+  same kernel passes `engine/validation/megakernel_mid`.
 
 ## 4. KV cache (decision)
 
@@ -93,11 +98,14 @@ values raw. The kernel contract **matches the Metal production layout**
 - **Sliding layers:** a ring of 513 positions per head
   (`FixedSlidingKVCache`: K and V `[1, kv_heads, 513, head_dim]`),
   `slot = pos % 513`.
-- The torch reference (`torch_rocm.Model`) uses the same head-major order,
-  `(k, v)` each `[B, kv_heads, T, head_dim]`. It applies the sliding window
-  by mask, not by ring: semantically identical, but memory grows past 513 on
-  sliding layers. That's fine for the reference path; a ring is a perf
-  follow-up.
+- The torch reference (`torch_rocm.Model`, `KVCache`) uses the same
+  head-major order. Full layers keep growing `(k, v)` tensors
+  `[B, kv_heads, T, head_dim]`. Sliding layers use `SlidingKV`, a
+  preallocated 513-slot ring with `slot = pos % 513` and a per-slot absolute
+  position, which builds the attention mask (so prefill chunks longer than
+  513 are handled). Sliding-layer KV memory is constant in context length
+  (rec-1h9). A fresh ring (offset 0) is skipped, so prefill attends only to
+  the chunk.
 - Both the tiny validation megakernel (`tiny_megakernel.hip`) and the mid/full
   kernel use `[layer][2 (K|V)][kv_head][t][head_dim]` (Metal `KVStorage`
   head-major order, rec-tan).
@@ -110,6 +118,7 @@ values raw. The kernel contract **matches the Metal production layout**
 | GPU vs CPU conformance of the torch layer | `engine/tests/torch_rocm_tiny_check.py --ckpt DIR --device cuda` | ROCm host |
 | HIP tiny megakernel == MLX model on the exact bank | `native/megakernel_hip/tiny_mk_driver.py` → `tiny_mk_np_reference.py` (any host) / `tiny_mk_mlx_reference.py` (ground truth) | ROCm host |
 | numpy reference pinned to MLX | `engine/tests/test_tiny_mk_reference.py` | any |
+| **mid-8L megakernel validation target** (production-format ckpt, cases, `rec-mk-out/1` schema, two-tier gate) | `engine/validation/megakernel_mid/` (README) | ROCm host (dusk) |
 | degenerate MoE router rejected at load | `rec_mlx.checkpoint.assert_router_nondegenerate` (QATModel + torch loader) | any |
 
 Synthetic test data must be **non-degenerate**: zero-centred weights and
