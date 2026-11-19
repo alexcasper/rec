@@ -94,7 +94,12 @@ bit-exact, device fp32 drift 2.1e-6, bf16 teacher-forced with 1 near-tie flip).
 
 This is a correctness reference path, **not a speed claim**. Mid decode is
 bound by dequantizing the full 150144×2048 lm_head plus the dense
-projections every step, which is also why peak memory is 7.1 GiB. The first
+projections every step, which is also why peak memory is 7.1 GiB.
+**Superseded 2026-11-19 by the torch dequant re-baseline (rec-9na / rec-aip
+step 1, rec/claude-correctness `56ea8b7`): decode32 3.69–3.71 tok/s,
+short-ctx 3.73–3.75, serial-516 292.0–292.9, peak 3.0–3.1 GiB, bit-identical
+numerics. The 2.25 tok/s / 7.1 GiB row above is the pre-fix historical
+reference.** The first
 version, which dequantized all 32 experts, measured 1.06 tok/s. Do not
 compare these numbers with the dense-bf16 rows above (58.7 / 37.2 / 12.2) as
 like-for-like. The fused dequant-matmul (rec-aip) and the megakernel
