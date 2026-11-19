@@ -110,9 +110,10 @@ rec-tan.3. The stand-in calibration is in section 4b. The kernel calibration
 (section 4c) confirms 2.5e-4 and proposes a declared-routing count rule.
 
 **Preferred path.** If the kernel output carries `step_experts`, the checker
-takes the swap from the kernel's declared routing and searches nothing
-(`router_path: "step_experts"`). The search below is the fallback for
-outputs without it.
+takes its routing deviations from the kernel's declared routing and searches
+nothing (`router_path: "step_experts"`). It applies the all-declared rule
+(section 4c, adopted under rec-tan.4). The single-swap search below is the
+fallback for outputs without `step_experts`.
 
 **Why it is needed.** The near-tie rule in section 4 (fp32 margin ≤ 5e-3)
 covers only the output-token argmax. The other discrete decision in the
@@ -295,8 +296,7 @@ deviations and passes stock.
   stand-in's |Δgap| tail, which is a different implementation; the kernel's
   crossings are the direct evidence.
 
-**PROPOSED (coordinator decision, not in force): the count limit is the real
-problem.**
+**ADOPTED 2026-11-19 (rec-tan.4): the count limit was the real problem.**
 - On the adopted rule's count limit, a correct kernel fails 5 of 13 bf16-KV
   prompts. Each of those has 2–5 genuine near-tie crossings, all at gaps
   ≤ 9.5e-5, and with the kernel's routing forced each one sits inside the
@@ -306,8 +306,9 @@ problem.**
   nothing is searched, and each declared deviation can be checked
   individually.
 
-Proposed wording for the `step_experts` path. Implemented as
-`ROUTER_EXPERTS_POLICY = "all-declared"`; the default is still `"single"`.
+Rule in force for the `step_experts` path (`ROUTER_EXPERTS_POLICY =
+"all-declared"`, the default since rec-tan.4; `"single"` stays selectable for
+comparison only):
 
 > **Declared-routing rule (when `step_experts` is present).**
 >

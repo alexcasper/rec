@@ -59,12 +59,13 @@ ROUTER_TIE_TOL = 2.5e-4
 ROUTER_TIE_TIERS = ("bf16",)
 MAX_ROUTER_SWAPS = 1
 MAX_ROUTER_CANDIDATES = 8  # bound on replays tried (each is a single swap)
-# step_experts path policy. "single" = adopted rule (one deviation at or before the
-# first failing row). "all-declared" = PROPOSED (README 4c, coordinator decision):
+# step_experts path policy. "all-declared" = ADOPTED (rec-tan.4, 2026-11-19; README 4c):
 # every kernel-declared deviation must be a k/(k+1) exchange at gap <= ROUTER_TIE_TOL,
 # then the full criteria against the reference forced to the kernel's routing; in the
-# fp32-KV tier any declared deviation is a FAIL.
-ROUTER_EXPERTS_POLICY = "single"
+# fp32-KV tier any declared deviation is a FAIL. "single" = superseded rule (one
+# deviation at or before the first failing row), kept selectable for comparison.
+# Outputs without step_experts use the single-swap search (unchanged).
+ROUTER_EXPERTS_POLICY = "all-declared"
 N_OUT = 24
 
 
@@ -302,7 +303,7 @@ def router_substitution_from_experts(reference: Reference, d, prompt, tokens, kv
 
 
 def _all_declared(d, kv_dtype, vocab, ev, dev, ref_f, p0):
-    """PROPOSED policy (README 4c). Returns like router_substitution_from_experts; a
+    """Adopted policy (README 4c, rec-tan.4). Returns like router_substitution_from_experts; a
     returned ev with problems signals FAIL even if the stock evaluation passed."""
     if ev["structural"]:
         return None, None, None, dev, None

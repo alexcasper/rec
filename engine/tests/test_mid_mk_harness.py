@@ -198,6 +198,7 @@ def test_step_experts_exact_reference_passes_with_no_deviations(prod_ckpt, tmp_p
 
 
 def test_step_experts_single_flip_named_by_kernel(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    monkeypatch.setattr(H, "ROUTER_EXPERTS_POLICY", "single")  # superseded policy, still selectable
     g = router_ties[0]
     out = _forced_kernel(prod_ckpt, tmp_path / "one_se.npz", "bf16", [_swap(g)], experts=True)
     monkeypatch.setattr(H, "ROUTER_TIE_TOL", g["gap"] * 1.01)
@@ -213,6 +214,7 @@ def test_step_experts_single_flip_named_by_kernel(prod_ckpt, tmp_path, router_ti
 
 
 def test_step_experts_two_flips_fail(prod_ckpt, tmp_path, router_ties, monkeypatch):
+    monkeypatch.setattr(H, "ROUTER_EXPERTS_POLICY", "single")  # superseded policy, still selectable
     a, _ = router_ties
     ref = H.Reference(prod_ckpt, "cpu", "bf16")
     prompt = H.case_matrix(H.vocab_of(prod_ckpt))["short4"]["prompt"]
@@ -258,7 +260,7 @@ def test_step_experts_malformed_rejected(prod_ckpt, tmp_path, bad):
     assert not r["pass"] and any("step_experts" in p for p in r["problems"])
 
 
-# ---------------------------------------------------------------- PROPOSED all-declared policy (README 4c)
+# ---------------------------------------------------------------- all-declared policy (README 4c, ADOPTED rec-tan.4)
 def _two_flip_kernel(prod_ckpt, tmp_path, router_ties, **kw):
     a, _ = router_ties
     ref = H.Reference(prod_ckpt, "cpu", "bf16")
@@ -271,8 +273,8 @@ def _two_flip_kernel(prod_ckpt, tmp_path, router_ties, **kw):
     return out, a, b
 
 
-def test_policy_default_is_adopted_single():
-    assert H.ROUTER_EXPERTS_POLICY == "single"
+def test_policy_default_is_adopted_all_declared():
+    assert H.ROUTER_EXPERTS_POLICY == "all-declared"  # rec-tan.4, adopted 2026-11-19
 
 
 def test_all_declared_passes_two_genuine_near_ties(prod_ckpt, tmp_path, router_ties, monkeypatch):
