@@ -289,6 +289,11 @@ class Engine:
         # kills the process, silent garbage on MLX.
         if ids and not (0 <= min(ids) and max(ids) < self.vocab_size):
             raise ValueError(f"Token ids must be in [0, {self.vocab_size}); got {min(ids)}..{max(ids)}")
+        if self.backend.name == "rocm":
+            yield from self._generate_tokens_torch(
+                ids, sampling, should_stop=should_stop, grammar=grammar, return_logprobs=return_logprobs
+            )
+            return
         if self.backend.name != "metal":
             yield from self._generate_tokens_native(
                 ids, sampling, should_stop=should_stop, grammar=grammar, return_logprobs=return_logprobs
@@ -463,6 +468,126 @@ class Engine:
             self._sync()
             del session
             mx.clear_cache()
+
+    def _generate_tokens_torch(self, ids, sampling, *, should_stop, grammar=None, return_logprobs=False):
+        """Torch-native generation for the rocm backend: sampling happens on
+        the model's torch device via :class:`TorchSampler`. No mlx arrays and
+        no per-step device->host->mlx copies (option 1, rec-9na). The event
+        and metrics contract is identical to ``_generate_tokens_native``;
+        memory-accounting metrics come from the torch allocator (0 on
+        non-CUDA devices). Filtered-sampling draws are per-request
+        reproducible on torch (seeded generator) but intentionally not
+        identical to mlx draws; greedy (temp 0) is exact on every backend.
+        """
+        if grammar is not None:
+            raise NotImplementedError(
+                "Grammar-constrained decoding requires the resident sampler (metal backend)"
+            )
+        import torch
+
+        from .torch_runtime import TorchSampler
+
+        device = self.runtime.device
+        sampler = TorchSampler(
+            sampling.temperature, sampling.top_p, sampling.top_k, device=device, seed=sampling.seed
+        )
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
+
+        def peak_bytes() -> int:
+            return int(torch.cuda.max_memory_allocated(device)) if device.type == "cuda" else 0
+
+        session = self.runtime.make_session(max_new_tokens=sampling.max_tokens)
+        stops = self.eos
+        generated = []
+        token_logprobs = []
+        seen = set()
+        start = time.perf_counter()
+        reason = "length"
+        try:
+            logits = session.prefill(ids, prefix=None, should_stop=should_stop)
+            self._prompt_cache = session.prompt_cache
+            text_stream = StreamingText(self.tokenizer)
+            prefill_end = time.perf_counter()
+            prefill_peak = peak_bytes()
+            first = None
+            for index in range(sampling.max_tokens):
+                if should_stop():
+                    reason = "stop"
+                    break
+                flat = logits.reshape(-1).float()
+                if not bool(torch.isfinite(flat).all()):
+                    raise FloatingPointError("The inference engine produced nonfinite logits")
+                if sampling.presence_penalty and seen:
+                    seen_idx = torch.tensor(sorted(seen), dtype=torch.long, device=flat.device)
+                    flat[seen_idx] -= sampling.presence_penalty
+                token = sampler.sample(flat)
+                if return_logprobs:
+                    report = flat / sampling.temperature if sampling.temperature else flat
+                    token_logprobs.append(float((report[token] - torch.logsumexp(report, 0)).item()))
+                if first is None:
+                    first = time.perf_counter()
+                generated.append(token)
+                seen.add(token)
+                details = {"logprob": token_logprobs[index]} if return_logprobs else {}
+                if token in stops:
+                    reason = "stop"
+                    delta = text_stream.finish(generated[:-1])
+                    yield {"token": token, "text": delta, "finish_reason": reason, **details}
+                    break
+                delta = text_stream.add_token(token)
+                if index + 1 == sampling.max_tokens:
+                    delta += text_stream.finish(generated)
+                yield {
+                    "token": token,
+                    "text": delta,
+                    "finish_reason": "length" if index + 1 == sampling.max_tokens else None,
+                    **details,
+                }
+                logits = session.decode_step(token)
+            self._sync()
+            end = time.perf_counter()
+            decode_seconds = end - first if first is not None else 0.0
+            peak = peak_bytes()
+            yield {
+                "finish_reason": reason,
+                "metrics": {
+                    "prompt_tokens": len(ids),
+                    "cached_prompt_tokens": session.cached_tokens,
+                    "common_prefix_tokens": session.common_prefix_tokens,
+                    "prefix_checkpoint_bytes": 0,
+                    "prefilled_tokens": len(ids) - session.cached_tokens,
+                    "prompt_cache_bytes": session._state["kv"].nbytes,
+                    "native_sliding_cache_bytes": 0,
+                    "shared_kv_bytes": session._state["kv"].nbytes,
+                    "decode_kv_capacity_tokens": session._state["capacity"],
+                    "decode_kv_growth_count": 0,
+                    "decode_kv_growth_seconds": 0.0,
+                    "generated_tokens": len(generated),
+                    "token_ids": generated,
+                    **(
+                        {"token_logprobs": token_logprobs[: len(generated)]}
+                        if return_logprobs
+                        else {}
+                    ),
+                    "ttft_seconds": first - start if first is not None else None,
+                    "prefill_seconds": prefill_end - start,
+                    "decode_seconds": decode_seconds,
+                    "request_seconds": end - start,
+                    "decode_tokens_per_second": max(0, len(generated) - 1) / decode_seconds
+                    if decode_seconds
+                    else 0.0,
+                    # Schema-stable keys; the values are torch-allocator peaks.
+                    "prefill_peak_mlx_bytes": prefill_peak,
+                    "peak_mlx_bytes": peak,
+                    "process_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                    "computed_tokens": len(generated),
+                    "decode_strategy": "torch",
+                },
+            }
+        finally:
+            self._sync()
+            del session
 
     def _generate_tokens_native(self, ids, sampling, *, should_stop, grammar=None, return_logprobs=False):
         """Pure-MLX generation used by the cpu backend (no resident kernel)."""

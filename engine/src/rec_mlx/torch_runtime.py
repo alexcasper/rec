@@ -3,10 +3,11 @@
 Implements the engine-facing surface of ``native_runtime.NativeRuntime``
 (make_session / prefill / decode_step / ``_state``) on the torch model layer
 in ``rec_mlx.torch_rocm``. The model runs on a torch device (ROCm builds of
-torch expose HIP GPUs as ``cuda``); logits are handed back to the engine as
-fp32 ``mx.array`` so the shared sampling loop (``_generate_tokens_native``)
-is unchanged. Grammar-constrained decode and prefix reuse are not supported,
-same as the cpu backend.
+torch expose HIP GPUs as ``cuda``); prefill/decode_step return fp32 torch
+logits and sampling happens on-device in the engine's torch loop
+(``_generate_tokens_torch`` + :class:`TorchSampler`) — no mlx arrays and no
+per-step host copies. Grammar-constrained decode and prefix reuse are not
+supported, same as the cpu backend.
 
 Device selection: ``REC_TORCH_DEVICE`` (default ``cuda``). ``cpu`` is
 accepted so the full engine path is testable on any Linux box.
@@ -18,8 +19,6 @@ from __future__ import annotations
 
 import os
 
-import mlx.core as mx
-import numpy as np
 import torch
 
 from .backends import BackendError
@@ -64,9 +63,56 @@ def resolve_dtype(requested: str | None = None) -> torch.dtype:
     return _DTYPES[name]
 
 
-def _to_mx(logits: torch.Tensor) -> mx.array:
-    """[1, 1, V] fp32 torch logits -> mx.array (host copy; V floats per step)."""
-    return mx.array(np.ascontiguousarray(logits.detach().float().cpu().numpy()))
+def _sampler_logprobs(flat: torch.Tensor, temperature: float, top_p: float, top_k: int) -> torch.Tensor:
+    """mlx_lm-mirroring filter: log-softmax, then top-k and top-p masking.
+
+    Mirrors ``mlx_lm.sample_utils`` on log-probabilities: top-k keeps the k
+    highest and masks the rest to -inf; top-p keeps tokens whose
+    ascending-order cumulative probability exceeds ``1 - top_p`` (boundary
+    token included). The filtered *distribution* is identical to mlx; the
+    draws are not (different RNG streams) — that is by design and asserted in
+    ``tests/test_torch_sampling.py``.
+    """
+    lp = torch.log_softmax(flat.float(), dim=-1)
+    vocab = lp.shape[-1]
+    if 0 < top_k < vocab:
+        # Exactly k survivors even on ties (mlx_lm argpartition keeps exactly k).
+        keep = torch.topk(lp, top_k, dim=-1).indices
+        keep_mask = torch.zeros_like(lp, dtype=torch.bool)
+        keep_mask.scatter_(dim=-1, index=keep, src=torch.ones_like(keep, dtype=torch.bool))
+        lp = torch.where(keep_mask, lp, lp.new_full((), float("-inf")))
+    if 0 < top_p < 1.0:
+        ascending = torch.argsort(lp, dim=-1, stable=True)
+        probs = torch.exp(lp)
+        cum = torch.cumsum(probs[ascending], dim=-1)[torch.argsort(ascending, dim=-1, stable=True)]
+        lp = torch.where(cum > 1 - top_p, lp, lp.new_full((), float("-inf")))
+    return lp
+
+
+class TorchSampler:
+    """Temperature/top-p/top-k sampling on the torch device (option 1: no mlx
+    in the decode loop). temp == 0 is exact argmax (greedy is the
+    cross-backend-exact path); temp > 0 matches mlx_lm's filtered distribution
+    with per-request reproducible torch draws (seeded Generator)."""
+
+    def __init__(self, temperature: float, top_p: float, top_k: int, device: torch.device, seed: int):
+        self.temperature = temperature
+        self.top_p = top_p
+        self.top_k = top_k
+        self.generator = torch.Generator(device=device.type)
+        self.generator.manual_seed(seed)
+
+    def sample(self, flat: torch.Tensor) -> int:
+        if self.temperature == 0:
+            return int(flat.argmax())
+        lp = _sampler_logprobs(flat, self.temperature, self.top_p, self.top_k)
+        probs = torch.softmax(lp / self.temperature, dim=-1)
+        if not bool(torch.isfinite(probs).all()) or float(probs.sum()) <= 0.0:
+            # Degenerate filter state (e.g. top-k mass < 1 - top_p masks every
+            # token). mlx categorical is undefined here; argmax is the safe
+            # interpretation.
+            return int(flat.argmax())
+        return int(torch.multinomial(probs, 1, generator=self.generator))
 
 
 class TorchSession:
@@ -97,7 +143,7 @@ class TorchSession:
             "growth_seconds": 0.0,
             "position": len(tokens),
         }
-        return _to_mx(logits)
+        return logits  # torch fp32 [1, 1, V]; the engine's torch loop samples on-device
 
     @torch.inference_mode()
     def decode_step(self, token):
@@ -105,7 +151,7 @@ class TorchSession:
         ids = torch.tensor([[token]], dtype=torch.long, device=model.device)
         logits = model.forward(ids, self._kv)
         self._state["position"] += 1
-        return _to_mx(logits)
+        return logits
 
 
 class TorchRuntime:
