@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import math
 import struct
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -122,15 +123,31 @@ class Config:
 def dequant(packed: torch.Tensor, scales: torch.Tensor, biases: torch.Tensor,
             bits: int, dtype: torch.dtype) -> torch.Tensor:
     """MLX affine dequant. ``packed`` is int32 [..., K*bits/32]; scales/biases
-    are [..., K/GROUP_SIZE]. Returns [..., K] in ``dtype``."""
+    are [..., K/GROUP_SIZE]. Returns [..., K] in ``dtype``.
+
+    Bit-identical to the original formulation (int32 shift/mask unpack, scales
+    and biases ``repeat_interleave``d to [..., K], fp32 ``q * s`` then ``+ b``
+    with no FMA, then cast), but it reads the packed words as bytes and
+    broadcasts s/b per group instead of materialising them (rec-aip profile s4).
+    On the dusk 890M the mid lm_head dequant goes from 227 ms / 4.59 GiB
+    transient to 134 ms / 1.72 GiB (engine/tests/test_torch_rocm_dequant.py
+    pins bit-identity)."""
     per_word = 32 // bits
-    shifts = torch.arange(per_word, device=packed.device, dtype=torch.int32) * bits
-    mask = (1 << bits) - 1
-    q = (packed.unsqueeze(-1) >> shifts) & mask  # arithmetic shift is fine: mask kills sign bits
-    q = q.reshape(*packed.shape[:-1], -1).to(torch.float32)
-    s = scales.float().repeat_interleave(GROUP_SIZE, dim=-1)
-    b = biases.float().repeat_interleave(GROUP_SIZE, dim=-1)
-    return (q * s + b).to(dtype)
+    K = packed.shape[-1] * per_word
+    groups = K // GROUP_SIZE
+    if scales.shape[-1] != groups or biases.shape[-1] != groups:
+        raise ValueError(f"scales/biases {tuple(scales.shape)} do not match K={K} / {GROUP_SIZE}")
+    if bits in (4, 8) and sys.byteorder == "little":
+        # Little-endian int32 word w holds element w*per_word + j at bits [j*bits, (j+1)*bits),
+        # i.e. byte j*bits//8 (low nibble first for 4-bit) -- the same order as the shift unpack.
+        b = packed.contiguous().view(torch.uint8)
+        q = torch.stack((b & 15, b >> 4), dim=-1) if bits == 4 else b
+    else:
+        shifts = torch.arange(per_word, device=packed.device, dtype=torch.int32) * bits
+        q = (packed.unsqueeze(-1) >> shifts) & ((1 << bits) - 1)  # mask kills sign bits
+    q = q.reshape(*packed.shape[:-1], groups, GROUP_SIZE).to(torch.float32)
+    q.mul_(scales.float().unsqueeze(-1)).add_(biases.float().unsqueeze(-1))
+    return q.view(*packed.shape[:-1], K).to(dtype)
 
 
 class QLinear:

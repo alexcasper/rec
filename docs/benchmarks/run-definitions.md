@@ -94,12 +94,89 @@ bit-exact, device fp32 drift 2.1e-6, bf16 teacher-forced with 1 near-tie flip).
 
 This is a correctness reference path, **not a speed claim**. Mid decode is
 bound by dequantizing the full 150144×2048 lm_head plus the dense
-projections every step, which is also why peak memory is 7.1 GiB. The first
+projections every step, which is also why peak memory is 7.1 GiB.
+**Superseded 2026-11-19 by the re-baseline section below** (dequant fix:
+3.69–3.71 tok/s, 3.0–3.1 GiB peak, bit-identical numerics). The first
 version, which dequantized all 32 experts, measured 1.06 tok/s. Do not
 compare these numbers with the dense-bf16 rows above (58.7 / 37.2 / 12.2) as
 like-for-like. The fused dequant-matmul (rec-aip) and the megakernel
 (rec-tan) are the speed paths. Albion (R9700 / MI50) was unreachable for this
 run.
+
+## Re-baseline: rec-9na torch layer after the dequant fix (dusk, Radeon 890M gfx1150, 2026-11-19, rec-aip step 1)
+
+**This is the gate the kernel lane measures fused-kernel wins against. It
+supersedes the 2.25 tok/s row above.**
+
+**Change.** `rec_mlx.torch_rocm.dequant` no longer materialises full-size
+int32 unpack temporaries or `repeat_interleave`d fp32 scale and bias arrays
+on every call. That was the waste behind 75–81% of a decode step in the
+rec-ebj profile, §4 (`docs/benchmarks/aip-prep-dusk-gfx1150-2026-11-18.md`).
+The new code:
+- reads the packed words as bytes (an exact little-endian nibble split);
+- converts once to fp32 `[..., groups, 64]`;
+- applies scale and bias in place by broadcast;
+- casts once.
+
+**Numerics are bit-identical**, because the arithmetic is the same fp32
+multiply, then add, with no FMA:
+- `engine/tests/test_torch_rocm_dequant.py`: 25 cases, 2/4/8-bit, stacked
+  experts, sign-bit words, bf16/f32 scales.
+- On the dusk GPU, the real mid-prod lm_head, q_proj and dense down_proj
+  (bf16 and fp32), a routed expert and INT8 embedding rows are all
+  bit-identical.
+
+The rec-pp2 validation reference is therefore unchanged. Weights stay INT4
+packed on device; the s2 layout is untouched.
+
+**Dequant microbenchmark** (`engine/tests/torch_rocm_dequant_micro.py`, mid
+lm_head 150144×2048 → bf16):
+
+| implementation | ms / call | transient | note |
+|---|---|---|---|
+| original (int32 shift + repeat_interleave) | 227.2 | 4.59 GiB | |
+| strided per-nibble writes (rejected) | 327.5 | 1.72 GiB | less memory but slower: 8 uncoalesced passes |
+| **bytes + in-place broadcast (landed)** | **134.2** | **1.72 GiB** | |
+
+**Recipe.** `engine/tests/torch_rocm_bench.py`:
+- prefill512: 3 warmup + 3 timed;
+- decode32 after 512: 4 warmup + 32 timed;
+- short-ctx decode32: prompt [1, 5, 6, 7], 4 warmup + 32 timed, mean of 3;
+- serial-516: 512 prefill + 4 decode end to end, 516 / mean of 3.
+
+All windows are canonical and sync-bounded (A1: eager path). The run used
+torch 2.9.1+rocm6.4, HIP 6.4.43484, `HSA_OVERRIDE_GFX_VERSION=11.0.0`, bf16
+activations and KV. Order was **ABBA ×2 per checkpoint**: 4 old + 4 new
+runs, old = the committed pre-fix `torch_rocm.py`, same bench script. Before
+every run the co-tenants were idle (flint :8080 and qwen :8091 `/slots`:
+0 processing). Values are medians, with the min–max over 4 runs in brackets.
+The raw log is `rec-aip-rebaseline-dusk-2026-11-19.log`.
+
+| ckpt | code | prefill512 tok/s | decode32 tok/s | short-ctx decode32 tok/s | serial-516 tok/s | peak |
+|---|---|---|---|---|---|---|
+| `cpu-baseline-mid` (synthetic, 20214438) | before | 496.4 [494.7–497.8] | 2.25 [2.24–2.25] | 2.26 [2.25–2.26] | 183.9 [183.3–184.0] | 7.11 GiB |
+| `cpu-baseline-mid` | **after** | **739.0** [737.4–740.5] | **3.71** [3.71–3.72] | **3.75** [3.75–3.75] | **292.0** [291.7–292.9] | **3.09 GiB** |
+| `mid-prod` (production format, f494e788) | before | 508.5 [500.2–510.0] | 2.24 [2.24–2.24] | 2.25 [2.25–2.25] | 184.7 [184.6–184.9] | 7.02 GiB |
+| `mid-prod` | **after** | **751.8** [731.8–753.3] | **3.69** [3.69–3.69] | **3.73** [3.72–3.73] | **292.9** [292.6–293.5] | **3.00 GiB** |
+
+Ratio after / before: prefill ×1.48, decode32 ×1.65, short-ctx ×1.66,
+serial-516 ×1.59, peak ×0.43, the same on both checkpoints. The "before" rows
+reproduce the committed 9c87cf3 numbers (2.25 tok/s, 7.1 GiB).
+
+**Caveats.**
+- An earlier A/B attempt that same morning, with the rejected strided
+  variant, measured the *old* code at 0.48 tok/s decode, 4.7× below this run,
+  with idle co-tenants. The 890M's ±2× swings (rec-ebj) are real. Only this
+  ABBA run, with its tight spreads, is the run of record; the aborted log is
+  not committed.
+- The projection in rec-ebj §5 (~6–8 tok/s) assumed steps 1–3. This is step 1
+  only. The lm_head dequant still runs every step at about 134 ms, so it
+  remains the largest single cost. Caching the bf16 lm_head (perf flag),
+  fused dequant-matmul, and the expert-loop host sync (§5 items 2–3) are
+  next, and belong to the kernel lane.
+- This is the eager torch path (canonical windows); the persistent-kernel
+  rows use the A1 differential. State the protocol when comparing.
+- gfx1150 only; albion was not run.
 
 ## Engine end-to-end, `REC_BACKEND=rocm` (dusk, Radeon 890M gfx1150, 2026-11-18, rec-ju9)
 

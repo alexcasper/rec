@@ -5,6 +5,12 @@
 prefill tok/s: 512-token prefill, 3 warmup + mean of 3 timed runs.
 decode tok/s : after the same prefill, 4 warmup decode steps, then 32 timed
                greedy steps; device-synchronized at both ends.
+short-ctx    : prompt [1, 5, 6, 7] (run-definitions A3), 4 warmup decode steps,
+               then 32 timed greedy steps (canonical window, mean of 3 runs).
+serial-516   : 512 prefill + 4 decode steps end to end (fresh cache), 516 / mean
+               wall of 3 runs; end-to-end incl. prefill, NOT 516 generated tokens.
+All windows are device-synchronized (canonical protocol for non-persistent
+paths; the persistent-kernel rows use the A1 differential instead).
 This path keeps weights INT4-packed on device and dequantizes inside every
 matmul (no fused kernel yet, rec-aip), so it is NOT the dense-bf16
 mid_bench_gpu.py configuration the existing reference numbers use.
@@ -66,6 +72,36 @@ def main() -> int:
     sync(dev)
     decode = DECODE / (time.perf_counter() - t0)
 
+    def decode_window(prompt_ids):
+        kv = model.new_cache()
+        tok = int(model.forward(prompt_ids, kv)[0, -1].argmax())
+        for _ in range(DECODE_WARM):
+            tok = int(model.forward(torch.tensor([[tok]], device=dev), kv)[0, -1].argmax())
+        sync(dev)
+        t0 = time.perf_counter()
+        for _ in range(DECODE):
+            tok = int(model.forward(torch.tensor([[tok]], device=dev), kv)[0, -1].argmax())
+        sync(dev)
+        return time.perf_counter() - t0
+
+    short = torch.tensor([[1, 5, 6, 7]], device=dev)
+    decode_window(short)  # warmup run
+    short_ctx = DECODE / (sum(decode_window(short) for _ in range(RUNS)) / RUNS)
+
+    def serial516():
+        sync(dev)
+        t0 = time.perf_counter()
+        kv = model.new_cache()
+        tok = int(model.forward(ids, kv)[0, -1].argmax())
+        for _ in range(DECODE_WARM - 1):  # 512 prefill positions + 4 decode positions
+            tok = int(model.forward(torch.tensor([[tok]], device=dev), kv)[0, -1].argmax())
+        model.forward(torch.tensor([[tok]], device=dev), kv)
+        sync(dev)
+        return time.perf_counter() - t0
+
+    serial516()
+    t516 = sum(serial516() for _ in range(RUNS)) / RUNS
+
     packed = sum(q.packed.nbytes + q.scales.nbytes + q.biases.nbytes for q in model.q.values())
     packed += model.embed.packed.nbytes + model.embed.scales.nbytes + model.embed.biases.nbytes
     out = {
@@ -75,6 +111,8 @@ def main() -> int:
         "act_dtype": a.dtype, "kv_dtype": a.dtype, "weights": "int4-affine packed (int8 embed), dequant per matmul",
         "resident_weight_gib": round(packed / 2**30, 3),
         "prefill512_tok_s": round(prefill, 1), "decode32_tok_s": round(decode, 2),
+        "decode32_short_ctx_tok_s": round(short_ctx, 2), "serial_516_tok_s": round(516 / t516, 2),
+        "t516_s": round(t516, 4), "protocol": "canonical sync-bounded windows",
         "peak_gib": round(torch.cuda.max_memory_allocated(dev) / 2**30, 2) if dev.type == "cuda" else None,
         "logits_finite": bool(torch.isfinite(logits).all()),
     }
