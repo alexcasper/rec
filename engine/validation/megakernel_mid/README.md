@@ -99,6 +99,80 @@ This is stricter than `docs/rocm-model-layer.md` §3 ("inter-op activations
 bf16"). If Phase B needs bf16 activations for speed, keep an fp32 validation
 build, as the tiny kernel does with float shared buffers.
 
+### 4a. MoE router near-ties: PROPOSED amendment, NOT in force
+
+**Status.** This section is proposed and awaits coordinator adoption. Until
+it is adopted, the gate in section 4 applies unchanged: a router near-tie
+flip is a FAIL. The checker does not implement this amendment yet.
+
+**Why it is needed.** The near-tie rule in section 4 (fp32 margin ≤ 5e-3)
+covers only the output-token argmax. The other discrete decision in the
+model, MoE top-k expert selection, is not teacher-forced. At the bf16-KV
+tier, a correct implementation perturbs the selection scores by roughly
+1e-4. That is enough to flip an expert sitting on the top-k boundary.
+Everything downstream of the flip then fails, even though nothing is wrong.
+
+Evidence (rec-tan, kernel 045c72f, `chat`, fp32 compute + bf16 KV, dusk; see
+`results-rec-tan-*` and `router_tie_probe.py`):
+
+- **Stock check.** Step 15 fails with step_rel 2.04e-1 and last_rel 1.37e-2.
+  The token differs from the reference at an fp32 margin of **8.1e-2**, 16×
+  the tie tolerance, so this is not an output-token tie.
+- **Reference router at step 15.** In layer 2, the 2nd and 3rd selection
+  scores (experts 12 and 7) differ by **4.1e-5**.
+- **Forced replay.** Swapping the reference's layer-2 position-19 choice from
+  12 to 7, and changing nothing else, gives step_rel **6.87e-4**, last_rel
+  4.17e-4 and **24/24 tokens exact**. That is inside the 1e-3 tier at the
+  correct floor.
+- **Controls.** Swapping the next two closest boundaries (gaps 1.8e-4 and
+  2.4e-4) leaves the failure at 2.0e-1. Gaps of the same size elsewhere
+  (`wrap512` L2 3.9e-5, L6 5.0e-5) did not flip. Flips are stochastic, so the
+  gate is currently a coin toss for any correct bf16-KV build.
+- **fp32-KV tier.** The same kernel passes 3/3 at ≤ 3.65e-6. Its smallest
+  observed boundary gap is 6.3e-5, about 17× that tier's logit floor
+  (3.65e-6). Its semantics are validated by that tier.
+
+**Proposed wording (replaces nothing; adds a rule to section 4):**
+
+> **Router near-tie substitution (bf16-KV tier only).** If a run fails the
+> bf16-KV tier, the checker may re-run the teacher-forced reference with at
+> most **one** MoE routing substitution per case, under all of these
+> conditions:
+>
+> 1. The substitution swaps the k-th and (k+1)-th expert at a single
+>    (layer, position).
+> 2. At that (layer, position), the reference's selection-score gap
+>    (sigmoid + expert_bias, between rank k and rank k+1) is
+>    ≤ **ROUTER_TIE_TOL = 2.5e-4** (absolute, in selection-score units).
+> 3. The position lies at or before the first failing step.
+>
+> The run PASSES only if the substituted reference meets the **full**
+> unchanged bf16-KV criteria: tokens exact (output ties ≤ 5e-3), and
+> last_logits and every step_logits row ≤ 1e-3. The report must list the
+> substitution (layer, position, experts, gap). It counts as a near-tie, like
+> accepted output ties.
+>
+> - The **fp32-KV tier gets no router allowance.** Sign-off still requires
+>   that tier to pass outright, so a selection or mixing bug cannot hide
+>   behind this rule. A selection bug changes routing at non-tie positions and
+>   fails the fp32 tier directly; the softmax-mix fault is caught there at
+>   about 70× its floor (section 6).
+> - More than one substitution, or one at a gap > ROUTER_TIE_TOL, is a FAIL.
+> - A bf16-activation production run remains no substitute for sign-off.
+
+**Calibration caveat.** ROUTER_TIE_TOL rests on one observed flip (gap 4.1e-5)
+and on boundary gaps up to 2.4e-4 that did not flip. It is a heuristic about
+6× the observed flip, kept below the bf16-KV logit floor (5.0e-4, a different
+unit). Before or with adoption, recalibrate it: produce the torch-fp32-bf16kv
+stand-in in streaming order on all 3 cases and several prompt seeds, and
+record the largest gap that flips.
+
+**Recommended follow-up (strengthens the rule, not required for it).** The
+kernel could emit `step_experts` (int32 [P + n_out, layers, k], its chosen
+expert ids) as an optional `rec-mk-out/1` key. The checker could then
+teacher-force routing exactly, instead of searching for a substitution, and
+apply the same gap and count limits to the positions where it differs.
+
 ## 5. Commands (dusk)
 
 ```bash
