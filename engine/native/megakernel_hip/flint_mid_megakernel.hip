@@ -105,53 +105,124 @@ __device__ inline float load16_bf(const bf16* x, float* v) {
 }
 
 __device__ inline float dot16(const uint8_t* w, const float* x, float s, float b, float sum) {
-    const uint16_t* p = (const uint16_t*)w;
+    const uint32_t* p32 = (const uint32_t*)w;
+    uint32_t u01 = p32[0];
+    uint32_t u23 = p32[1];
     float a = 0.0f;
-    #pragma unroll
-    for (int j = 0; j < 4; ++j) {
-        uint16_t u = p[j];
-        a += x[4 * j]     * (float)(u & 15u)
-           + x[4 * j + 1] * (float)(u & 240u)
-           + x[4 * j + 2] * (float)(u & 3840u)
-           + x[4 * j + 3] * (float)(u & 61440u);
-    }
+    a += x[0]  * (float)(u01 & 0x0000000fu)
+       + x[1]  * (float)(u01 & 0x000000f0u)
+       + x[2]  * (float)(u01 & 0x00000f00u)
+       + x[3]  * (float)(u01 & 0x0000f000u);
+    uint32_t u1 = u01 >> 16;
+    a += x[4]  * (float)(u1  & 0x0000000fu)
+       + x[5]  * (float)(u1  & 0x000000f0u)
+       + x[6]  * (float)(u1  & 0x00000f00u)
+       + x[7]  * (float)(u1  & 0x0000f000u);
+    a += x[8]  * (float)(u23 & 0x0000000fu)
+       + x[9]  * (float)(u23 & 0x000000f0u)
+       + x[10] * (float)(u23 & 0x00000f00u)
+       + x[11] * (float)(u23 & 0x0000f000u);
+    uint32_t u3 = u23 >> 16;
+    a += x[12] * (float)(u3  & 0x0000000fu)
+       + x[13] * (float)(u3  & 0x000000f0u)
+       + x[14] * (float)(u3  & 0x00000f00u)
+       + x[15] * (float)(u3  & 0x0000f000u);
     return s * a + sum * b;
 }
 
-// Multi-workgroup q4 matmul (K is a multiple of 512, e.g. 512, 1024, 2048, 4096).
-// Each 32-thread warp `sg` (0..groups-1) computes 4 rows at a time across K in 512-wide blocks.
-// Writes bf16 rounded results to `out_bf` and/or float (unrounded or bf16-rounded) to `out_f`.
+// Unified device function for fused INT4-affine dequant-matmul (rec-aip / rec-tan)
+// consuming the zero-copy layout from docs/rocm-model-layer.md s2:
+//   w: uint8_t [N, K/2] (2 nibbles/byte, low nibble = even element),
+//   s, b: bf16 [N, K/64] (group size 64 along K, stride in ELEMENTS for bf16*).
+// Shared by both standalone `flint_q4_gemv_kernel` and persistent `mid_generate_impl`
+// (`lm_head` [150144, 2048] and layer Q4 projections).
+// For compile-time K == 2048 (`lm_head`, `q_proj`, `k_proj`, `v_proj`, `gate/up`),
+// preloads the lane's 4x16 pre-scaled input slices and 4 group sums into registers once
+// outside the row loop, eliminating redundant input reads and pre-scale math across rows
+// (especially across the 1,173 row-quads per warp in the 150144x2048 lm_head).
 template <int K, bool ROUND_BF16 = false>
-__device__ inline void q4_block512(const uint8_t* w, const bf16* s, const bf16* b,
-                                   const float* x, bf16* out_bf, float* out_f,
-                                   int n, int lane, int sg, int groups) {
-    static_assert(K % 512 == 0, "q4_block512 requires K % 512 == 0");
-    for (int first = sg * 4; first < n; first += groups * 4) {
-        float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        #pragma unroll
-        for (int block = 0; block < K; block += 512) {
-            int scalar = block + lane * 16;
-            float v[16];
-            float sum = load16_f(x + scalar, v);
+__device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
+                                        const bf16* __restrict__ s,
+                                        const bf16* __restrict__ b,
+                                        const float* __restrict__ x,
+                                        bf16* __restrict__ out_bf,
+                                        float* __restrict__ out_f,
+                                        int n, int lane, int sg, int groups) {
+    static_assert(K % 512 == 0, "flint_q4_gemv_op requires K % 512 == 0");
+    if constexpr (K == 2048) {
+        float v0[16], v1[16], v2[16], v3[16];
+        int sc0 = lane * 16;
+        int sc1 = 512 + sc0;
+        int sc2 = 1024 + sc0;
+        int sc3 = 1536 + sc0;
+        float sum0 = load16_f(x + sc0, v0);
+        float sum1 = load16_f(x + sc1, v1);
+        float sum2 = load16_f(x + sc2, v2);
+        float sum3 = load16_f(x + sc3, v3);
+        int g0 = sc0 >> 6;
+        int g1 = sc1 >> 6;
+        int g2 = sc2 >> 6;
+        int g3 = sc3 >> 6;
+
+        for (int first = sg * 4; first < n; first += groups * 4) {
+            float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
             #pragma unroll
             for (int r = 0; r < 4; ++r) {
                 int row = first + r;
                 if (row < n) {
-                    int gi = row * (K / 64) + scalar / 64;
-                    a[r] += dot16(w + (size_t)row * (K / 2) + scalar / 2,
-                                  v, tofloat(s[gi]), tofloat(b[gi]), sum);
+                    const uint8_t* wr = w + (size_t)row * 1024;
+                    const bf16*    sr = s + (size_t)row * 32;
+                    const bf16*    br = b + (size_t)row * 32;
+                    a[r] += dot16(wr + (sc0 >> 1), v0, tofloat(sr[g0]), tofloat(br[g0]), sum0);
+                    a[r] += dot16(wr + (sc1 >> 1), v1, tofloat(sr[g1]), tofloat(br[g1]), sum1);
+                    a[r] += dot16(wr + (sc2 >> 1), v2, tofloat(sr[g2]), tofloat(br[g2]), sum2);
+                    a[r] += dot16(wr + (sc3 >> 1), v3, tofloat(sr[g3]), tofloat(br[g3]), sum3);
+                }
+            }
+            #pragma unroll
+            for (int r = 0; r < 4; ++r) {
+                float val = simd_sum(a[r]);
+                if (lane == 0 && first + r < n) {
+                    if (out_bf) out_bf[first + r] = tobf(val);
+                    if (out_f)  out_f[first + r]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
                 }
             }
         }
-        #pragma unroll
-        for (int r = 0; r < 4; ++r) {
-            float val = simd_sum(a[r]);
-            if (lane == 0 && first + r < n) {
-                if (out_bf) out_bf[first + r] = tobf(val);
-                if (out_f)  out_f[first + r]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
+    } else {
+        for (int first = sg * 4; first < n; first += groups * 4) {
+            float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+            #pragma unroll
+            for (int block = 0; block < K; block += 512) {
+                int scalar = block + lane * 16;
+                float v[16];
+                float sum = load16_f(x + scalar, v);
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) {
+                    int row = first + r;
+                    if (row < n) {
+                        int gi = row * (K / 64) + scalar / 64;
+                        a[r] += dot16(w + (size_t)row * (K / 2) + scalar / 2,
+                                      v, tofloat(s[gi]), tofloat(b[gi]), sum);
+                    }
+                }
+            }
+            #pragma unroll
+            for (int r = 0; r < 4; ++r) {
+                float val = simd_sum(a[r]);
+                if (lane == 0 && first + r < n) {
+                    if (out_bf) out_bf[first + r] = tobf(val);
+                    if (out_f)  out_f[first + r]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
+                }
             }
         }
     }
+}
+
+template <int K, bool ROUND_BF16 = false>
+__device__ inline void q4_block512(const uint8_t* w, const bf16* s, const bf16* b,
+                                   const float* x, bf16* out_bf, float* out_f,
+                                   int n, int lane, int sg, int groups) {
+    flint_q4_gemv_op<K, ROUND_BF16>(w, s, b, x, out_bf, out_f, n, lane, sg, groups);
 }
 
 // ---- Mid-8L Flint constants ----
@@ -627,11 +698,15 @@ __device__ inline void mid_generate_impl(
         // ---- 10. Final RMSNorm -> sh_xn ----
         mid_rmsnorm_2048(ws_x, B(MID_OFF_FINAL_NORM), sh_xn, sh_red);
 
-        // ---- 11. LM Head Q4 Matmul (150144 x 2048) -> ws_f_logits ----
+        // ---- 11. LM Head Fused INT4 Dequant-Matmul (150144 x 2048, rec-aip) -> ws_f_logits ----
         // Always execute lm_head + argmax at every position so persistent decode32
         // differential cancellation holds identically across prefill and decode steps.
-        q4_block512<MID_HID>(Q_W(MID_OFF_LM_HEAD), Q_S(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID), Q_B(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID),
-                             sh_xn, nullptr, ws_f_logits, MID_VOCAB, lane, sg, groups);
+        // Uses the integrated `flint_q4_gemv_op<MID_HID>` fast path (preloaded register
+        // input slices + 32-bit packed weight loads over zero-copy layout s2).
+        flint_q4_gemv_op<MID_HID>(Q_W(MID_OFF_LM_HEAD),
+                                  Q_S(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID),
+                                  Q_B(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID),
+                                  sh_xn, nullptr, ws_f_logits, MID_VOCAB, lane, sg, groups);
         SYNC_ALL();
 
         // ---- 12. Parallel Device Argmax over 150,144 vocab ----
@@ -753,6 +828,7 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate_fp32kv(
 // ---- Standalone Fused INT4 Dequant-Matmul Kernel (rec-aip) ----
 // Consumes the exact zero-copy checkpoint layout from docs/rocm-model-layer.md s2:
 //   w: uint8_t [N, K/2], s: bf16 [N, K/64], b: bf16 [N, K/64], x: bf16 [K] -> out: bf16 or fp32 [N]
+// Shares `flint_q4_gemv_op` with `mid_generate_impl` (after staging `x` into shared float[K] for K <= 4096).
 extern "C" __global__ __launch_bounds__(256) void flint_q4_gemv_kernel(
     const uint8_t* w, const bf16* s, const bf16* b,
     const bf16* x, bf16* out_bf, float* out_f, int n, int k) {
@@ -760,6 +836,25 @@ extern "C" __global__ __launch_bounds__(256) void flint_q4_gemv_kernel(
     int lane = tid & 31;
     int sg = blockIdx.x * (blockDim.x >> 5) + (tid >> 5);
     int groups = gridDim.x * (blockDim.x >> 5);
+
+    __shared__ float sh_x[4096];
+    if (k <= 4096) {
+        for (int i = tid; i < k; i += 256) sh_x[i] = tofloat(x[i]);
+        __syncthreads();
+        if (k == 2048) {
+            flint_q4_gemv_op<2048>(w, s, b, sh_x, out_bf, out_f, n, lane, sg, groups);
+            return;
+        } else if (k == 4096) {
+            flint_q4_gemv_op<4096>(w, s, b, sh_x, out_bf, out_f, n, lane, sg, groups);
+            return;
+        } else if (k == 1024) {
+            flint_q4_gemv_op<1024>(w, s, b, sh_x, out_bf, out_f, n, lane, sg, groups);
+            return;
+        } else if (k == 512) {
+            flint_q4_gemv_op<512>(w, s, b, sh_x, out_bf, out_f, n, lane, sg, groups);
+            return;
+        }
+    }
 
     for (int first = sg * 4; first < n; first += groups * 4) {
         float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};

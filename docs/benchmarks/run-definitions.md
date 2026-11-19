@@ -354,10 +354,12 @@ and must be rebuilt; the weights are unchanged.
 - **vs. Incumbent `llama.cpp` Vulkan (`28.5 tok/s` on `dusk` `:8080`, NOT like-for-like — cross-model & cross-context caveat)**:
   - `111.67 / 28.5 = 3.92×` (`3.26×` at `workers=8`), **caveat**: compares synthetic **mid-8L INT4 at 512-token context** against the real **Flint 49-layer `Q3_K_XL` GGUF at 131k context** cumulative `/metrics` decode rate. Must not be read as a like-for-like 49L comparison.
 
-### Standalone Fused INT4-Affine Dequant-Matmul (`flint_q4_gemv_kernel`, A9)
+### Standalone Fused INT4-Affine Dequant-Matmul (`flint_q4_gemv_kernel`, A9) & Integrated `flint_q4_gemv_op` Decode Delta (`rec-aip`)
 - **Method**: `flint_q4_gemv_host` wraps `iters=50` back-to-back `flint_q4_gemv_device` launches in `hipEventRecord` after `warmup=10` launches (`per_iter_ms = total_ms / 50`). Effective bandwidth formula counts weight+scale+bias+input reads plus fp32 output writes:
   `GB/s = (N*(K/2) + 2*N*(K/64)*2 + K*2 + N*4) / (per_iter_ms * 1e6)`.
-- **Designated Run of Record** (`2026-11-18T23:36:35Z` commit-adjacent run on `dusk` `gfx1150`, with spread from the `23:35:01Z` build+run noted):
+- **Designated Run of Record (A9)**: The commit-adjacent `2026-11-18T23:36:35Z` run on `dusk` `gfx1150` is designated as the run of record for `c264e52`, with the prior `2026-11-18T23:35:01Z` compile+run recorded alongside it for run-to-run spread. Committed raw evidence logs:
+  - Run of record (`23:36:35Z`): `docs/benchmarks/q4-hunt/step254-comment-run-2336Z.txt` (`sha256: a34911ab1c8e2a8a07e722846c5261b6b6610cfb610a3af9ddfa0de6dd0fc1c4`)
+  - Prior compile+run (`23:35:01Z`): `docs/benchmarks/q4-hunt/step246-docs-run-2335Z.txt` (`sha256: 52de66b393d9d3c1adbf01485a8b320140bef484a5848175d6ac7a0d2bdeb92c`)
 
 | Projection Shape (`[N, K]`) | Run-of-Record Latency (`ms`) | Run-of-Record Effective BW (`GB/s`) | Prior Run (`23:35Z`) Latency / BW | Max Abs Error vs `fp64` | Relative MaxAbs Error |
 |---|---|---|---|---|---|
@@ -365,6 +367,14 @@ and must be rebuilt; the weights are unchanged.
 | `q_proj` `[4096, 2048]` | **`0.139 ms`** | **`34.04 GB/s`** | `0.149 ms` / `31.88 GB/s` | `2.384e-07` | `8.931e-08` |
 | `o_proj` `[2048, 4096]` | **`0.138 ms`** | **`34.25 GB/s`** | `0.166 ms` / `28.47 GB/s` | `2.384e-07` | `1.146e-07` |
 | `lm_head` `[150144, 2048]` | **`2.264 ms`** | **`76.67 GB/s`** | `2.572 ms` / `67.48 GB/s` | `2.384e-07` | `8.647e-08` |
+
+- **Integration into Mid-8L Megakernel Decode Path (`flint_q4_gemv_op<2048>`, `rec-aip`)**:
+  - Unified `flint_q4_gemv_op<K>` across `flint_q4_gemv_kernel` and `mid_generate_impl`, consuming the zero-copy layout in `docs/rocm-model-layer.md` §2 (`U8 [.., out, K/2]`, `BF16` scales/biases `[.., out, K/64]`). For `K == 2048` (`lm_head` `[150144, 2048]`, which accounts for 40–50% of a mid decode step per `rec-ebj` profiling, plus `K=2048` layer projections), each lane preloads its 4×16 pre-scaled input slices (`v0..v3`) and 4 group sums (`sum0..sum3`) into registers once before the row loop and reads packed weights via 32-bit `uint32_t` loads in `dot16`.
+  - **Before vs. After Decode Throughput (`workers = 16`, 4-pair ABBA differential recipe on `dusk` `gfx1150`, `ckpt: f494e788…`; JSON: `docs/benchmarks/bench_mid_prod_aip_q4_dusk_gfx1150.json`)**:
+    - `decode32_after_512` (differential): **`111.67 tok/s` $\to$ `120.78 tok/s`** (**`+8.16%`**, `+9.11 tok/s`; 4-pair min..max `117.08 .. 123.49 tok/s`, `t516_mean = 3.5655s`, `t548_mean = 3.8304s`, `dt32_mean = 0.2649s` vs `0.2866s` before; **`53.7×`** vs current unfused torch INT4 `2.25 tok/s` baseline — note: the `2.25 tok/s` torch broadcast-dequant baseline is being re-baselined separately by the Claude lane per `rec-ebj`).
+    - `decode32_short_ctx` (differential): **`157.01 tok/s` $\to$ `175.67 tok/s`** (**`+11.88%`**, `+18.66 tok/s`; 4-pair min..max `174.17 .. 176.99 tok/s`, `dt_short_mean = 0.1822s` vs `0.2038s` before).
+    - `end_to_end_516_pos_tok_s` (`512` prefill + `4` decode): **`131.67 tok/s` $\to$ `144.72 tok/s`** (**`+9.91%`**).
+  - **Conformance (`rec-pp2` under `00c74a6` `all-declared` default policy)**: **6/6 PASS** (`exit 0`, both with `--emit-experts` on the `all-declared` `step_experts` path and without `--emit-experts` on the search fallback; see `engine/validation/megakernel_mid/results-rec-aip-matrix-all-declared.txt`).
 
 Scripts: `engine/.build/torch_conformance.py` (conformance + tiny bench),
 `engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0),

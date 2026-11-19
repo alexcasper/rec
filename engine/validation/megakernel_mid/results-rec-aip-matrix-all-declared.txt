@@ -1,0 +1,8 @@
+PASS  chat_fp32_bf16kv.npz               case=chat     ref_kv=bf16 tokens_exact=True ties=1 last_rel=4.37e-04 step_rel=7.18e-04  router-tie L2@pos19 12->7 gap 4.10e-05
+PASS  chat_fp32kv.npz                    case=chat     ref_kv=fp32 tokens_exact=True ties=0 last_rel=2.87e-06 step_rel=3.59e-06  
+PASS  short4_fp32_bf16kv.npz             case=short4   ref_kv=bf16 tokens_exact=True ties=0 last_rel=4.98e-04 step_rel=9.39e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref_kv=fp32 tokens_exact=True ties=0 last_rel=2.69e-06 step_rel=3.61e-06  
+PASS  wrap512_fp32_bf16kv.npz            case=wrap512  ref_kv=bf16 tokens_exact=True ties=1 last_rel=2.27e-04 step_rel=2.60e-04  router-tie L1@pos175 14->18 gap 1.09e-05
+PASS  wrap512_fp32kv.npz                 case=wrap512  ref_kv=fp32 tokens_exact=True ties=0 last_rel=2.45e-06 step_rel=3.28e-06  
+6/6 PASS; (case, kv tier) without a passing run: none
+matrix_exp exit 0

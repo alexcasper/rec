@@ -1,0 +1,22 @@
+Created At: 2026-11-18T23:36:27Z
+Completed At: 2026-11-18T23:36:35Z
+Command exited with code 0.
+
+Command output:
+q4_gemv expert_gate_512x2048  :   0.010 ms |  61.23 GB/s | max|err| 1.788e-07 rel 8.847e-08 -> PASS
+q4_gemv q_proj_4096x2048      :   0.139 ms |  34.04 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+q4_gemv o_proj_2048x4096      :   0.138 ms |  34.25 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+q4_gemv lm_head_150144x2048   :   2.264 ms |  76.67 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[rec/gemini-kernels c264e52] rec-tan phase 2b / rec-aip: mid-8L multi-workgroup persistent HIP megakernel + fused INT4 dequant-matmul (99.0-139.6 tok/s on dusk gfx1150)
+ 3 files changed, 1526 insertions(+)
+ create mode 100644 engine/native/megakernel_hip/flint_mid_megakernel.hip
+ create mode 100644 engine/native/megakernel_hip/mid_mk_driver.py
+## rec/gemini-kernels
+c264e52 (HEAD -> rec/gemini-kernels) rec-tan phase 2b / rec-aip: mid-8L multi-workgroup persistent HIP megakernel + fused INT4 dequant-matmul (99.0-139.6 tok/s on dusk gfx1150)
+ea2236a rec-tan phase 2b: multi-workgroup persistent tiny megakernel with device-wide sync_all barrier
+0af4bff rec-tan phase 2a: move tiny megakernel KV layout to head-major [NL][K|V][NKV][cap][HDIM] and clean hipcc warnings
+812809f docs: ROCm model-layer tensor layout contract (rec-9na -> rec-tan)
+ad8c34c megakernel harness: ruff clean (no behaviour change; bank bit-identical)
+2fb007a megakernel validation: production-model reference, signed synthetic bank
+77a1f1c tiny megakernel: fix q4 unpack period, add SiLU, router bias selection-only
+3a844a2 rec-hjr: per-expert MoE scale/bias strides in elements, not bytes

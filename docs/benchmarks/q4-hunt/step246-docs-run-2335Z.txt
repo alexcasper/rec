@@ -1,0 +1,137 @@
+Created At: 2026-11-18T23:34:55Z
+Completed At: 2026-11-18T23:35:01Z
+Command exited with code 0.
+
+Command output:
+flint_mid_megakernel.hip:719:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  719 |     hipMemcpy(d_w, h_w, wb, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:720:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  720 |     hipMemcpy(d_s, h_s, sb, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:721:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  721 |     hipMemcpy(d_b, h_b, sb, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:722:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  722 |     hipMemcpy(d_x, h_x, xb, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:727:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  727 |     hipDeviceSynchronize();
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:730:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  730 |     hipEventCreate(&ev0);
+      |     ^~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:731:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  731 |     hipEventCreate(&ev1);
+      |     ^~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:732:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  732 |     hipEventRecord(ev0, 0);
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:736:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  736 |     hipEventRecord(ev1, 0);
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:737:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  737 |     hipEventSynchronize(ev1);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:739:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  739 |     hipEventElapsedTime(&total_ms, ev0, ev1);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:741:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  741 |     hipEventDestroy(ev0);
+      |     ^~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:742:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  742 |     hipEventDestroy(ev1);
+      |     ^~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:744:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  744 |     if (h_out_bf) hipMemcpy(h_out_bf, d_out_bf, ob_bf, hipMemcpyDeviceToHost);
+      |                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:745:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  745 |     if (h_out_f)  hipMemcpy(h_out_f, d_out_f, ob_f, hipMemcpyDeviceToHost);
+      |                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:747:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  747 |     hipFree(d_w); hipFree(d_s); hipFree(d_b); hipFree(d_x);
+      |     ^~~~~~~~~~~~
+flint_mid_megakernel.hip:747:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  747 |     hipFree(d_w); hipFree(d_s); hipFree(d_b); hipFree(d_x);
+      |                   ^~~~~~~~~~~~
+flint_mid_megakernel.hip:747:33: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  747 |     hipFree(d_w); hipFree(d_s); hipFree(d_b); hipFree(d_x);
+      |                                 ^~~~~~~~~~~~
+flint_mid_megakernel.hip:747:47: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  747 |     hipFree(d_w); hipFree(d_s); hipFree(d_b); hipFree(d_x);
+      |                                               ^~~~~~~~~~~~
+flint_mid_megakernel.hip:748:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  748 |     if (d_out_bf) hipFree(d_out_bf);
+      |                   ^~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:749:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  749 |     if (d_out_f)  hipFree(d_out_f);
+      |                   ^~~~~~~~~~~~~~~~
+21 warnings generated when compiling for gfx1150.
+flint_mid_megakernel.hip:719:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  719 |     hipMemcpy(d_w, h_w, wb, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:720:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  720 |     hipMemcpy(d_s, h_s, sb, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:721:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  721 |     hipMemcpy(d_b, h_b, sb, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:722:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  722 |     hipMemcpy(d_x, h_x, xb, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:727:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  727 |     hipDeviceSynchronize();
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:730:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  730 |     hipEventCreate(&ev0);
+      |     ^~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:731:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  731 |     hipEventCreate(&ev1);
+      |     ^~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:732:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  732 |     hipEventRecord(ev0, 0);
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:736:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  736 |     hipEventRecord(ev1, 0);
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:737:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  737 |     hipEventSynchronize(ev1);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:739:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  739 |     hipEventElapsedTime(&total_ms, ev0, ev1);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:741:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  741 |     hipEventDestroy(ev0);
+      |     ^~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:742:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  742 |     hipEventDestroy(ev1);
+      |     ^~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:744:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  744 |     if (h_out_bf) hipMemcpy(h_out_bf, d_out_bf, ob_bf, hipMemcpyDeviceToHost);
+      |                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:745:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  745 |     if (h_out_f)  hipMemcpy(h_out_f, d_out_f, ob_f, hipMemcpyDeviceToHost);
+      |                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:747:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  747 |     hipFree(d_w); hipFree(d_s); hipFree(d_b); hipFree(d_x);
+      |     ^~~~~~~~~~~~
+flint_mid_megakernel.hip:747:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  747 |     hipFree(d_w); hipFree(d_s); hipFree(d_b); hipFree(d_x);
+      |                   ^~~~~~~~~~~~
+flint_mid_megakernel.hip:747:33: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  747 |     hipFree(d_w); hipFree(d_s); hipFree(d_b); hipFree(d_x);
+      |                                 ^~~~~~~~~~~~
+flint_mid_megakernel.hip:747:47: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  747 |     hipFree(d_w); hipFree(d_s); hipFree(d_b); hipFree(d_x);
+      |                                               ^~~~~~~~~~~~
+flint_mid_megakernel.hip:748:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  748 |     if (d_out_bf) hipFree(d_out_bf);
+      |                   ^~~~~~~~~~~~~~~~~
+flint_mid_megakernel.hip:749:19: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  749 |     if (d_out_f)  hipFree(d_out_f);
+      |                   ^~~~~~~~~~~~~~~~
+21 warnings generated when compiling for host.
+q4_gemv expert_gate_512x2048  :   0.010 ms |  60.69 GB/s | max|err| 1.788e-07 rel 8.847e-08 -> PASS
+q4_gemv q_proj_4096x2048      :   0.149 ms |  31.88 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+q4_gemv o_proj_2048x4096      :   0.166 ms |  28.47 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+q4_gemv lm_head_150144x2048   :   2.572 ms |  67.48 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
