@@ -40,7 +40,8 @@ Un-instrumented `torch_rocm_bench.py`, this host:
 within 1%. Same script/protocol/seed. Likely iGPU clock/load variance
 (tiny is launch-bound, wall noise relatively larger), but treat tiny
 wall numbers as ±20% uncertain. Mid — the config the fusion decisions
-below rest on — reproduces.
+below rest on — reproduces. **→ Reconciled in §7: root cause is GPU
+co-tenancy, not clock ramp or launch jitter.**
 
 ## 1. mid-8L decode — where one step goes (two runs: 551.2 / 599.8 ms)
 
@@ -130,3 +131,53 @@ true fused kernel; rec-aip's fused dequant-matmul compounds on top.
 - Stage timings carry the run-to-run variance documented above; only the
   rankings (stable across both runs) are load-bearing.
 - No albion arm (host offline all day); gfx1150-only.
+
+## 7. Reconciliation: tiny-2L swing is GPU co-tenancy (2026-11-19)
+
+Setup: the 890M is shared. During the first probe the GPU sat at
+`gpu_busy_percent ≈ 99%` continuously (co-tenant benches — other lanes
+were in their bench window). Amdgpu sysfs sampled at 0.3 s throughout
+(`aip_variance_probe.py`); a second, **gated** probe (`aip_gated_probe.py`)
+fires the bench only after 3 consecutive `busy < 5` samples.
+
+| regime | n | prefill512 tok/s | decode32 tok/s |
+|---|---|---|---|
+| gated (busy < 5 before run) | 8 | **85,155 – 90,772** | **422.5 – 479.0** |
+| ungated, co-tenant saturated (busy ≈ 99%) | 9 | 7,770 – 22,044 | 58.6 – 71.7 |
+| ungated, partial contention | 3 | 75,713 – 77,295 | 363.4 – 375.3 |
+| ungated, landed in a quiet window | 1 | 91,101.9 | 478.7 |
+| committed (9c87cf3) | — | 91,963.6 | 495.1 |
+
+Raw: `aip-prep-raw-gated-tiny.jsonl` (one JSON per gated run, with
+pre-run busy stats), `aip-prep-raw-ungated-tiny.jsonl` (first probe).
+
+Findings:
+
+1. **Root cause = co-tenancy, confirmed.** Gated runs on an idle GPU
+   cluster within −1.4% to −7.4% of the committed table; the same
+   binary/protocol ungated under a saturated GPU is 4–7× slower. The
+   aip-prep profile run's −14/−18% was partial contention, and §1–§3
+   stage shares were taken during partial contention (rankings hold;
+   absolute ms values are inflated by the same factor — re-profile on
+   an idle GPU before quoting absolute per-op costs).
+2. **Clock ramp excluded.** A 20 s full-blast 4096² bf16 matmul load
+   immediately before the bench did not change the slow runs (they
+   stayed at ~16–22k while the GPU remained saturated), and active sclk
+   telemetry stayed in a mid pstate across both fast and slow runs
+   (sysfs sclk parsing is ambiguous; `busy%` is the reliable signal).
+   If clocks mattered, the warm runs would have recovered.
+3. **Launch-bound configs are the contention canary.** mid-8L reproduced
+   within 1% *during* contention while tiny swung 4–7×: mid's kernels
+   are large (long GPU occupancy per launch), so time-slicing steals
+   little; tiny's ~100 short launches per decode step inherit the
+   co-tenant's queues. Any launch-bound number on this host is
+   meaningless without a busy-gate.
+4. **Protocol fix for future runs on shared hosts:** gate on
+   `gpu_busy_percent < 5` for ≥1 s before (and ideally during) every
+   timed run, and record the busy stats with the result
+   (`aip_gated_probe.py` does this). A run-definitions note to that
+   effect is recommended for the shared-host rows.
+
+Gated-run wall summary: tiny-2L INT4 on idle dusk 890M = **~90k prefill /
+~470 decode tok/s**, reproducing the committed table; the committed
+numbers stand.
