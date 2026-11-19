@@ -1,0 +1,130 @@
+{
+ "ckpt": "/home/dusk/rec-ve/ckpt-pp2/mid-prod",
+ "device": "cuda",
+ "prompt": "randint(3, vocab, 512), seed 0 (torch_rocm_bench)",
+ "experts_hit_per_moe_layer": {
+  "1": 29,
+  "2": 24,
+  "3": 19,
+  "4": 23,
+  "5": 14,
+  "6": 16,
+  "7": 24
+ },
+ "bit_identical_to_stock": {
+  "A_stock": true,
+  "B_oracle": true,
+  "C_onesync": true
+ },
+ "host_syncs_per_forward": {
+  "A_stock": 164,
+  "B_oracle": 0,
+  "C_onesync": 21
+ },
+ "skipped_not_quiet": 0,
+ "times": {
+  "A_stock": {
+   "event_ms": [
+    560.146,
+    550.075,
+    548.609,
+    551.981,
+    556.872,
+    549.262
+   ],
+   "wall_ms": [
+    561.382,
+    551.336,
+    549.862,
+    553.288,
+    558.186,
+    550.775
+   ],
+   "quiet_wait_s": [
+    3.9,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    3.0
+   ]
+  },
+  "B_oracle": {
+   "event_ms": [
+    593.599,
+    542.769,
+    543.551,
+    540.153,
+    550.67,
+    541.948
+   ],
+   "wall_ms": [
+    594.593,
+    544.037,
+    544.817,
+    541.407,
+    552.415,
+    543.588
+   ],
+   "quiet_wait_s": [
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    3.0
+   ]
+  },
+  "C_onesync": {
+   "event_ms": [
+    542.347,
+    546.173,
+    543.027,
+    546.789,
+    599.941,
+    543.373
+   ],
+   "wall_ms": [
+    543.644,
+    546.344,
+    544.289,
+    548.067,
+    600.945,
+    544.675
+   ],
+   "quiet_wait_s": [
+    29.8,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    30.1
+   ]
+  }
+ },
+ "summary": {
+  "A_stock": {
+   "event_ms_median": 551.028,
+   "wall_ms_median": 552.312,
+   "min": 548.609,
+   "max": 560.146,
+   "n": 6
+  },
+  "B_oracle": {
+   "event_ms_median": 543.1600000000001,
+   "wall_ms_median": 544.427,
+   "min": 540.153,
+   "max": 593.599,
+   "n": 6
+  },
+  "C_onesync": {
+   "event_ms_median": 544.773,
+   "wall_ms_median": 545.5095,
+   "min": 542.347,
+   "max": 599.941,
+   "n": 6
+  }
+ },
+ "sync_share_of_prefill": 0.0143,
+ "onesync_recovers": 0.795
+}

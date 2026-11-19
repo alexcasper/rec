@@ -253,6 +253,39 @@ kernels).
   that finished at 07:54 (`bench_aip_w16.json`), which is the likely cause
   of its 0.48 tok/s reading. The step-1 run of record started afterwards.
 
+## Prefill MoE host syncs: quantified, left in place (dusk 890M, mid-prod, 2026-11-19, rec-aip step 3)
+
+**Measurement.** `engine/tests/torch_rocm_prefill_sync_probe.py` ran on
+mid-prod with the rec-ikf gate before every timed forward: `gpu_busy_percent`
+< 5 on 3 consecutive 0.3 s samples. Rounds were interleaved (12 rounds) and
+each forward was timed with CUDA events. The raw data is in
+`rec-aip-step3-prefill-sync-dusk-2026-11-19.json`.
+
+Stock prefill512 makes **164 host syncs** per forward: per MoE layer one
+`unique().tolist()` plus one `nonzero()` per hit expert, with 149 experts hit
+across the 7 MoE layers. An oracle replay of the identical ops and shapes,
+with no syncs, is **6.4 ms faster** (paired median, 12 of 12 rounds
+positive): 549.7 → 543.2 ms, i.e. **1.2% of prefill**. Consolidating to one
+`bincount().tolist()` per layer (21 syncs) keeps the shapes, is verified
+bit-identical on GPU, and recovers 97% of that, 6.0 ms. All variants are
+`torch.equal` to stock.
+
+**Why there is no sync-free, numerics-preserving prefill.** Each expert's
+GEMM M dimension (tokens routed to it) exists only on the device after the
+router runs. hipBLAS/rocBLAS launches take M, N and K as host arguments, so
+the host must either learn M, which is a sync, or launch with a fixed M (all
+512 tokens, or a capacity bound). A fixed M changes the GEMM problem shape,
+and with it kernel and tiling selection and per-row reduction order, so bit-
+identity cannot be proven.
+
+**Decision.** `prefill_sync_free` is **not** added, and the one-sync variant
+is not landed in the reference layer. Its ~1.1% gain is below the prefill512
+run-to-run spread (about 3%, step-2 table) and is not worth a second code
+path in the conformance reference. The design and its bit-identity check are
+in the probe if a later lane wants it. Device-side expert dispatch (grouped
+GEMM) is a numerics-changing design, and belongs to the fused-kernel lane
+under its own conformance run.
+
 ## Engine end-to-end, `REC_BACKEND=rocm` (dusk, Radeon 890M gfx1150, 2026-11-18, rec-ju9)
 
 **Env (user-space, separate venv; the older `~/rec-ve/.venv` was left untouched):**
