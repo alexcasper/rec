@@ -226,6 +226,37 @@ def _write_tokenizer(directory: Path, vocab_size: int) -> None:
         )
 
 
+def repair_tokenizer(src: Path, dst: Path) -> Path:
+    """Copy a synthetic checkpoint written before 92f9bc2 and rewrite only its
+    tokenizer files with the fixed generator (rec-jow).
+
+    Those tokenizers re-registered the specials past the vocab (e.g. <|user|> =
+    514 for vocab 512), so every chat prompt carried out-of-vocab ids. The
+    weights, config and manifest are copied unchanged (the manifest pins file
+    names, not hashes); the source directory is never modified.
+    """
+    import shutil
+
+    from .checkpoint import validate
+
+    src, dst = Path(src), Path(dst)
+    manifest = json.loads((src / "manifest.json").read_text())
+    if not str(manifest.get("model_id", "")).startswith("synthetic-"):
+        raise ValueError(f"{src} is not a rec_mlx.synthetic checkpoint (model_id {manifest.get('model_id')!r})")
+    vocab_size = json.loads((src / "config.json").read_text())["vocab_size"]
+    words = json.loads((src / "tokenizer.json").read_text())["model"].get("vocab", {})
+    if f"tok{vocab_size - 1}" not in words:
+        raise ValueError(f"{src}: tokenizer is not the synthetic WordLevel tok<i> vocabulary")
+    if dst.exists():
+        raise FileExistsError(dst)
+    shutil.copytree(src, dst)
+    for name in ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"):
+        (dst / name).unlink()
+    _write_tokenizer(dst, vocab_size)
+    validate(dst, dst / "manifest.json")
+    return dst
+
+
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--preset", choices=sorted(PRESETS), default="tiny")
@@ -233,7 +264,13 @@ def main(argv=None) -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--model-id")
     parser.add_argument("--format", choices=FORMATS, default="synthetic")
+    parser.add_argument("--repair-tokenizer", type=Path, metavar="SRC",
+                        help="copy SRC to --out with a fixed tokenizer (pre-92f9bc2 checkpoints; rec-jow)")
     args = parser.parse_args(argv)
+    if args.repair_tokenizer:
+        path = repair_tokenizer(args.repair_tokenizer, args.out)
+        print(f"wrote {path}: tokenizer rewritten, weights/config/manifest copied from {args.repair_tokenizer}")
+        return
     path = build_checkpoint(args.out, args.preset, args.seed, args.model_id, args.format)
     print(f"wrote {path} ({args.preset}, {args.format}, seed {args.seed}); validate() OK, "
           "router non-degenerate")

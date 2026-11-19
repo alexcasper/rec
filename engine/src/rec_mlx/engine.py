@@ -95,11 +95,7 @@ class Engine:
         self.mx = mx
         self.tokenizer = load_tokenizer(directory)
         self.vocab_size = config["vocab_size"]
-        if len(self.tokenizer) > self.vocab_size:
-            raise ValueError(
-                f"Tokenizer has {len(self.tokenizer)} ids but the model vocab is {self.vocab_size}; "
-                "ids past the vocab would index outside the embedding"
-            )
+        self.tokenizer_extra_ids = self._check_tokenizer_vocab(config)
         self._constraints = None
         self.enforce_tool_schemas = enforce_tool_schemas
         self._constraints_lock = threading.Lock()
@@ -154,6 +150,51 @@ class Engine:
             "weight_format": self.identity["weight_format"],
             "kv_format": self.identity["kv_format"],
         }
+
+    # Probe for the ids the chat template emits on its own (role markers etc.).
+    _PROBE_MESSAGES = [
+        {"role": "system", "content": "probe"},
+        {"role": "user", "content": "probe"},
+        {"role": "assistant", "content": "probe"},
+        {"role": "user", "content": "probe"},
+    ]
+
+    def _check_tokenizer_vocab(self, config) -> int:
+        """Reject a tokenizer whose *structural* ids fall outside the model vocab.
+
+        Every request carries the special tokens (BOS/EOS/chat role markers) that
+        the chat template emits, and generation stops on the config EOS ids. Any of
+        them >= vocab_size is an out-of-bounds embedding gather on every request
+        (a GPU hardware fault on rocm, rec-ju9), so that fails at load. Extra
+        *plain* tokenizer ids past the vocab are tolerated (real tokenizers carry a
+        few): user text that maps onto one is rejected per request by the range
+        check in _generate_tokens. Returns the number of tolerated extra ids.
+        """
+        vocab = self.vocab_size
+        structural = {"special": set(self.tokenizer.all_special_ids),
+                      "config eos_token_id": set(config["eos_token_id"])}
+        try:
+            structural["chat template"] = set(self.prompt(self._PROBE_MESSAGES))
+        except Exception as exc:  # a template that cannot render fails later, loudly, per request
+            logger.warning("Chat template probe failed at load: %s", exc)
+        bad = {where: sorted(i for i in ids if not 0 <= i < vocab) for where, ids in structural.items()}
+        bad = {where: ids for where, ids in bad.items() if ids}
+        if bad:
+            names = sorted({self.tokenizer.convert_ids_to_tokens(i) for ids in bad.values() for i in ids
+                            if i >= 0}, key=str)
+            raise ValueError(
+                f"Tokenizer ids outside the model vocab [0, {vocab}) reach the model on every request: "
+                + "; ".join(f"{where}: {ids}" for where, ids in bad.items())
+                + f" ({', '.join(map(str, names))}). Checkpoints written before 92f9bc2 by "
+                "rec_mlx.synthetic have this tokenizer bug: rewrite the tokenizer with "
+                "`python -m rec_mlx.synthetic --repair-tokenizer SRC --out DST` (weights unchanged)."
+            )
+        extra = max(len(self.tokenizer) - vocab, 0)
+        if extra:
+            logger.warning(
+                "Tokenizer has %d ids past the model vocab %d (none structural); requests that "
+                "encode to them are rejected", extra, vocab)
+        return extra
 
     @property
     def constraints(self):
