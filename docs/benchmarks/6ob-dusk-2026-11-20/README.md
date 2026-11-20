@@ -117,3 +117,85 @@ with experts, new vs the rebuilt untouched d1f6208 source.
   byte-identical in the megakernel; the lab's identity did not transfer. Decision needed (see the
   rec-6ob bead): either a one-time explicit-contraction re-baseline signed off under spec (a), or
   waive G0 for this change in favour of the fp32-KV tier vs the CPU reference.
+
+## 5. Step 3 (option A): spill fix + explicit contraction, gated under spec (a), then timed (`s3/`)
+
+The kernel change was applied to `flint_mid_megakernel.hip`. dusk solo, every launch <= 0.235 s,
+busy-gated, cotenant state on every line: flint :8080 and E4B :8090 up and idle, not paused (standing
+protocol); qwen disabled.
+
+**Change (v2)**
+- `dot16v(u01, u23, ...)` takes packed words by value, with the fp graph explicit:
+  - per 4-nibble group `G = fma(x3,q3, fma(x2,q2, fma(x1,q1, x0*q0)))`;
+  - `a = ((G0 + G1) + G2) + G3`;
+  - `fma(s, a, sum*b)`;
+  - `#pragma clang fp contract(off)` inside.
+- `dot16` is a wrapper over `dot16v`.
+- Generic path (K = 512/1024/4096): `#pragma unroll 2` instead of a full unroll, and on full
+  row-quads each block's four row loads are issued together.
+- K=2048 path: original structure.
+- Rejected v1 (K=2048 with 2 rows in flight): lm_head failed accuracy NONDETERMINISTICALLY in 3 of 6
+  runs (rel ~3e-3), still at 248 VGPR + 92 B scratch, and lm_head was 13% slower (`rep.log`).
+
+**Resources** (`res.sh`; per-function `.set .L*.num_vgpr/private_seg_size`):
+
+| function | HEAD | v2 |
+|---|---|---|
+| gemv K=4096 | 248 VGPR, 184 B scratch | **113, 0** |
+| gemv K=2048 | 248, 64 | 248, 64 |
+| gemv K=1024 | 119, 0 | 133, 0 |
+
+The failed attempt patch had 256 / 900 B on K=4096.
+
+**Standalone (`--q4-bench`, 6 interleaved reps, medians, ms)**
+
+| build | expert_gate | q_proj | o_proj | lm_head | FAILs |
+|---|---|---|---|---|---|
+| HEAD | 0.010 | 0.091 | 0.163 | 2.343 | 0 |
+| v2 | 0.010 | 0.090 | **0.123** | 2.325 | 0 |
+
+Target was o_proj <= 0.18 ms; met.
+
+**Determinism and accuracy** (`det.py`): 7 shapes covering every K path, 40 runs each over grids
+0 and 16. All runs bitwise identical; max rel vs fp64 9.7e-8 (HEAD: same determinism, up to 1.1e-7).
+
+**Contraction independence** (`gate.log` a): v2 built with `-ffp-contract=off` vs the default gives
+bitwise IDENTICAL gemv outputs on K = 512/1024/2048/4096 and lm_head. The gemv arithmetic no longer
+depends on fusion context.
+
+**Spec (a) gate** (`matrix_v2.txt`): mid_mk_check matrix, ref=torch-fp32@cpu (f0698a5 pin), v2 suite
+short4 + chat x 3 builds, with experts.
+
+| file | result |
+|---|---|
+| short4_fp32kv | PASS 1.16e-6; tokens exact, 0 routing deviations |
+| chat_fp32kv | PASS 1.07e-6; tokens exact, 0 routing deviations |
+| short4_fp32_bf16kv | PASS 9.1e-4 |
+| chat_fp32_bf16kv | PASS 4.4e-4 (1 declared router tie, gap 4.2e-5) |
+| short4/chat bf16kv (production bf16 activations) | tokens exact; 3.9e-3 over the 1e-3 tier |
+
+The production bf16kv level is inherent to that build: HEAD's d1f6208 bf16kv measures 3.7-3.8e-3
+against the same reference. Under spec (a) bf16 builds are judged on tokens, which are exact.
+wrap512 coverage is absent (deferred to albion).
+
+**Timing** (`abba_short.py`; decode32 short-ctx differential t(P+36) - t(P+4), mode 0, workers 16,
+8 ABBA rounds, all pairs valid; production-build tokens identical HEAD vs v2):
+
+| case | HEAD tok/s (pair range) | v2 tok/s (pair range) | speedup |
+|---|---|---|---|
+| short4 | 175.12 (173.6-177.7) | **188.54** (184.6-191.3) | **1.077x** |
+| chat | 174.37 (173.2-175.7) | **187.75** (183.6-190.7) | **1.077x** |
+
+**Re-profile** (`prof_v2_w16.json`):
+- token 5865 -> **5391 us** (185.5 tok/s in-kernel);
+- O-proj 1314 -> **944 us** (-28%);
+- MLP 1363 -> 1282 us;
+- lm_head and QKV unchanged;
+- barrier wait still about 6%.
+
+**Not covered** (albion off):
+- wrap512 G0/sign-off and ctx512 decode32 (the run-of-record metric);
+- any new run-of-record row;
+- R9700 rows.
+
+The full-config effect of the o_proj/expert_down change stays UNKNOWN until albion returns.

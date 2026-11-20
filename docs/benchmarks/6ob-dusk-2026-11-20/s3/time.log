@@ -1,0 +1,34 @@
+[20:19:25Z] ABBA short4: A=HEAD(headd) B=v2, mode 0, 8 rounds | busy=3 | flint:idle,e4b:idle,qwen:inactive
+20:19:30Z round 0 AB | A 177.72 B 189.1 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+20:19:35Z round 1 BA | A 174.42 B 191.16 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+20:19:40Z round 2 AB | A 173.8 B 188.51 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+20:19:45Z round 3 BA | A 173.63 B 186.91 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+20:19:50Z round 4 AB | A 175.77 B 184.55 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+20:19:54Z round 5 BA | A 174.39 B 191.33 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+20:20:00Z round 6 AB | A 176.43 B 188.49 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+20:20:04Z round 7 BA | A 174.86 B 188.5 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+{"case": "short4", "A": {"valid": 8, "differential_tok_s": 175.12, "pair_min": 173.63, "pair_max": 177.72, "t36_mean_s": 0.22921}, "B": {"valid": 8, "differential_tok_s": 188.54, "pair_min": 184.55, "pair_max": 191.33, "t36_mean_s": 0.21288}, "speedup_B_over_A": 1.077, "tokens_identical_A_B": true}
+[20:20:04Z] ABBA chat: A=HEAD(headd) B=v2, mode 0, 8 rounds | busy=44 | flint:idle,e4b:idle,qwen:inactive
+20:20:10Z round 0 AB | A 173.23 B 188.34 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+20:20:16Z round 1 BA | A 173.73 B 183.63 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=45 flint:idle,e4b:idle,qwen:down
+20:20:20Z round 2 AB | A 174.79 B 187.78 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=45 flint:idle,e4b:idle,qwen:down
+20:20:25Z round 3 BA | A 174.24 B 189.09 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=45 flint:idle,e4b:idle,qwen:down
+20:20:31Z round 4 AB | A 173.93 B 187.92 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=45 flint:idle,e4b:idle,qwen:down
+20:20:35Z round 5 BA | A 174.28 B 186.09 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=45 flint:idle,e4b:idle,qwen:down
+20:20:40Z round 6 AB | A 175.08 B 188.67 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=45 flint:idle,e4b:idle,qwen:down
+20:20:45Z round 7 BA | A 175.7 B 190.67 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=45 flint:idle,e4b:idle,qwen:down
+{"case": "chat", "A": {"valid": 8, "differential_tok_s": 174.37, "pair_min": 173.23, "pair_max": 175.7, "t36_mean_s": 0.23472}, "B": {"valid": 8, "differential_tok_s": 187.75, "pair_min": 183.63, "pair_max": 190.67, "t36_mean_s": 0.21854}, "speedup_B_over_A": 1.077, "tokens_identical_A_B": true}
+[20:20:45Z] re-profile v2 (MK_PROFILE) | busy=44 | flint:idle,e4b:idle,qwen:inactive
+[20:20:47Z] prof build exit 0 | busy=7 | flint:idle,e4b:idle,qwen:inactive
+barriers/token 140 | token 5390.94 us (185.5 tok/s in-kernel) | sum phase 5380 us, sum wait 298.1 us (6%)
+launch s prof [0.21631, 0.21553, 0.21671] prod [0.21087, 0.21082, 0.21137] | tokens match prod: True
+  11. LM Head Fused INT4 Dequant                   x  1 phase   2221.8 us  work   2207.4  wait    15.4
+  9. MLP (Layer 0 Dense vs Layers 1..7 MoE)        x 88 phase   1282.0 us  work   1128.0  wait   155.3
+  7. O projection (K=4096                          x 16 phase    944.4 us  work    861.9  wait    81.4
+  3. Q, K, V projections (K=2048)                  x  8 phase    735.3 us  work    712.1  wait    23.0
+  6. Attention with Sinks (32 warps across workgro x  8 phase    133.1 us  work    125.7  wait     6.7
+  4. Per                                           x  8 phase     26.6 us  work     18.9  wait     7.6
+  5. Write K, V to head                            x  8 phase     18.5 us  work     12.2  wait     6.2
+  12. Parallel Device Argmax over 150,144 vocab    x  2 phase     15.7 us  work     14.0  wait     1.7
+  1. INT8 affine embedding lookup                  x  1 phase      2.7 us  work      2.0  wait     0.8
+[20:20:51Z] DONE | busy=81 | flint:idle,e4b:idle,qwen:inactive

@@ -1,0 +1,26 @@
+[20:16:30Z] (a) contraction independence: v2 built with -ffp-contract=off vs default | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[20:16:32Z] v2off build exit 0 | busy=3 | flint:idle,e4b:idle,qwen:inactive
+  512x2048: fp-contract=fast vs off -> IDENTICAL
+  2048x512: fp-contract=fast vs off -> IDENTICAL
+  2048x1024: fp-contract=fast vs off -> IDENTICAL
+  2048x4096: fp-contract=fast vs off -> IDENTICAL
+  150144x2048: fp-contract=fast vs off -> IDENTICAL
+CONTRACTION-INDEPENDENT: True
+[20:16:33Z] (b) emit v2 suite: short4,chat x fp32kv,fp32_bf16kv,bf16kv (+experts), workers=16 | busy=6 | flint:idle,e4b:idle,qwen:inactive
+[20:16:37Z] emit exit 0 | busy=60 | flint:idle,e4b:idle,qwen:inactive
+wrote short4_fp32kv.npz          |  150.4 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939, 145985, 
+wrote chat_fp32kv.npz            |  156.5 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998, 26998, 26
+wrote short4_fp32_bf16kv.npz     |  148.7 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939, 145985, 
+wrote chat_fp32_bf16kv.npz       |  154.3 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998, 26998, 26
+wrote short4_bf16kv.npz          |  151.3 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939, 145985, 
+wrote chat_bf16kv.npz            |  154.6 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998, 26998, 26
+[20:16:37Z] (c) spec (a) matrix vs pinned torch fp32 CPU reference (CPU only) | busy=59 | flint:idle,e4b:idle,qwen:inactive
+FAIL  chat_bf16kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=2.82e-03 step_rel=3.89e-03  last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier); step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)
+PASS  chat_fp32_bf16kv.npz               case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=3.12e-04 step_rel=4.37e-04  router-tie L2@pos19 12->7 gap 4.17e-05
+PASS  chat_fp32kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.74e-07 step_rel=1.07e-06  
+FAIL  short4_bf16kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=2.73e-03 step_rel=3.91e-03  last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier); step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)
+PASS  short4_fp32_bf16kv.npz             case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=6.43e-04 step_rel=9.12e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.53e-07 step_rel=1.16e-06  
+4/6 PASS; (case, kv tier) without a passing run: [('wrap512', 'bf16'), ('wrap512', 'fp32')]; reference torch-fp32@cpu; sign-off run: yes
+matrix exit 1
+[20:16:57Z] DONE | busy=3 | flint:idle,e4b:idle,qwen:inactive

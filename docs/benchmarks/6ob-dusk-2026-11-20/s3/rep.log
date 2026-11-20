@@ -1,0 +1,90 @@
+headd rep1 | q4_gemv expert_gate_512x2048  :   0.009 ms |  62.88 GB/s | max|err| 1.788e-07 rel 8.847e-08 -> PASS
+headd rep1 | q4_gemv q_proj_4096x2048      :   0.095 ms |  50.15 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+headd rep1 | q4_gemv o_proj_2048x4096      :   0.153 ms |  30.93 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+headd rep1 | q4_gemv lm_head_150144x2048   :   2.344 ms |  74.04 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:14:15Z] headd rep1 | pre busy=3 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive
+v1 rep1 | q4_gemv expert_gate_512x2048  :   0.011 ms |  54.08 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v1 rep1 | q4_gemv q_proj_4096x2048      :   0.102 ms |  46.67 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v1 rep1 | q4_gemv o_proj_2048x4096      :   0.122 ms |  38.94 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v1 rep1 | q4_gemv lm_head_150144x2048   :   2.676 ms |  64.87 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:14:19Z] v1 rep1 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=12 flint:idle,e4b:idle,qwen:inactive
+v2 rep1 | q4_gemv expert_gate_512x2048  :   0.010 ms |  61.40 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v2 rep1 | q4_gemv q_proj_4096x2048      :   0.090 ms |  52.49 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v2 rep1 | q4_gemv o_proj_2048x4096      :   0.122 ms |  38.88 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v2 rep1 | q4_gemv lm_head_150144x2048   :   2.313 ms |  75.05 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:14:24Z] v2 rep1 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=10 flint:idle,e4b:idle,qwen:inactive
+headd rep2 | q4_gemv expert_gate_512x2048  :   0.010 ms |  61.45 GB/s | max|err| 1.788e-07 rel 8.847e-08 -> PASS
+headd rep2 | q4_gemv q_proj_4096x2048      :   0.091 ms |  51.94 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+headd rep2 | q4_gemv o_proj_2048x4096      :   0.162 ms |  29.21 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+headd rep2 | q4_gemv lm_head_150144x2048   :   2.343 ms |  74.08 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:14:27Z] headd rep2 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive
+v1 rep2 | q4_gemv expert_gate_512x2048  :   0.011 ms |  53.74 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v1 rep2 | q4_gemv q_proj_4096x2048      :   0.102 ms |  46.27 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v1 rep2 | q4_gemv o_proj_2048x4096      :   0.122 ms |  38.80 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v1 rep2 | q4_gemv lm_head_150144x2048   :   2.678 ms |  64.81 GB/s | max|err| 4.513e-02 rel 1.637e-02 -> FAIL
+[20:14:32Z] v1 rep2 | pre busy=3 flint:idle,e4b:idle,qwen:inactive | post busy=12 flint:idle,e4b:idle,qwen:inactive
+v2 rep2 | q4_gemv expert_gate_512x2048  :   0.010 ms |  60.27 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v2 rep2 | q4_gemv q_proj_4096x2048      :   0.090 ms |  52.40 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v2 rep2 | q4_gemv o_proj_2048x4096      :   0.123 ms |  38.52 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v2 rep2 | q4_gemv lm_head_150144x2048   :   2.337 ms |  74.27 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:14:36Z] v2 rep2 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive
+headd rep3 | q4_gemv expert_gate_512x2048  :   0.010 ms |  61.58 GB/s | max|err| 1.788e-07 rel 8.847e-08 -> PASS
+headd rep3 | q4_gemv q_proj_4096x2048      :   0.091 ms |  51.83 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+headd rep3 | q4_gemv o_proj_2048x4096      :   0.163 ms |  29.08 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+headd rep3 | q4_gemv lm_head_150144x2048   :   2.343 ms |  74.08 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:14:40Z] headd rep3 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive
+v1 rep3 | q4_gemv expert_gate_512x2048  :   0.011 ms |  54.32 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v1 rep3 | q4_gemv q_proj_4096x2048      :   0.102 ms |  46.50 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v1 rep3 | q4_gemv o_proj_2048x4096      :   0.132 ms |  35.95 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v1 rep3 | q4_gemv lm_head_150144x2048   :   2.665 ms |  65.13 GB/s | max|err| 1.399e-02 rel 5.072e-03 -> FAIL
+[20:14:45Z] v1 rep3 | pre busy=3 flint:idle,e4b:idle,qwen:inactive | post busy=12 flint:idle,e4b:idle,qwen:inactive
+v2 rep3 | q4_gemv expert_gate_512x2048  :   0.010 ms |  60.91 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v2 rep3 | q4_gemv q_proj_4096x2048      :   0.089 ms |  52.96 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v2 rep3 | q4_gemv o_proj_2048x4096      :   0.123 ms |  38.63 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v2 rep3 | q4_gemv lm_head_150144x2048   :   2.323 ms |  74.71 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:14:49Z] v2 rep3 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive
+headd rep4 | q4_gemv expert_gate_512x2048  :   0.010 ms |  61.65 GB/s | max|err| 1.788e-07 rel 8.847e-08 -> PASS
+headd rep4 | q4_gemv q_proj_4096x2048      :   0.089 ms |  53.04 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+headd rep4 | q4_gemv o_proj_2048x4096      :   0.160 ms |  29.53 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+headd rep4 | q4_gemv lm_head_150144x2048   :   2.344 ms |  74.04 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:14:53Z] headd rep4 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive
+v1 rep4 | q4_gemv expert_gate_512x2048  :   0.011 ms |  53.50 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v1 rep4 | q4_gemv q_proj_4096x2048      :   0.101 ms |  47.12 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v1 rep4 | q4_gemv o_proj_2048x4096      :   0.122 ms |  38.89 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v1 rep4 | q4_gemv lm_head_150144x2048   :   2.680 ms |  64.77 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:14:57Z] v1 rep4 | pre busy=3 flint:idle,e4b:idle,qwen:inactive | post busy=12 flint:idle,e4b:idle,qwen:inactive
+v2 rep4 | q4_gemv expert_gate_512x2048  :   0.010 ms |  60.72 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v2 rep4 | q4_gemv q_proj_4096x2048      :   0.090 ms |  52.86 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v2 rep4 | q4_gemv o_proj_2048x4096      :   0.123 ms |  38.56 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v2 rep4 | q4_gemv lm_head_150144x2048   :   2.316 ms |  74.94 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:15:01Z] v2 rep4 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=12 flint:idle,e4b:idle,qwen:inactive
+headd rep5 | q4_gemv expert_gate_512x2048  :   0.010 ms |  61.26 GB/s | max|err| 1.788e-07 rel 8.847e-08 -> PASS
+headd rep5 | q4_gemv q_proj_4096x2048      :   0.091 ms |  52.01 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+headd rep5 | q4_gemv o_proj_2048x4096      :   0.164 ms |  28.91 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+headd rep5 | q4_gemv lm_head_150144x2048   :   2.340 ms |  74.16 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:15:06Z] headd rep5 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive
+v1 rep5 | q4_gemv expert_gate_512x2048  :   0.011 ms |  54.94 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v1 rep5 | q4_gemv q_proj_4096x2048      :   0.101 ms |  46.87 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v1 rep5 | q4_gemv o_proj_2048x4096      :   0.122 ms |  38.73 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v1 rep5 | q4_gemv lm_head_150144x2048   :   2.671 ms |  64.99 GB/s | max|err| 2.617e-02 rel 9.491e-03 -> FAIL
+[20:15:10Z] v1 rep5 | pre busy=3 flint:idle,e4b:idle,qwen:inactive | post busy=12 flint:idle,e4b:idle,qwen:inactive
+v2 rep5 | q4_gemv expert_gate_512x2048  :   0.010 ms |  60.91 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v2 rep5 | q4_gemv q_proj_4096x2048      :   0.090 ms |  52.40 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v2 rep5 | q4_gemv o_proj_2048x4096      :   0.134 ms |  35.33 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v2 rep5 | q4_gemv lm_head_150144x2048   :   2.328 ms |  74.57 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:15:14Z] v2 rep5 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive
+headd rep6 | q4_gemv expert_gate_512x2048  :   0.010 ms |  61.37 GB/s | max|err| 1.788e-07 rel 8.847e-08 -> PASS
+headd rep6 | q4_gemv q_proj_4096x2048      :   0.091 ms |  51.98 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+headd rep6 | q4_gemv o_proj_2048x4096      :   0.174 ms |  27.14 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+headd rep6 | q4_gemv lm_head_150144x2048   :   2.347 ms |  73.96 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:15:18Z] headd rep6 | pre busy=3 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive
+v1 rep6 | q4_gemv expert_gate_512x2048  :   0.014 ms |  42.42 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v1 rep6 | q4_gemv q_proj_4096x2048      :   0.101 ms |  46.85 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v1 rep6 | q4_gemv o_proj_2048x4096      :   0.121 ms |  39.04 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v1 rep6 | q4_gemv lm_head_150144x2048   :   2.656 ms |  65.35 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:15:22Z] v1 rep6 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=12 flint:idle,e4b:idle,qwen:inactive
+v2 rep6 | q4_gemv expert_gate_512x2048  :   0.010 ms |  60.71 GB/s | max|err| 1.192e-07 rel 5.898e-08 -> PASS
+v2 rep6 | q4_gemv q_proj_4096x2048      :   0.090 ms |  52.40 GB/s | max|err| 2.384e-07 rel 8.931e-08 -> PASS
+v2 rep6 | q4_gemv o_proj_2048x4096      :   0.122 ms |  38.92 GB/s | max|err| 2.384e-07 rel 1.146e-07 -> PASS
+v2 rep6 | q4_gemv lm_head_150144x2048   :   2.327 ms |  74.60 GB/s | max|err| 2.384e-07 rel 8.647e-08 -> PASS
+[20:15:26Z] v2 rep6 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=11 flint:idle,e4b:idle,qwen:inactive

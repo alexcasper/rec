@@ -104,30 +104,35 @@ __device__ inline float load16_bf(const bf16* x, float* v) {
     return sum;
 }
 
+// rec-6ob (option A, explicit contraction): the q4 dot product's floating-point graph is spelled out
+// with fmaf and fp-contract is OFF inside, so the compiled arithmetic no longer depends on the fusion
+// context the caller is compiled in (under the default -ffp-contract=fast, restructuring a caller's
+// loads changed which mul+add pairs fused -> 1e-7 diffs, amplified by bf16-KV into token flips).
+// Graph: per 4-nibble group G = fma(x3,q3, fma(x2,q2, fma(x1,q1, x0*q0))); a = ((G0 + G1) + G2) + G3
+// (the original left-to-right order); return fma(s, a, sum * b).
+// Packed words are passed BY VALUE: reading a register array back through a punned pointer
+// (&uint2[] -> uint32_t*) corrupted ~1 in 50k lm_head rows on gfx1150.
+__device__ inline float dot16_group(uint32_t u, const float* x) {
+    #pragma clang fp contract(off)
+    float g = x[0] * (float)(u & 0x0000000fu);
+    g = __builtin_fmaf(x[1], (float)(u & 0x000000f0u), g);
+    g = __builtin_fmaf(x[2], (float)(u & 0x00000f00u), g);
+    g = __builtin_fmaf(x[3], (float)(u & 0x0000f000u), g);
+    return g;
+}
+
+__device__ inline float dot16v(uint32_t u01, uint32_t u23, const float* x, float s, float b, float sum) {
+    #pragma clang fp contract(off)
+    float a = dot16_group(u01, x);
+    a = a + dot16_group(u01 >> 16, x + 4);
+    a = a + dot16_group(u23, x + 8);
+    a = a + dot16_group(u23 >> 16, x + 12);
+    return __builtin_fmaf(s, a, sum * b);
+}
+
 __device__ inline float dot16(const uint8_t* w, const float* x, float s, float b, float sum) {
     const uint32_t* p32 = (const uint32_t*)w;
-    uint32_t u01 = p32[0];
-    uint32_t u23 = p32[1];
-    float a = 0.0f;
-    a += x[0]  * (float)(u01 & 0x0000000fu)
-       + x[1]  * (float)(u01 & 0x000000f0u)
-       + x[2]  * (float)(u01 & 0x00000f00u)
-       + x[3]  * (float)(u01 & 0x0000f000u);
-    uint32_t u1 = u01 >> 16;
-    a += x[4]  * (float)(u1  & 0x0000000fu)
-       + x[5]  * (float)(u1  & 0x000000f0u)
-       + x[6]  * (float)(u1  & 0x00000f00u)
-       + x[7]  * (float)(u1  & 0x0000f000u);
-    a += x[8]  * (float)(u23 & 0x0000000fu)
-       + x[9]  * (float)(u23 & 0x000000f0u)
-       + x[10] * (float)(u23 & 0x00000f00u)
-       + x[11] * (float)(u23 & 0x0000f000u);
-    uint32_t u3 = u23 >> 16;
-    a += x[12] * (float)(u3  & 0x0000000fu)
-       + x[13] * (float)(u3  & 0x000000f0u)
-       + x[14] * (float)(u3  & 0x00000f00u)
-       + x[15] * (float)(u3  & 0x0000f000u);
-    return s * a + sum * b;
+    return dot16v(p32[0], p32[1], x, s, b, sum);
 }
 
 // Unified device function for fused INT4-affine dequant-matmul (rec-aip / rec-tan)
@@ -191,18 +196,37 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
     } else {
         for (int first = sg * 4; first < n; first += groups * 4) {
             float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-            #pragma unroll
+            const bool full = first + 4 <= n;
+            // rec-6ob: bounded unroll (full unroll of 8 blocks x batched rows spilled 900 B/lane at
+            // K=4096) and, on full row-quads, the four rows' loads for a block issued together.
+            #pragma unroll 2
             for (int block = 0; block < K; block += 512) {
                 int scalar = block + lane * 16;
                 float v[16];
                 float sum = load16_f(x + scalar, v);
-                #pragma unroll
-                for (int r = 0; r < 4; ++r) {
-                    int row = first + r;
-                    if (row < n) {
-                        int gi = row * (K / 64) + scalar / 64;
-                        a[r] += dot16(w + (size_t)row * (K / 2) + scalar / 2,
-                                      v, tofloat(s[gi]), tofloat(b[gi]), sum);
+                if (full) {
+                    uint32_t wl[4], wh[4];
+                    float sc[4], bi[4];
+                    #pragma unroll
+                    for (int r = 0; r < 4; ++r) {
+                        int gi = (first + r) * (K / 64) + scalar / 64;
+                        const uint32_t* p32 = (const uint32_t*)(w + (size_t)(first + r) * (K / 2) + scalar / 2);
+                        wl[r] = p32[0];
+                        wh[r] = p32[1];
+                        sc[r] = tofloat(s[gi]);
+                        bi[r] = tofloat(b[gi]);
+                    }
+                    #pragma unroll
+                    for (int r = 0; r < 4; ++r) a[r] += dot16v(wl[r], wh[r], v, sc[r], bi[r], sum);
+                } else {
+                    #pragma unroll
+                    for (int r = 0; r < 4; ++r) {
+                        int row = first + r;
+                        if (row < n) {
+                            int gi = row * (K / 64) + scalar / 64;
+                            a[r] += dot16(w + (size_t)row * (K / 2) + scalar / 2,
+                                          v, tofloat(s[gi]), tofloat(b[gi]), sum);
+                        }
                     }
                 }
             }
