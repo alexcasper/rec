@@ -271,6 +271,13 @@ def repair_added_specials(src: Path, dst: Path) -> Path:
     tokens may render as the special strings — this copy is for engine
     runtime/benchmarks, not chat curation. Weights, config and manifest are
     copied unchanged; the source directory is never modified.
+
+    CAVEAT (rec-tq7, 2026-11-20): HF AddedVocabulary may REJECT added tokens
+    whose id collides with a base-vocab token and re-append them after the
+    vocab at runtime — the guard then fails again. Do not rely on this repair
+    for HF tokenizers with a full base vocab; the reliable fix is pairing the
+    weights with a clean tokenizer generation (see rec-tq7 recipe /
+    cpu-baseline-mid-d2 on dusk).
     """
     import shutil
 
