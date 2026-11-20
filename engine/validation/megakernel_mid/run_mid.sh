@@ -17,6 +17,6 @@ for c in short4 chat wrap512; do
     $PY $H produce --ckpt $CK --case $c --impl torch-fp32-bf16kv --fault $f --device cuda --out out/${c}_fault-${f}.npz >/dev/null 2>>out/err.log && stamp "produced $c fault $f" || stamp "PRODUCE FAILED $c $f"
   done
 done
-stamp "matrix check (ref: fp32 compute on cuda)"
-$PY $H matrix --ckpt $CK out --ref-device cuda > out/matrix.txt 2>>out/err.log; echo "matrix exit $?" >> out/matrix.txt
+stamp "matrix check (ref: torch fp32 on cpu, rec-s3m)"
+$PY $H matrix --ckpt $CK out --ref-device cpu > out/matrix.txt 2>>out/err.log; echo "matrix exit $?" >> out/matrix.txt
 stamp "DONE"

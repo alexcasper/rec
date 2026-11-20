@@ -190,6 +190,24 @@ def test_matrix_requires_both_kv_tiers_per_case(prod_ckpt, tmp_path):
     assert H.main(["matrix", "--ckpt", str(prod_ckpt), str(d), "--ref-device", "cpu"]) == 0
 
 
+def test_signoff_reference_is_pinned_to_cpu(prod_ckpt, tmp_path, capsys):
+    """rec-s3m: the default reference is torch fp32 on the CPU, every matrix line names the
+    reference device, and a passing matrix on any other device is a diagnostic (exit 2)."""
+    assert H.SIGNOFF_REF_DEVICE == "cpu"
+    d = tmp_path / "mx"
+    d.mkdir()
+    for case in H.case_matrix(H.vocab_of(prod_ckpt)):
+        H.produce(prod_ckpt, case, d / f"{case}_fp32.npz", "torch-fp32", "cpu")
+        H.produce(prod_ckpt, case, d / f"{case}_bf16kv.npz", "torch-fp32-bf16kv", "cpu")
+    capsys.readouterr()
+    assert H.main(["matrix", "--ckpt", str(prod_ckpt), str(d)]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert all("ref=torch-fp32@cpu" in line for line in out[:-1]) and "sign-off run: yes" in out[-1]
+    # a non-CPU reference that passes is not a sign-off; "cpu:0" stands in for a GPU device here
+    assert H.main(["matrix", "--ckpt", str(prod_ckpt), str(d), "--ref-device", "cpu:0"]) == 2
+    assert "sign-off run: NO" in capsys.readouterr().out
+
+
 # ---------------------------------------------------------------- step_experts path (preferred)
 def test_step_experts_exact_reference_passes_with_no_deviations(prod_ckpt, tmp_path):
     out = _forced_kernel(prod_ckpt, tmp_path / "exact.npz", "bf16", [], experts=True)
