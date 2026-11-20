@@ -1,0 +1,7 @@
+[17:31:25Z] quantize --pure q4_0 | busy=0 vram_used=57MiB gpu_procs=1
+[17:32:31Z] quantize exit 0 llama_model_quantize_impl: quant size = 21423.98 MiB (4.52 BPW);quantize wall 66.23 s; | busy=0 vram_used=57MiB gpu_procs=1
+[17:32:32Z] bench d512 start | busy=0 vram_used=57MiB gpu_procs=1
+[17:32:43Z] bench d512 exit 0 n_prompt=0 n_gen=32 depth=512 avg_ts=82.78 stddev=5.34 build=513ad7ae/2660 dev=auto | busy=37 vram_used=21349MiB gpu_procs=1
+[17:32:44Z] bench p512 start | busy=0 vram_used=57MiB gpu_procs=1
+[17:32:48Z] bench p512 exit 0 n_prompt=512 n_gen=0 depth=0 avg_ts=4517.12 stddev=34.07 build=513ad7ae/2660 dev=auto | busy=65 vram_used=21375MiB gpu_procs=1
+[17:33:40Z] ALL_DONE | busy=0 vram_used=57MiB gpu_procs=1
