@@ -107,6 +107,15 @@ class ShardIndex:
             f.seek(t["abs_start"])
             return f.read(t["nbytes"])
 
+    def read_slice(self, name: str, r0: int, r1: int) -> np.ndarray:
+        """Read a contiguous row-range [r0, r1) of a tensor (row-major)."""
+        t = self.tensors[name]
+        row = t["nbytes"] // max(1, int(np.prod(t["shape"][:-1])))
+        with open(t["path"], "rb") as f:
+            f.seek(t["abs_start"] + r0 * row)
+            buf = f.read((r1 - r0) * row)
+        return np.frombuffer(buf, dtype=ST_DTYPES[t["dtype"]]).reshape(r1 - r0, *t["shape"][1:])
+
 
 def f32_to_bf16(v: np.ndarray) -> np.ndarray:
     u = np.ascontiguousarray(v, dtype=np.float32).view(np.uint32)
@@ -245,52 +254,48 @@ def packed_rows_k(shape: tuple, dtype_tag: str, bits: int) -> tuple[int, int]:
     return rows, shape[-1] * per_unit
 
 
-def dequant_bank_region(bank: np.ndarray, off: int, rows_shape: tuple, bits: int) -> np.ndarray:
-    """Dequantize one qlinear region straight from the packed bank, row-chunked.
-
-    Bank region layout: packed U8 [out, K*bits/8] | bf16 s [out, K/64] | bf16 b
-    [out, K/64]. Mirrors mid_mk_driver.dequant_np (BF16-rounded s/b, low nibble
-    = even element for INT4).
-    """
-    out_rows, k = rows_shape
-    w_bytes_len = out_rows * k * bits // 8
-    n_s = out_rows * (k // 64)
-    w = bank[off:off + w_bytes_len].reshape(out_rows, k * bits // 8)
-    s_off = off + w_bytes_len
-    s_bits = bank[s_off:s_off + n_s * 2].view(np.uint16).reshape(out_rows, k // 64)
-    b_bits = bank[s_off + n_s * 2:s_off + 2 * n_s * 2].view(np.uint16).reshape(out_rows, k // 64)
-    s = (s_bits.astype(np.uint32) << np.uint32(16)).view(np.float32).astype(np.float64)
-    b = (b_bits.astype(np.uint32) << np.uint32(16)).view(np.float32).astype(np.float64)
+def dequant_row_chunk(bank: np.ndarray, off: int, rows: int, k: int, bits: int,
+                      r0: int, r1: int) -> np.ndarray:
+    """Dequantize rows [r0, r1) of one qlinear bank region, straight from the
+    (possibly memmapped) bank. Region layout: packed [rows, k*bits/8] |
+    bf16 s [rows, k/64] | bf16 b [rows, k/64]. BF16-rounded s/b, low nibble =
+    even element (INT4) — mirrors mid_mk_driver.dequant_np."""
+    w_row = k * bits // 8
+    sb_row = (k // 64) * 2
+    s_off = off + rows * w_row
+    b_off = s_off + rows * sb_row
+    w = np.asarray(bank[off + r0 * w_row:off + r1 * w_row]).reshape(r1 - r0, k * bits // 8)
+    s = np.asarray(bank[s_off + r0 * sb_row:s_off + r1 * sb_row]).view(np.uint16).reshape(r1 - r0, k // 64)
+    b = np.asarray(bank[b_off + r0 * sb_row:b_off + r1 * sb_row]).view(np.uint16).reshape(r1 - r0, k // 64)
+    s = (s.astype(np.uint32) << np.uint32(16)).view(np.float32).astype(np.float64)
+    b = (b.astype(np.uint32) << np.uint32(16)).view(np.float32).astype(np.float64)
     if bits == 8:
         q = w.astype(np.float64)
     else:
-        low = (w & 0x0F).astype(np.float64)
-        high = ((w >> 4) & 0x0F).astype(np.float64)
-        q = np.empty((out_rows, k), dtype=np.float64)
-        q[:, 0::2] = low
-        q[:, 1::2] = high
-    chunk = max(1, 2**22 // max(k, 1))
-    for r0 in range(0, out_rows, chunk):
-        r1 = min(r0 + chunk, out_rows)
-        s_rep = np.repeat(s[r0:r1], 64, axis=-1)
-        b_rep = np.repeat(b[r0:r1], 64, axis=-1)
-        q[r0:r1] = q[r0:r1] * s_rep + b_rep
-    return q
+        q = np.empty((r1 - r0, k), dtype=np.float64)
+        q[:, 0::2] = (w & 0x0F).astype(np.float64)
+        q[:, 1::2] = ((w >> 4) & 0x0F).astype(np.float64)
+    s_rep = np.repeat(s, 64, axis=-1)
+    b_rep = np.repeat(b, 64, axis=-1)
+    return q * s_rep + b_rep
 
 
-def dequant_source(idx: ShardIndex, name: str, bits: int) -> np.ndarray:
-    w = idx.read(name + ".weight")
-    s_bits = to_bf16_bits(idx.read(name + ".scales"), idx.tensors[name + ".scales"]["dtype"])
-    b_bits = to_bf16_bits(idx.read(name + ".biases"), idx.tensors[name + ".biases"]["dtype"])
+def dequant_source_row_chunk(idx: ShardIndex, name: str, bits: int,
+                             r0: int, r1: int) -> np.ndarray:
+    """Dequantize rows [r0, r1) of a source qlinear tensor (ranged reads)."""
+    wname, sname, bname = (name + ".weight", name + ".scales", name + ".biases")
+    w = idx.read_slice(wname, r0, r1)
+    s_bits = to_bf16_bits(idx.read_slice(sname, r0, r1), idx.tensors[sname]["dtype"])
+    b_bits = to_bf16_bits(idx.read_slice(bname, r0, r1), idx.tensors[bname]["dtype"])
     s = (s_bits.astype(np.uint32) << np.uint32(16)).view(np.float32).astype(np.float64)
     b = (b_bits.astype(np.uint32) << np.uint32(16)).view(np.float32).astype(np.float64)
     w_u8 = np.ascontiguousarray(w).view(np.uint8)
     if bits == 8:
-        q = w_u8.reshape(*s.shape[:-1], -1).astype(np.float64)
+        q = w_u8.astype(np.float64)
     else:
         low = (w_u8 & 0x0F).astype(np.float64)
         high = ((w_u8 >> 4) & 0x0F).astype(np.float64)
-        q = np.stack([low, high], axis=-1).reshape(*s.shape[:-1], -1)
+        q = np.stack([low, high], axis=-1).reshape(r1 - r0, -1)
     s_rep = np.repeat(s, 64, axis=-1)
     b_rep = np.repeat(b, 64, axis=-1)
     return q * s_rep + b_rep
@@ -302,8 +307,10 @@ def verify(ckpt_dir: Path, bank_path: Path, off_path: Path) -> int:
     entries = plan_offsets(cfg)
     offsets = np.fromfile(off_path, dtype=np.int64)
     assert len(offsets) == len(entries), "offset table length mismatch"
-    bank = np.fromfile(bank_path, dtype=np.uint8)
-    log(f"verify: bank {bank.nbytes / 2**30:.3f} GiB, {len(entries)} entries "
+    # memmap, not fromfile: the bank can exceed MemAvailable on a cotenant-loaded
+    # host (21 GiB bank vs ~11 GiB available); pages fault in per region.
+    bank = np.memmap(bank_path, dtype=np.uint8, mode="r")
+    log(f"verify: bank {bank.nbytes / 2**30:.3f} GiB (memmap), {len(entries)} entries "
         f"| {cotenant_state()}")
     failures = 0
     for i, e in enumerate(entries):
@@ -331,13 +338,21 @@ def verify(ckpt_dir: Path, bank_path: Path, off_path: Path) -> int:
             wname = e["name"] + ".weight"
             wt = idx.tensors[wname]
             rows, k = packed_rows_k(wt["shape"], wt["dtype"], e["bits"])
-            got = dequant_bank_region(bank, off, (rows, k), e["bits"]).reshape(
-                *wt["shape"][:-1], k)
-            want = dequant_source(idx, e["name"], e["bits"])
-            if got.shape != want.shape or not np.array_equal(got, want):
-                diff = float(np.abs(got - want).max()) if got.shape == want.shape else -1
-                print(f"DEQUANT MISMATCH {e['name']} maxabs={diff}", flush=True)
-                failures += 1
+            mism = False
+            chunk = max(1, min(rows, 2**21 // max(k, 1)))
+            for r0 in range(0, rows, chunk):
+                r1 = min(r0 + chunk, rows)
+                got = dequant_row_chunk(bank, off, rows, k, e["bits"], r0, r1)
+                want = dequant_source_row_chunk(idx, e["name"], e["bits"], r0, r1)
+                if not np.array_equal(got, want):
+                    diff = float(np.abs(got - want).max())
+                    print(f"DEQUANT MISMATCH {e['name']} rows[{r0}:{r1}] maxabs={diff}",
+                          flush=True)
+                    mism = True
+                    failures += 1
+                    break
+            if mism:
+                continue
         if i % 32 == 0:
             log(f"verified {i}/{len(entries)} | {cotenant_state()}")
     log(f"VERIFY {'PASS' if failures == 0 else f'FAIL ({failures})'} "
