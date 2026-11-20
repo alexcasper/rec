@@ -1,0 +1,46 @@
+{
+ "file": "full-probe/short4_fp32kv.npz",
+ "case": "short4",
+ "impl": "flint_mid_megakernel.hip[FULL]:mid_generate_fp32kv (fp32-compute, fp32-KV) workers=16",
+ "ref_kv": "fp32",
+ "logit_rtol": 0.0001,
+ "pass": true,
+ "problems": [],
+ "tokens_exact": true,
+ "near_ties_accepted": [],
+ "bad_tokens": [],
+ "last_logits_rel": 1.3206916197874502e-06,
+ "step_logits_max_rel": 2.3093850353488627e-06,
+ "ref_logit_absmax": 58.92988204956055,
+ "distinct_ref_tokens": 21,
+ "router_near_tie": null,
+ "router_candidates_tried": 0,
+ "min_router_gap": 4.343688488006592e-06,
+ "router_path": "step_experts",
+ "routing_deviations": [],
+ "n_routing_deviations": 0
+}
+ref=torch-fp32@cpu sign-off=yes
+	Command being timed: "timeout 3000 /home/albion/rec-ve/.venv/bin/python gk/engine/validation/megakernel_mid/mid_mk_check.py check --ckpt flint-int4 full-probe/short4_fp32kv.npz"
+	User time (seconds): 99.53
+	System time (seconds): 46.40
+	Percent of CPU this job got: 434%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:33.59
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 28863644
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 22424531
+	Voluntary context switches: 16198
+	Involuntary context switches: 854
+	Swaps: 0
+	File system inputs: 29362160
+	File system outputs: 96
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

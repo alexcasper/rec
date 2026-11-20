@@ -49,36 +49,73 @@ def log(msg: str) -> None:
     print(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
+def _local_addrs() -> list[str]:
+    try:
+        return subprocess.run(["hostname", "-I"], capture_output=True, text=True, timeout=5).stdout.split() or ["127.0.0.1"]
+    except Exception:
+        return ["127.0.0.1"]
+
+
+_ADDRS = None
+_CARD: str | None = None  # /sys/class/drm/cardN/device of the HIP device, set in main()
+
+
 def cotenants() -> str:
-    """Cotenant state for every log line (benchmark hygiene protocol)."""
-    host = "100.98.73.29"
+    """Cotenant state for every log line (benchmark hygiene protocol): llama servers on THIS host
+    (dusk binds them to its tailscale address, not localhost) + this GPU's busy counter."""
+    global _ADDRS
+    _ADDRS = _ADDRS or _local_addrs()
     st = []
     for name, port in (("flint", 8080), ("e4b", 8090), ("qwen", 8091)):
-        try:
-            out = subprocess.run(["curl", "-s", "-m", "2", f"http://{host}:{port}/slots"],
-                                 capture_output=True, text=True, timeout=5).stdout
-            st.append(f"{name}:{'busy' if '\"is_processing\":true' in out else 'idle'}" if out else f"{name}:down")
-        except Exception:
-            st.append(f"{name}:?")
+        state = "down"
+        for ip in _ADDRS:
+            try:
+                out = subprocess.run(["curl", "-s", "-m", "1", f"http://{ip}:{port}/slots"],
+                                     capture_output=True, text=True, timeout=3).stdout
+            except Exception:
+                out = ""
+            if out:
+                state = "busy" if '"is_processing":true' in out else "idle"
+                break
+        st.append(f"{name}:{state}")
     return ",".join(st) + f",gpu_busy={_busy()}"
 
 
 def _busy() -> str:
-    for p in glob.glob("/sys/class/drm/card*/device/gpu_busy_percent"):
+    if _CARD is None:
+        return "?"
+    try:
+        return open(f"{_CARD}/gpu_busy_percent").read().strip()
+    except OSError:  # amdgpu refuses busy reads (EBUSY) on a runtime-suspended card
         try:
-            return open(p).read().strip()
+            return "0(suspended)" if open(f"{_CARD}/power/runtime_status").read().strip() == "suspended" else "?"
         except OSError:
-            pass
-    return "?"
+            return "?"
+
+
+def hip_card(device: int = 0) -> str | None:
+    """sysfs device dir of HIP device `device` (respects HIP_VISIBLE_DEVICES), via its PCI bus id."""
+    try:
+        hip = ctypes.CDLL("libamdhip64.so")
+        buf = ctypes.create_string_buffer(64)
+        if hip.hipDeviceGetPCIBusId(buf, 64, device) != 0:
+            return None
+        bus = buf.value.decode().lower()
+    except OSError:
+        return None
+    for d in glob.glob("/sys/class/drm/card[0-9]*/device"):
+        if os.path.basename(os.path.realpath(d)).lower().endswith(bus[-7:]) and os.path.exists(f"{d}/mem_info_vram_total"):
+            return d
+    return None
 
 
 def vram_free_bytes() -> int | None:
-    for d in glob.glob("/sys/class/drm/card*/device"):
-        try:
-            return int(open(f"{d}/mem_info_vram_total").read()) - int(open(f"{d}/mem_info_vram_used").read())
-        except OSError:
-            continue
-    return None
+    if _CARD is None:
+        return None
+    try:
+        return int(open(f"{_CARD}/mem_info_vram_total").read()) - int(open(f"{_CARD}/mem_info_vram_used").read())
+    except OSError:
+        return None
 
 
 def load_lib(path: Path) -> tuple[ctypes.CDLL, dict]:
@@ -105,8 +142,18 @@ def occupancy(lib, mode: int) -> dict:
     return dict(zip(("cus", "max_blocks_per_cu", "max_co_resident_workers", "wave_size"), [x.value for x in v]))
 
 
+def read_offsets(path: Path) -> np.ndarray:
+    """pack_flint_bank.py writes the offset table as raw little-endian int64 (tofile), despite the
+    .off.npy name; accept a real .npy as well."""
+    with open(path, "rb") as f:
+        magic = f.read(6)
+    if magic == b"\x93NUMPY":
+        return np.load(path).astype(np.int64)
+    return np.fromfile(path, dtype="<i8")
+
+
 def open_bank(bank_path: Path, cfg: dict) -> tuple[np.memmap, np.ndarray]:
-    off = np.load(str(bank_path) + ".off.npy").astype(np.int64)
+    off = read_offsets(Path(str(bank_path) + ".off.npy"))
     if len(off) != cfg["n_offsets"]:
         raise SystemExit(f"offset table has {len(off)} entries, {cfg['n_offsets']} expected by the .so (NL={cfg['nl']})")
     size = os.path.getsize(bank_path)
@@ -268,6 +315,10 @@ def main(argv=None) -> int:
     if os.environ.get("HSA_OVERRIDE_GFX_VERSION"):
         raise SystemExit("refusing: HSA_OVERRIDE_GFX_VERSION is set (rec-tan.5: native launch no-ops)")
     lib, cfg = load_lib(a.lib)
+    global _CARD
+    _CARD = hip_card(0)
+    if _CARD is None:
+        raise SystemExit("cannot map HIP device 0 to its sysfs card (VRAM preflight impossible)")
     if not cfg["full"]:
         raise SystemExit(f"{a.lib} is not a FLINT_CFG_FULL build: {cfg}")
     if not 1 <= a.workers <= 64:
@@ -276,7 +327,7 @@ def main(argv=None) -> int:
     if a.workers > occ["max_co_resident_workers"]:
         raise SystemExit(f"workers={a.workers} > max co-resident {occ['max_co_resident_workers']} ({occ})")
     bank, off = open_bank(a.bank, cfg)
-    log(f"lib {a.lib.name} cfg {cfg} | occupancy {occ} | workers {a.workers}")
+    log(f"lib {a.lib.name} cfg {cfg} | occupancy {occ} | workers {a.workers} | card {_CARD} | {cotenants()}")
     if a.emit_suite:
         return 1 if emit_suite(lib, cfg, bank, off, a.ckpt, a.emit_suite, a.workers,
                                a.builds.split(","), a.cases.split(",")) else 0

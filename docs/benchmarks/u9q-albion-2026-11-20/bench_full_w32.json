@@ -1,0 +1,184 @@
+{
+ "protocol": "run-definitions R1-R8 differential ABBA (4 pairs), rec-u9q full-Flint",
+ "ckpt": "/home/albion/rec-ve/u9q/flint-int4",
+ "ckpt_sha256": "12979140fa019042ff5cdec4c0237cc87db13b56428ce7fe093dd9d33893ea32",
+ "bank_bytes": 22568729664,
+ "config": {
+  "nl": 49,
+  "nexp": 256,
+  "topk": 6,
+  "n_dense": 2,
+  "dense_i": 6144,
+  "n_offsets": 837,
+  "n_full": 14,
+  "full": 1
+ },
+ "mode": 0,
+ "workers": 32,
+ "occupancy": {
+  "cus": 32,
+  "max_blocks_per_cu": 3,
+  "max_co_resident_workers": 64,
+  "wave_size": 32
+ },
+ "prompt512_int32_sha256": "4090cfe16f28a7deee8eadde2edf21ba8eb06655b5ad0f61c46b1f05164b4814",
+ "host": "albion",
+ "pairs": {
+  "decode32_short_ctx": {
+   "valid": true,
+   "differential_tok_s": 67.569,
+   "pair_min": 67.192,
+   "pair_max": 67.901,
+   "ta_mean_s": 0.1166,
+   "tb_mean_s": 0.5902,
+   "pairs": [
+    {
+     "pair": 0,
+     "order": "AB",
+     "t8_s": 0.11715,
+     "t40_s": 0.58843,
+     "dt32_s": 0.47128,
+     "decode32_tok_s": 67.901,
+     "prefix4_match": true,
+     "invalid": [],
+     "cotenants": [
+      "flint:down,e4b:down,qwen:down,gpu_busy=16",
+      "flint:down,e4b:down,qwen:down,gpu_busy=57",
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=87"
+     ],
+     "valid": true
+    },
+    {
+     "pair": 1,
+     "order": "BA",
+     "t8_s": 0.11736,
+     "t40_s": 0.59062,
+     "dt32_s": 0.47326,
+     "decode32_tok_s": 67.616,
+     "prefix4_match": true,
+     "invalid": [],
+     "cotenants": [
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=57",
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=87"
+     ],
+     "valid": true
+    },
+    {
+     "pair": 2,
+     "order": "AB",
+     "t8_s": 0.11588,
+     "t40_s": 0.58945,
+     "dt32_s": 0.47358,
+     "decode32_tok_s": 67.571,
+     "prefix4_match": true,
+     "invalid": [],
+     "cotenants": [
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=57",
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=87"
+     ],
+     "valid": true
+    },
+    {
+     "pair": 3,
+     "order": "BA",
+     "t8_s": 0.11595,
+     "t40_s": 0.5922,
+     "dt32_s": 0.47625,
+     "decode32_tok_s": 67.192,
+     "prefix4_match": true,
+     "invalid": [],
+     "cotenants": [
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=57",
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=87"
+     ],
+     "valid": true
+    }
+   ]
+  },
+  "decode32_after_512": {
+   "valid": true,
+   "differential_tok_s": 34.908,
+   "pair_min": 30.66,
+   "pair_max": 39.384,
+   "ta_mean_s": 11.2815,
+   "tb_mean_s": 12.1982,
+   "pairs": [
+    {
+     "pair": 0,
+     "order": "AB",
+     "t516_s": 11.35486,
+     "t548_s": 12.16738,
+     "dt32_s": 0.81252,
+     "decode32_tok_s": 39.384,
+     "prefix4_match": true,
+     "invalid": [],
+     "cotenants": [
+      "flint:down,e4b:down,qwen:down,gpu_busy=99",
+      "flint:down,e4b:down,qwen:down,gpu_busy=99",
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=99"
+     ],
+     "valid": true
+    },
+    {
+     "pair": 1,
+     "order": "BA",
+     "t516_s": 11.28709,
+     "t548_s": 12.17963,
+     "dt32_s": 0.89253,
+     "decode32_tok_s": 35.853,
+     "prefix4_match": true,
+     "invalid": [],
+     "cotenants": [
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=99",
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=99"
+     ],
+     "valid": true
+    },
+    {
+     "pair": 2,
+     "order": "AB",
+     "t516_s": 11.26063,
+     "t548_s": 12.17863,
+     "dt32_s": 0.91799,
+     "decode32_tok_s": 34.859,
+     "prefix4_match": true,
+     "invalid": [],
+     "cotenants": [
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=99",
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=99"
+     ],
+     "valid": true
+    },
+    {
+     "pair": 3,
+     "order": "BA",
+     "t516_s": 11.22338,
+     "t548_s": 12.26708,
+     "dt32_s": 1.0437,
+     "decode32_tok_s": 30.66,
+     "prefix4_match": true,
+     "invalid": [],
+     "cotenants": [
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=99",
+      "flint:down,e4b:down,qwen:down,gpu_busy=3",
+      "flint:down,e4b:down,qwen:down,gpu_busy=99"
+     ],
+     "valid": true
+    }
+   ]
+  }
+ }
+}

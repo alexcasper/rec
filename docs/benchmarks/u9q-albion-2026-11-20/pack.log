@@ -1,0 +1,17 @@
+2026-11-20T16:34:26Z shard index: 1751 tensors, 21.02 GiB
+2026-11-20T16:34:26Z plan: 837 entries, NL=49, E=256, topk=6 | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:26Z packed 0/837 written=0.00 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:26Z packed 64/837 written=0.01 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:26Z packed 128/837 written=0.02 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:27Z packed 192/837 written=0.02 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:27Z packed 256/837 written=0.03 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:27Z packed 320/837 written=0.04 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:27Z packed 384/837 written=1.28 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:29Z packed 448/837 written=3.90 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:31Z packed 512/837 written=6.93 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:32Z packed 576/837 written=9.55 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:34Z packed 640/837 written=12.45 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:36Z packed 704/837 written=15.20 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:37Z packed 768/837 written=17.82 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:39Z packed 832/837 written=20.86 GiB | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%
+2026-11-20T16:34:39Z DONE bank=flint-int4.bank (21.019 GiB) offsets=flint-int4.bank.off.npy (837 entries) | cotenants[flint=1,e4b=4,qwen=1] gpu_busy=0%

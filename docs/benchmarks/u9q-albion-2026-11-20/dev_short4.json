@@ -1,0 +1,124 @@
+{
+ "file": "suite_w16/short4_fp32_bf16kv.npz",
+ "case": "short4",
+ "impl": "flint_mid_megakernel.hip[FULL]:mid_generate_fp32_bf16kv (fp32-compute, bf16-KV) workers=16",
+ "ref_kv": "bf16",
+ "logit_rtol": 0.001,
+ "pass": false,
+ "problems": [
+  "last_logits rel err 3.991e-02 > 0.001 (bf16-KV tier)",
+  "step_logits max rel err 2.849e-01 > 0.001 (bf16-KV tier)"
+ ],
+ "tokens_exact": true,
+ "near_ties_accepted": [],
+ "bad_tokens": [],
+ "last_logits_rel": 0.03991312982906625,
+ "step_logits_max_rel": 0.28492858747554545,
+ "ref_logit_absmax": 70.75804138183594,
+ "distinct_ref_tokens": 22,
+ "router_near_tie": null,
+ "router_candidates_tried": 0,
+ "min_router_gap": 6.92903995513916e-07,
+ "router_path": "step_experts",
+ "routing_deviations": [
+  {
+   "layer": 11,
+   "pos": 26,
+   "gap": 5.949288606643677e-05,
+   "kth": 54,
+   "next": 178,
+   "kernel": [
+    45,
+    63,
+    168,
+    178,
+    219,
+    233
+   ],
+   "ref": [
+    45,
+    54,
+    63,
+    168,
+    219,
+    233
+   ],
+   "k_k1_exchange": true
+  },
+  {
+   "layer": 16,
+   "pos": 5,
+   "gap": 0.0003420114517211914,
+   "kth": 144,
+   "next": 134,
+   "kernel": [
+    42,
+    134,
+    172,
+    206,
+    235,
+    237
+   ],
+   "ref": [
+    42,
+    144,
+    172,
+    206,
+    235,
+    237
+   ],
+   "k_k1_exchange": true
+  },
+  {
+   "layer": 17,
+   "pos": 21,
+   "gap": 0.0010842978954315186,
+   "kth": 253,
+   "next": 217,
+   "kernel": [
+    25,
+    95,
+    114,
+    129,
+    200,
+    217
+   ],
+   "ref": [
+    25,
+    95,
+    114,
+    129,
+    200,
+    253
+   ],
+   "k_k1_exchange": true
+  },
+  {
+   "layer": 39,
+   "pos": 13,
+   "gap": 2.0042061805725098e-05,
+   "kth": 190,
+   "next": 135,
+   "kernel": [
+    59,
+    98,
+    135,
+    201,
+    211,
+    232
+   ],
+   "ref": [
+    59,
+    98,
+    190,
+    201,
+    211,
+    232
+   ],
+   "k_k1_exchange": true
+  }
+ ],
+ "n_routing_deviations": 4,
+ "router_note": "routing deviation L16@5 gap 3.42e-04 (k/(k+1)) exceeds the rule"
+}
+ref=torch-fp32@cpu sign-off=yes

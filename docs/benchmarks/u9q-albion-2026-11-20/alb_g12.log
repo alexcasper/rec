@@ -1,0 +1,81 @@
+[16:41:41Z] == G1 emit (fp32kv, fp32_bf16kv, bf16kv) x (short4, chat, wrap512)
+2026-11-20T16:41:43Z lib flint_full.so cfg {'nl': 49, 'nexp': 256, 'topk': 6, 'n_dense': 2, 'dense_i': 6144, 'n_offsets': 837, 'n_full': 14, 'full': 1} | occupancy {'cus': 32, 'max_blocks_per_cu': 3, 'max_co_resident_workers': 64, 'wave_size': 32} | workers 16 | card /sys/class/drm/card1/device | flint:down,e4b:down,qwen:down,gpu_busy=8
+2026-11-20T16:41:46Z ckpt /home/albion/rec-ve/u9q/flint-int4 shard sha256 12979140fa019042 | bank 22568729664 B | cfg {'nl': 49, 'nexp': 256, 'topk': 6, 'n_dense': 2, 'dense_i': 6144, 'n_offsets': 837, 'n_full': 14, 'full': 1} | flint:down,e4b:down,qwen:down,gpu_busy=3
+2026-11-20T16:41:46Z VRAM preflight: need 21.21 GiB + 1.5 slack, sysfs free 31.64 GiB | flint:down,e4b:down,qwen:down,gpu_busy=3
+2026-11-20T16:41:53Z session created in 6.9 s (bank 21.019 GiB H2D) | flint:down,e4b:down,qwen:down,gpu_busy=30
+2026-11-20T16:41:54Z wrote short4_fp32kv.npz |    0.52 s |   53.7 pos/s | tokens[:6]=[19629, 52387, 332, 38560, 269, 1090] | flint:down,e4b:down,qwen:down,gpu_busy=83
+2026-11-20T16:41:54Z wrote chat_fp32kv.npz |    0.54 s |   54.0 pos/s | tokens[:6]=[1964, 26, 269, 86599, 86599, 86599] | flint:down,e4b:down,qwen:down,gpu_busy=85
+2026-11-20T16:42:08Z wrote wrap512_fp32kv.npz |   13.47 s |   39.8 pos/s | tokens[:6]=[86, 16289, 220, 197, 1, 764] | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:42:09Z wrote short4_fp32_bf16kv.npz |    0.50 s |   55.7 pos/s | tokens[:6]=[19629, 52387, 332, 38560, 269, 1090] | flint:down,e4b:down,qwen:down,gpu_busy=84
+2026-11-20T16:42:09Z wrote chat_fp32_bf16kv.npz |    0.53 s |   55.2 pos/s | tokens[:6]=[1964, 26, 269, 86599, 86599, 86599] | flint:down,e4b:down,qwen:down,gpu_busy=84
+2026-11-20T16:42:23Z wrote wrap512_fp32_bf16kv.npz |   13.44 s |   39.9 pos/s | tokens[:6]=[86, 16289, 220, 197, 1, 764] | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:42:23Z wrote short4_bf16kv.npz |    0.50 s |   56.1 pos/s | tokens[:6]=[19629, 52387, 3460, 269, 26230, 269] | flint:down,e4b:down,qwen:down,gpu_busy=83
+2026-11-20T16:42:24Z wrote chat_bf16kv.npz |    0.52 s |   55.6 pos/s | tokens[:6]=[1964, 28, 16, 135724, 28, 27466] | flint:down,e4b:down,qwen:down,gpu_busy=84
+2026-11-20T16:42:38Z wrote wrap512_bf16kv.npz |   13.64 s |   39.3 pos/s | tokens[:6]=[86, 16289, 220, 197, 1, 764] | flint:down,e4b:down,qwen:down,gpu_busy=99
+[16:42:38Z] emit w16 exit 0
+2026-11-20T16:42:39Z lib flint_full.so cfg {'nl': 49, 'nexp': 256, 'topk': 6, 'n_dense': 2, 'dense_i': 6144, 'n_offsets': 837, 'n_full': 14, 'full': 1} | occupancy {'cus': 32, 'max_blocks_per_cu': 3, 'max_co_resident_workers': 64, 'wave_size': 32} | workers 64 | card /sys/class/drm/card1/device | flint:down,e4b:down,qwen:down,gpu_busy=3
+2026-11-20T16:42:42Z ckpt /home/albion/rec-ve/u9q/flint-int4 shard sha256 12979140fa019042 | bank 22568729664 B | cfg {'nl': 49, 'nexp': 256, 'topk': 6, 'n_dense': 2, 'dense_i': 6144, 'n_offsets': 837, 'n_full': 14, 'full': 1} | flint:down,e4b:down,qwen:down,gpu_busy=3
+2026-11-20T16:42:42Z VRAM preflight: need 21.21 GiB + 1.5 slack, sysfs free 31.64 GiB | flint:down,e4b:down,qwen:down,gpu_busy=3
+2026-11-20T16:42:43Z session created in 1.6 s (bank 21.019 GiB H2D) | flint:down,e4b:down,qwen:down,gpu_busy=94
+2026-11-20T16:42:44Z wrote short4_fp32kv.npz |    0.39 s |   71.8 pos/s | tokens[:6]=[19629, 52387, 332, 38560, 269, 1090] | flint:down,e4b:down,qwen:down,gpu_busy=79
+2026-11-20T16:42:44Z wrote chat_fp32kv.npz |    0.41 s |   71.6 pos/s | tokens[:6]=[1964, 26, 269, 86599, 86599, 86599] | flint:down,e4b:down,qwen:down,gpu_busy=79
+2026-11-20T16:42:56Z wrote wrap512_fp32kv.npz |   11.20 s |   47.9 pos/s | tokens[:6]=[86, 16289, 220, 197, 1, 764] | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:42:56Z wrote short4_fp32_bf16kv.npz |    0.38 s |   72.9 pos/s | tokens[:6]=[19629, 52387, 332, 38560, 269, 1090] | flint:down,e4b:down,qwen:down,gpu_busy=80
+2026-11-20T16:42:57Z wrote chat_fp32_bf16kv.npz |    0.40 s |   72.2 pos/s | tokens[:6]=[1964, 26, 269, 86599, 86599, 86599] | flint:down,e4b:down,qwen:down,gpu_busy=81
+2026-11-20T16:43:08Z wrote wrap512_fp32_bf16kv.npz |   11.29 s |   47.5 pos/s | tokens[:6]=[86, 16289, 220, 197, 1, 764] | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:43:09Z wrote short4_bf16kv.npz |    0.38 s |   73.2 pos/s | tokens[:6]=[19629, 52387, 3460, 269, 26230, 269] | flint:down,e4b:down,qwen:down,gpu_busy=80
+2026-11-20T16:43:09Z wrote chat_bf16kv.npz |    0.40 s |   72.4 pos/s | tokens[:6]=[1964, 28, 16, 135724, 28, 27466] | flint:down,e4b:down,qwen:down,gpu_busy=81
+2026-11-20T16:43:21Z wrote wrap512_bf16kv.npz |   11.42 s |   46.9 pos/s | tokens[:6]=[86, 16289, 220, 197, 1, 764] | flint:down,e4b:down,qwen:down,gpu_busy=99
+[16:43:21Z] emit w64 exit 0
+worker invariance: 9/9 npz byte-identical at workers 16 vs 64
+[16:43:21Z] == G1 sign-off matrix (CPU reference)
+FAIL  chat_fp32_bf16kv.npz               case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=3.19e-02 step_rel=8.67e-02  last_logits rel err 3.190e-02 > 0.001 (bf16-KV tier); step_logits max rel err 8.665e-02 > 0.001 (bf16-KV tier)
+PASS  chat_fp32kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=1.34e-06 step_rel=1.30e-06  
+FAIL  short4_fp32_bf16kv.npz             case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=3.99e-02 step_rel=2.85e-01  last_logits rel err 3.991e-02 > 0.001 (bf16-KV tier); step_logits max rel err 2.849e-01 > 0.001 (bf16-KV tier)
+PASS  short4_fp32kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=1.32e-06 step_rel=2.31e-06  
+FAIL  wrap512_fp32_bf16kv.npz            case=wrap512  ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=False ties=0 last_rel=3.91e-02 step_rel=1.63e-01  1 token(s) differ from the fp32 reference beyond the near-tie margin; last_logits rel err 3.907e-02 > 0.001 (bf16-KV tier); step_logits max rel err 1.633e-01 > 0.001 (bf16-KV tier)
+PASS  wrap512_fp32kv.npz                 case=wrap512  ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=6.25e-07 step_rel=2.08e-06  
+3/6 PASS; (case, kv tier) without a passing run: [('chat', 'bf16'), ('short4', 'bf16'), ('wrap512', 'bf16')]; reference torch-fp32@cpu; sign-off run: yes
+matrix exit 1
+matrix wall 210.05 s, peak RSS 29267072 KB
+[16:46:51Z] == production bf16kv smoke vs CPU reference (diagnostic; bf16 activations are not a sign-off build)
+short4_bf16kv tokens_exact False last_rel 3.64e-02 step_rel 1.39e-01 pass False
+chat_bf16kv tokens_exact False last_rel 2.43e-02 step_rel 9.80e-02 pass False
+wrap512_bf16kv tokens_exact False last_rel 5.14e-02 step_rel 1.82e-01 pass False
+[16:48:50Z] == G2 bench (production bf16-KV build, mode 0), R1-R8 differential ABBA
+2026-11-20T16:49:05Z short pair 0 AB: ta=0.148s tb=0.736s -> 54.408 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=89
+2026-11-20T16:49:06Z short pair 1 BA: ta=0.148s tb=0.738s -> 54.279 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=89
+2026-11-20T16:49:07Z short pair 2 AB: ta=0.146s tb=0.739s -> 54.028 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=89
+2026-11-20T16:49:09Z short pair 3 BA: ta=0.146s tb=0.744s -> 53.514 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=89
+2026-11-20T16:49:22Z warmup 516: 13.032s invalid=[]
+2026-11-20T16:49:49Z ctx512 pair 0 AB: ta=13.072s tb=14.009s -> 34.123 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:50:17Z ctx512 pair 1 BA: ta=13.097s tb=14.095s -> 32.045 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:50:44Z ctx512 pair 2 AB: ta=13.060s tb=14.069s -> 31.702 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:51:12Z ctx512 pair 3 BA: ta=13.052s tb=14.178s -> 28.409 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:51:12Z RESULT decode32_after_512 31.433 tok/s (pairs 28.409..34.123, valid=True); short_ctx 54.055 (valid=True); t516 13.0699s -> end_to_end_516 39.48 pos/s
+2026-11-20T16:51:19Z short pair 0 AB: ta=0.117s tb=0.588s -> 67.901 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=87
+2026-11-20T16:51:20Z short pair 1 BA: ta=0.117s tb=0.591s -> 67.616 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=87
+2026-11-20T16:51:21Z short pair 2 AB: ta=0.116s tb=0.589s -> 67.571 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=87
+2026-11-20T16:51:22Z short pair 3 BA: ta=0.116s tb=0.592s -> 67.192 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=87
+2026-11-20T16:51:33Z warmup 516: 11.336s invalid=[]
+2026-11-20T16:51:57Z ctx512 pair 0 AB: ta=11.355s tb=12.167s -> 39.384 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:52:21Z ctx512 pair 1 BA: ta=11.287s tb=12.180s -> 35.853 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:52:45Z ctx512 pair 2 AB: ta=11.261s tb=12.179s -> 34.859 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:53:09Z ctx512 pair 3 BA: ta=11.223s tb=12.267s -> 30.66 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:53:09Z RESULT decode32_after_512 34.908 tok/s (pairs 30.66..39.384, valid=True); short_ctx 67.569 (valid=True); t516 11.2815s -> end_to_end_516 45.74 pos/s
+2026-11-20T16:53:16Z short pair 0 AB: ta=0.113s tb=0.569s -> 70.078 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=86
+2026-11-20T16:53:17Z short pair 1 BA: ta=0.113s tb=0.572s -> 69.742 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=86
+2026-11-20T16:53:18Z short pair 2 AB: ta=0.112s tb=0.568s -> 70.157 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=86
+2026-11-20T16:53:19Z short pair 3 BA: ta=0.112s tb=0.572s -> 69.608 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=86
+2026-11-20T16:53:30Z warmup 516: 11.006s invalid=[]
+2026-11-20T16:53:53Z ctx512 pair 0 AB: ta=11.016s tb=11.784s -> 41.632 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:54:16Z ctx512 pair 1 BA: ta=10.953s tb=11.825s -> 36.7 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:54:39Z ctx512 pair 2 AB: ta=10.944s tb=11.894s -> 33.668 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:55:03Z ctx512 pair 3 BA: ta=10.933s tb=11.952s -> 31.39 tok/s valid=True | flint:down,e4b:down,qwen:down,gpu_busy=99
+2026-11-20T16:55:03Z RESULT decode32_after_512 35.452 tok/s (pairs 31.39..41.632, valid=True); short_ctx 69.896 (valid=True); t516 10.9613s -> end_to_end_516 47.07 pos/s
+[16:55:03Z] == G2 context: mid-8L megakernel on the same R9700 (mode 0)
+mid w16 195.85 180.6 209.86 valid True
+mid w32 241.8 234.72 248.29 valid True
+mid w64 260.81 236.32 301.13 valid True
+mid w32 241.41 225.99 252.24 valid True
+[16:56:14Z] DONE

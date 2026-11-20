@@ -1,0 +1,21 @@
+orig build exit 0 errors=0 warnings=0
+refac build exit 0 errors=0 warnings=0
+full build exit 0 errors=0 warnings=0
+[16:35:15Z] G0 emit orig
+orig emit exit 0
+wrote short4_fp32kv.npz          |  118.7 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145
+wrote chat_fp32kv.npz            |  111.7 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] 
+wrote wrap512_fp32kv.npz         | 2243.3 ms | kv=fp32 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 2214
+wrote short4_fp32_bf16kv.npz     |   82.5 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145
+wrote chat_fp32_bf16kv.npz       |   85.8 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] 
+wrote wrap512_fp32_bf16kv.npz    | 2215.5 ms | kv=bf16 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 2214
+[16:35:24Z] G0 emit refac
+refac emit exit 0
+wrote short4_fp32kv.npz          |   84.0 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145
+wrote chat_fp32kv.npz            |   88.1 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] 
+wrote wrap512_fp32kv.npz         | 2198.6 ms | kv=fp32 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 2214
+wrote short4_fp32_bf16kv.npz     |   82.6 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145
+wrote chat_fp32_bf16kv.npz       |   85.7 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] 
+wrote wrap512_fp32_bf16kv.npz    | 2213.3 ms | kv=bf16 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 2214
+G0 gfx1201: 6/6 mid npz byte-identical (all arrays except impl string) refactored vs d1f6208
+[16:35:32Z] done
