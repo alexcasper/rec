@@ -1,0 +1,8 @@
+FAIL  chat_bf16kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=2.82e-03 step_rel=3.89e-03  last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier); step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)
+PASS  chat_fp32_bf16kv.npz               case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=3.12e-04 step_rel=4.37e-04  router-tie L2@pos19 12->7 gap 4.17e-05
+PASS  chat_fp32kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.74e-07 step_rel=1.07e-06  
+FAIL  short4_bf16kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=2.73e-03 step_rel=3.91e-03  last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier); step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)
+PASS  short4_fp32_bf16kv.npz             case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=6.43e-04 step_rel=9.12e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.53e-07 step_rel=1.16e-06  
+4/6 PASS; (case, kv tier) without a passing run: [('wrap512', 'bf16'), ('wrap512', 'fp32')]; reference torch-fp32@cpu; sign-off run: yes
+matrix exit 1

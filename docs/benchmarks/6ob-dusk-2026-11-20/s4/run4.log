@@ -1,0 +1,82 @@
+[21:14:44Z] build base exit 0 | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[21:14:46Z] build va exit 0 | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[21:14:48Z] build vc2048 exit 0 | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[21:14:50Z] build vcgen exit 0 | busy=3 | flint:idle,e4b:idle,qwen:inactive
+== base/flint_mid_megakernel.hip
+  _Z16flint_q4_gemv_opILi1024          vgpr=133  scratch=0
+  _Z16flint_q4_gemv_opILi2048          vgpr=248  scratch=56
+  _Z16flint_q4_gemv_opILi4096          vgpr=113  scratch=0
+  _Z16flint_q4_gemv_opILi512           vgpr=87   scratch=0
+  kernels:       5 ; NumVgprs: 248	; ScratchSize: 56
+  kernels:       1 ; NumVgprs: 87	; ScratchSize: 0
+  kernels:       1 ; NumVgprs: 133	; ScratchSize: 0
+== va/flint_mid_megakernel.hip
+  _Z16flint_q4_gemv_opILi1024          vgpr=133  scratch=0
+  _Z16flint_q4_gemv_opILi2048          vgpr=248  scratch=92
+  _Z16flint_q4_gemv_opILi4096          vgpr=113  scratch=0
+  _Z16flint_q4_gemv_opILi512           vgpr=87   scratch=0
+  kernels:       5 ; NumVgprs: 248	; ScratchSize: 92
+  kernels:       1 ; NumVgprs: 87	; ScratchSize: 0
+  kernels:       1 ; NumVgprs: 133	; ScratchSize: 0
+== vc2048/flint_mid_megakernel.hip
+  _Z16flint_q4_gemv_opILi1024          vgpr=133  scratch=0
+  _Z16flint_q4_gemv_opILi2048          vgpr=248  scratch=156
+  _Z16flint_q4_gemv_opILi4096          vgpr=113  scratch=0
+  _Z16flint_q4_gemv_opILi512           vgpr=87   scratch=0
+  kernels:       5 ; NumVgprs: 248	; ScratchSize: 156
+  kernels:       1 ; NumVgprs: 87	; ScratchSize: 0
+  kernels:       1 ; NumVgprs: 133	; ScratchSize: 0
+== vcgen/flint_mid_megakernel.hip
+  _Z16flint_q4_gemv_opILi1024          vgpr=164  scratch=0
+  _Z16flint_q4_gemv_opILi2048          vgpr=248  scratch=56
+  _Z16flint_q4_gemv_opILi4096          vgpr=151  scratch=0
+  _Z16flint_q4_gemv_opILi512           vgpr=115  scratch=0
+  kernels:       5 ; NumVgprs: 248	; ScratchSize: 56
+  kernels:       1 ; NumVgprs: 164	; ScratchSize: 0
+  kernels:       1 ; NumVgprs: 151	; ScratchSize: 0
+[21:14:59Z] GATE + timing: va vs base | busy=3 | flint:idle,e4b:idle,qwen:inactive
+  expert_gate_512x2048     IDENTICAL x40
+  expert_down_2048x512     IDENTICAL x40
+  shared_down_2048x1024    IDENTICAL x40
+  shared_gate_1024x2048    IDENTICAL x40
+  q_proj_4096x2048         DIFF in 3/40 runs: 1 rows e.g. [181], max rel 2.01e-02, max 1538993 ulp
+  o_proj_2048x4096         IDENTICAL x40
+  lm_head_150144x2048      DIFF in 21/40 runs: 2 rows e.g. [85549, 99761], max rel 1.91e-02, max 2699877 ulp
+GATE byte-identity vs base: FAIL
+[21:15:00Z] GATE + timing: vc2048 vs base | busy=36 | flint:idle,e4b:idle,qwen:inactive
+  expert_gate_512x2048     IDENTICAL x40
+  expert_down_2048x512     IDENTICAL x40
+  shared_down_2048x1024    IDENTICAL x40
+  shared_gate_1024x2048    IDENTICAL x40
+  q_proj_4096x2048         IDENTICAL x40
+  o_proj_2048x4096         IDENTICAL x40
+  lm_head_150144x2048      IDENTICAL x40
+GATE byte-identity vs base: PASS
+  round 0 BV | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 1 VB | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 2 BV | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 3 VB | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 4 BV | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 5 VB | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  TIME o_proj_2048x4096         grid16 base 0.1109 ms  var 0.1109 ms  speedup 0.999  (var range 0.1101-0.1122)
+  TIME expert_down_2048x512     grid16 base 0.0114 ms  var 0.0113 ms  speedup 1.006  (var range 0.0104-0.0159)
+  TIME lm_head_150144x2048      grid16 base 2.2618 ms  var 2.3552 ms  speedup 0.960  (var range 2.3404-2.3822)
+[21:15:26Z] GATE + timing: vcgen vs base | busy=28 | flint:idle,e4b:idle,qwen:inactive
+  expert_gate_512x2048     IDENTICAL x40
+  expert_down_2048x512     IDENTICAL x40
+  shared_down_2048x1024    IDENTICAL x40
+  shared_gate_1024x2048    IDENTICAL x40
+  q_proj_4096x2048         IDENTICAL x40
+  o_proj_2048x4096         IDENTICAL x40
+  lm_head_150144x2048      IDENTICAL x40
+GATE byte-identity vs base: PASS
+  round 0 BV | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=28 flint:idle,e4b:idle,qwen:down
+  round 1 VB | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 2 BV | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 3 VB | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 4 BV | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 5 VB | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  TIME o_proj_2048x4096         grid16 base 0.1101 ms  var 0.1042 ms  speedup 1.057  (var range 0.1040-0.1069)
+  TIME expert_down_2048x512     grid16 base 0.0115 ms  var 0.0104 ms  speedup 1.101  (var range 0.0093-0.0117)
+  TIME lm_head_150144x2048      grid16 base 2.2670 ms  var 2.2701 ms  speedup 0.999  (var range 2.2580-2.2781)
+[21:15:53Z] DONE | busy=28 | flint:idle,e4b:idle,qwen:inactive

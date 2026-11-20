@@ -1,0 +1,41 @@
+[21:19:07Z] emit base short4,chat x 3 builds | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[21:19:09Z] emit base exit 0 | busy=60 | flint:idle,e4b:idle,qwen:inactive
+[21:19:14Z] emit vcgen short4,chat x 3 builds | busy=4 | flint:idle,e4b:idle,qwen:inactive
+[21:19:16Z] emit vcgen exit 0 | busy=60 | flint:idle,e4b:idle,qwen:inactive
+  chat_bf16kv.npz IDENTICAL
+  chat_fp32_bf16kv.npz IDENTICAL
+  chat_fp32kv.npz IDENTICAL
+  short4_bf16kv.npz IDENTICAL
+  short4_fp32_bf16kv.npz IDENTICAL
+  short4_fp32kv.npz IDENTICAL
+SUITE byte-identity vcgen vs base(2fd83cb): 6/6
+[21:19:16Z] spec (a) matrix vcgen vs torch fp32 CPU ref | busy=51 | flint:idle,e4b:idle,qwen:inactive
+FAIL  chat_bf16kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=2.82e-03 step_rel=3.89e-03  last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier); step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)
+PASS  chat_fp32_bf16kv.npz               case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=3.12e-04 step_rel=4.37e-04  router-tie L2@pos19 12->7 gap 4.17e-05
+PASS  chat_fp32kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.74e-07 step_rel=1.07e-06  
+FAIL  short4_bf16kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=2.73e-03 step_rel=3.91e-03  last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier); step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)
+PASS  short4_fp32_bf16kv.npz             case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=6.43e-04 step_rel=9.12e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.53e-07 step_rel=1.16e-06  
+4/6 PASS; (case, kv tier) without a passing run: [('wrap512', 'bf16'), ('wrap512', 'fp32')]; reference torch-fp32@cpu; sign-off run: yes
+matrix exit 1
+[21:19:36Z] ABBA short4: A=base(2fd83cb) B=vcgen, mode 0, 8 rounds | busy=3 | flint:idle,e4b:idle,qwen:inactive
+21:19:42Z round 0 AB | A 188.36 B 190.65 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=42 flint:idle,e4b:idle,qwen:down
+21:19:47Z round 1 BA | A 188.62 B 189.84 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=42 flint:idle,e4b:idle,qwen:down
+21:19:51Z round 2 AB | A 187.91 B 190.14 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=42 flint:idle,e4b:idle,qwen:down
+21:19:56Z round 3 BA | A 187.82 B 189.41 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=42 flint:idle,e4b:idle,qwen:down
+21:20:01Z round 4 AB | A 190.99 B 190.53 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=42 flint:idle,e4b:idle,qwen:down
+21:20:06Z round 5 BA | A 187.57 B 189.34 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=42 flint:idle,e4b:idle,qwen:down
+21:20:11Z round 6 AB | A 185.86 B 190.71 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=42 flint:idle,e4b:idle,qwen:down
+21:20:16Z round 7 BA | A 189.19 B 190.64 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=42 flint:idle,e4b:idle,qwen:down
+{"case": "short4", "A": {"valid": 8, "differential_tok_s": 188.28, "pair_min": 185.86, "pair_max": 190.99, "t36_mean_s": 0.21258}, "B": {"valid": 8, "differential_tok_s": 190.15, "pair_min": 189.34, "pair_max": 190.71, "t36_mean_s": 0.2105}, "speedup_B_over_A": 1.01, "tokens_identical_A_B": true}
+[21:20:16Z] ABBA chat: A=base(2fd83cb) B=vcgen, mode 0, 8 rounds | busy=42 | flint:idle,e4b:idle,qwen:inactive
+21:20:22Z round 0 AB | A 187.71 B 191.24 | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+21:20:26Z round 1 BA | A 181.76 B 189.53 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:20:31Z round 2 AB | A 187.45 B 189.79 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+21:20:36Z round 3 BA | A 188.8 B 192.7 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+21:20:41Z round 4 AB | A 180.4 B 188.92 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:20:46Z round 5 BA | A 188.45 B 192.85 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+21:20:51Z round 6 AB | A 187.02 B 190.57 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+21:20:56Z round 7 BA | A 188.53 B 188.74 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=43 flint:idle,e4b:idle,qwen:down
+{"case": "chat", "A": {"valid": 8, "differential_tok_s": 186.21, "pair_min": 180.4, "pair_max": 188.8, "t36_mean_s": 0.21966}, "B": {"valid": 8, "differential_tok_s": 190.53, "pair_min": 188.74, "pair_max": 192.85, "t36_mean_s": 0.21569}, "speedup_B_over_A": 1.023, "tokens_identical_A_B": true}
+[21:20:56Z] DONE | busy=43 | flint:idle,e4b:idle,qwen:inactive

@@ -145,6 +145,27 @@ __device__ inline float dot16(const uint8_t* w, const float* x, float s, float b
 // preloads the lane's 4x16 pre-scaled input slices and 4 group sums into registers once
 // outside the row loop, eliminating redundant input reads and pre-scale math across rows
 // (especially across the 1,173 row-quads per warp in the 150144x2048 lm_head).
+
+// rec-6ob step 4 VC: LDS staging of one 512-element block of a full row-quad. The 32-lane logical warp
+// copies 4 rows x 256 B with two 16-byte loads per lane, then each lane reads back exactly the 8 bytes
+// it consumes in the unstaged path (same words -> same arithmetic). A logical warp lives inside one
+// hardware wave on wave32 and wave64, so wave-level fences order the LDS write -> read -> rewrite.
+__device__ inline void q4_stage_block(const uint8_t* __restrict__ w, size_t row_bytes, int first, int byte_off,
+                                      int lane, uint8_t* lds /* 1024 B per logical warp */) {
+    __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
+    __builtin_amdgcn_wave_barrier();  // previous block's reads are done before overwrite
+    #pragma unroll
+    for (int t = 0; t < 2; ++t) {
+        int idx = t * 32 + lane;           // 0..63 : (row 0..3) x (16-byte chunk 0..15)
+        int r = idx >> 4, c = idx & 15;
+        uint4 q = *(const uint4*)(w + (size_t)(first + r) * row_bytes + byte_off + c * 16);
+        *(uint4*)(lds + r * 256 + c * 16) = q;
+    }
+    __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
+    __builtin_amdgcn_wave_barrier();
+    __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
+}
+
 template <int K, bool ROUND_BF16 = false>
 __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         const bf16* __restrict__ s,
@@ -205,19 +226,21 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 float v[16];
                 float sum = load16_f(x + scalar, v);
                 if (full) {
-                    uint32_t wl[4], wh[4];
+                    __shared__ __attribute__((aligned(16))) uint8_t q4_stage_gen[8][1024];
+                    uint8_t* lds = q4_stage_gen[(sg % 8)];
+                    q4_stage_block(w, (size_t)(K / 2), first, block / 2, lane, lds);
                     float sc[4], bi[4];
                     #pragma unroll
                     for (int r = 0; r < 4; ++r) {
                         int gi = (first + r) * (K / 64) + scalar / 64;
-                        const uint32_t* p32 = (const uint32_t*)(w + (size_t)(first + r) * (K / 2) + scalar / 2);
-                        wl[r] = p32[0];
-                        wh[r] = p32[1];
                         sc[r] = tofloat(s[gi]);
                         bi[r] = tofloat(b[gi]);
                     }
                     #pragma unroll
-                    for (int r = 0; r < 4; ++r) a[r] += dot16v(wl[r], wh[r], v, sc[r], bi[r], sum);
+                    for (int r = 0; r < 4; ++r) {
+                        const uint32_t* p = (const uint32_t*)(lds + r * 256 + lane * 8);
+                        a[r] += dot16v(p[0], p[1], v, sc[r], bi[r], sum);
+                    }
                 } else {
                     #pragma unroll
                     for (int r = 0; r < 4; ++r) {

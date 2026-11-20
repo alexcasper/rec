@@ -199,3 +199,65 @@ wrap512 coverage is absent (deferred to albion).
 - R9700 rows.
 
 The full-config effect of the o_proj/expert_down change stays UNKNOWN until albion returns.
+
+## 6. Step 4: load-schedule lever retried on the contraction-independent 2fd83cb (`s4/`)
+
+dusk solo, standalone gemv launches (ms) and megakernel launches <= 0.22 s. busy < 5 before every
+round; flint :8080 and E4B :8090 up and idle, logged per line, not paused (standing protocol); qwen
+disabled.
+
+Wider per-lane GLOBAL loads are not byte-identical by construction. A lane's chunks sit 256 B apart;
+the warp's b64 loads are already one contiguous 256 B span; widening per lane needs a lane->element
+remap, which changes the simd_sum tree. So the wide-load lever was tested as LDS staging instead: the
+warp moves 4 rows x 256 B with two b128 loads per lane, then each lane reads back exactly its own 8 B.
+Same words, same arithmetic.
+
+Variants on 2fd83cb (`s4/variant_*_REJECTED.hip`; the VCgen change is in the kernel):
+- **VA**: K=2048 path, all 4 rows' words/scales loaded before compute.
+- **VC2048**: LDS staging on the K=2048 path.
+- **VCgen**: LDS staging on the generic path (K = 512/1024/4096).
+
+**Gate 1: byte identity vs 2fd83cb** (`gate7.py`; 7 shapes covering every K path, 40 runs each over
+grids 0/16, `run4.log`)
+
+| variant | result | resources (gemv K=2048 / 4096 / 1024 VGPR, scratch) |
+|---|---|---|
+| VA | **FAIL**, nondeterministic: q_proj 3/40 runs, lm_head 21/40 | 248 + 92 B scratch on K=2048 |
+| VC2048 | PASS x280 | 248 + 156 B scratch on K=2048 |
+| VCgen | PASS x280 | K=4096 151 / K=1024 164 / K=512 115 VGPR, no scratch |
+
+VA's divergence is NOT fmaf-level. In a fraction of runs it hits 1-2 isolated rows by about 2e-2
+relative (1.5-2.7M ulp), and other runs are bitwise exact. That is the same run-to-run corruption
+signature as step 3's rejected 2-rows-in-flight K=2048 variant. Both batched K=2048 forms carry
+extra scratch spill next to the 64-float x preload. Dropped; not chased further.
+
+**Per-op timing** (grid 16 = megakernel grid; A9 method; 6 ABBA rounds; medians, ms)
+
+| variant | o_proj | expert_down | lm_head |
+|---|---|---|---|
+| base (2fd83cb) | 0.1109 / 0.1101 | 0.0114 / 0.0115 | 2.2618 / 2.2670 |
+| VC2048 | 0.1109 (0.999x) | 0.0113 (1.006x) | 2.3552 (**0.960x**) -> dropped |
+| VCgen | **0.1042 (1.057x)** | **0.0104 (1.101x)** | 2.2701 (0.999x) |
+
+(Each variant had its own base series, listed in order.)
+
+**Gate 2 (VCgen, megakernel)** (`run4b.log`):
+- short4 + chat x 3 builds with experts: **6/6 npz byte-identical to 2fd83cb**.
+- Spec (a) matrix vs torch fp32@cpu (`matrix_vcgen.txt`) is therefore identical to 2fd83cb's:
+  - fp32kv PASS (<= 1.16e-6, tokens and routing exact);
+  - fp32_bf16kv PASS;
+  - production bf16kv tokens exact at the inherent 3.9e-3.
+- wrap512 coverage absent (albion).
+
+**ABBA decode32 short-ctx differential, VCgen vs 2fd83cb** (mode 0, 8 rounds, all pairs valid,
+tokens identical):
+
+| case | 2fd83cb tok/s (range) | VCgen tok/s (range) | speedup |
+|---|---|---|---|
+| short4 | 188.28 (185.9-191.0) | 190.15 (189.3-190.7) | 1.010x (inside base spread) |
+| chat | 186.21 (180.4-188.8) | 190.53 (188.7-192.9) | 1.023x |
+
+Verdict: VCgen is committed as a small, byte-identical win (o_proj 1.06x, expert_down 1.10x per-op;
++1-2% decode). VA (nondeterministic) and VC2048 (slower lm_head) are rejected. The lm_head (38% of a
+token, ~77 of ~82 GB/s) and the K=2048 path have no byte-identical load-schedule headroom left on
+dusk. Full-config / R9700 effect still unknown (albion off).
