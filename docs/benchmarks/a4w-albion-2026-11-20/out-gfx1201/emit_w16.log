@@ -1,0 +1,7 @@
+ckpt: /home/albion/rec-ve/r109/ckpt/mid-prod | sha256: f494e7885d10bdedf5d885faef826a27fdbe4bfb1fb11781fac12c7cabbd92ad | emit_experts=True
+wrote short4_fp32kv.npz          |   85.8 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 2)
+wrote chat_fp32kv.npz            |   89.4 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32kv.npz         | 2221.9 ms | kv=fp32 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)
+wrote short4_fp32_bf16kv.npz     |   82.7 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 2)
+wrote chat_fp32_bf16kv.npz       |   85.5 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32_bf16kv.npz    | 2213.3 ms | kv=bf16 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)

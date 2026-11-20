@@ -1,0 +1,27 @@
+50a093b86459e66e82f50ef6e703880c4139ac910c1616e3c1da8486fc9bfbe4  /home/albion/rec-ve/a4w/gk/engine/native/megakernel_hip/tiny_megakernel.hip
+gfx906 build exit 0
+gfx906 cfg01 seed=0 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 6.824e-04 (tol 0.02) MATCH 
+gfx906 cfg02 seed=1 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 5.462e-04 (tol 0.02) MATCH 
+gfx906 cfg03 seed=2 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 8.229e-04 (tol 0.02) MATCH 
+gfx906 cfg04 seed=3 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 6.844e-04 (tol 0.02) MATCH 
+gfx906 cfg05 seed=4 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 7.438e-04 (tol 0.02) MATCH 
+gfx906 cfg06 seed=0 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 5.349e-04 (tol 0.02) MATCH 
+gfx906 cfg07 seed=1 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 6.092e-04 (tol 0.02) MATCH 
+gfx906 cfg08 seed=2 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 9.118e-04 (tol 0.02) MATCH 
+gfx906 cfg09 seed=3 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: near-ties accepted: 1 (margin <= 0.005) last-step logits rel maxabs err 4.452e-04 (tol 0.02) MATCH 
+gfx906 cfg10 seed=4 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 8.840e-04 (tol 0.02) MATCH 
+gfx906 cfg11 seed=0 prompt=1,5,6,7 data=legacy driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 1.667e-05 (tol 0.02) MATCH 
+gfx906 tiny: 11/11 MATCH
+gfx1201 build exit 0
+gfx1201 cfg01 seed=0 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 6.824e-04 (tol 0.02) MATCH 
+gfx1201 cfg02 seed=1 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 5.462e-04 (tol 0.02) MATCH 
+gfx1201 cfg03 seed=2 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 8.229e-04 (tol 0.02) MATCH 
+gfx1201 cfg04 seed=3 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 6.844e-04 (tol 0.02) MATCH 
+gfx1201 cfg05 seed=4 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 7.438e-04 (tol 0.02) MATCH 
+gfx1201 cfg06 seed=0 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 5.349e-04 (tol 0.02) MATCH 
+gfx1201 cfg07 seed=1 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 6.092e-04 (tol 0.02) MATCH 
+gfx1201 cfg08 seed=2 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 9.118e-04 (tol 0.02) MATCH 
+gfx1201 cfg09 seed=3 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: near-ties accepted: 1 (margin <= 0.005) last-step logits rel maxabs err 4.452e-04 (tol 0.02) MATCH 
+gfx1201 cfg10 seed=4 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 8.840e-04 (tol 0.02) MATCH 
+gfx1201 cfg11 seed=0 prompt=1,5,6,7 data=legacy driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 1.667e-05 (tol 0.02) MATCH 
+gfx1201 tiny: 11/11 MATCH

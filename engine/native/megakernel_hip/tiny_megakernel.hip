@@ -81,10 +81,15 @@ __device__ inline bf16 tobf(float v) { return __float2bfloat16(v); }
 
 __device__ inline float silu(float v) { return v / (1.0f + expf(-v)); }
 
+// 32-lane logical warp sum. Width-32 __shfl_xor, not __shfl_xor_sync(full mask): HIP's _sync
+// variants __hip_check_mask() and trap when the mask names lanes that are not active. On wave64
+// (gfx906) the upper 32-lane half of a hardware wave can already have returned (rmsnorm: warp 0
+// only), which faulted every launch (HSA_STATUS_ERROR_EXCEPTION 0x1016, rec-a4w). Width 32 keeps
+// the reduction inside aligned 32-lane segments and is the whole wave on wave32 RDNA.
 __device__ inline float warp_sum(float v) {
     #pragma unroll
     for (int off = 16; off >= 1; off >>= 1)
-        v += __shfl_xor_sync(0xffffffffffffffffull, v, off);
+        v += __shfl_xor(v, off, 32);
     return v;
 }
 

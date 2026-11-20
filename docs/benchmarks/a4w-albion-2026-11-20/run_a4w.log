@@ -1,0 +1,118 @@
+[0s 15:01:27Z] host albion  15:01:27  up   0:28,  1 user,  load average: 0.11, 0.25, 0.46
+83a17171f004ee257b76874135954058cdd6ef5b9c689699df95ee7169d0965a /home/albion/rec-ve/a4w/gk/engine/native/megakernel_hip/tiny_megakernel.hip
+92947d61d70aeb885810eb30fe726380ee869d4f296f097dd0e88111f11dc96f /home/albion/rec-ve/a4w/gk/engine/native/megakernel_hip/flint_mid_megakernel.hip
+b5c326bc7ee3496748945a8f8ac907f0415ce73be029225b08fdc39c2f685795 /home/albion/rec-ve/a4w/gk/engine/native/megakernel_hip/tiny_mk_driver.py
+de5e5894b212d67e785552c603ad7d20d9045fa36c74bed527a3a1e2ca9e758f /home/albion/rec-ve/a4w/gk/engine/native/megakernel_hip/tiny_mk_np_reference.py
+298c9d6bad537133330854fd941dec16ac1dca476553933cca38afe4babcfc58 /home/albion/rec-ve/a4w/gk/engine/native/megakernel_hip/mid_mk_driver.py
+ded73adf649927a964e2c0eca82f101726cf665d8001525fcf11f50b8c3c3428 /home/albion/rec-ve/a4w/gk/engine/validation/megakernel_mid/mid_mk_check.py
+f494e7885d10bdedf5d885faef826a27fdbe4bfb1fb11781fac12c7cabbd92ad /home/albion/rec-ve/r109/ckpt/mid-prod/model-00001.safetensors
+[1s 15:01:28Z] ===== gfx1201 (HIP device 0, card1)
+tiny build exit 0 errors=0
+mid build exit 0 errors=0
+occupancy: 64 {'cus': 32, 'max_blocks_per_cu': 2, 'max_co_resident_workers': 64, 'wave_size': 32, 'compiled_hard_cap': 64}
+[6s 15:01:33Z] == tiny matrix gfx1201
+gfx1201 cfg01 seed=0 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 6.824e-04 (tol 0.02) MATCH 
+gfx1201 cfg02 seed=1 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 5.462e-04 (tol 0.02) MATCH 
+gfx1201 cfg03 seed=2 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 8.229e-04 (tol 0.02) MATCH 
+gfx1201 cfg04 seed=3 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 6.844e-04 (tol 0.02) MATCH 
+gfx1201 cfg05 seed=4 prompt=1,5,6,7 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 7.438e-04 (tol 0.02) MATCH 
+gfx1201 cfg06 seed=0 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 5.349e-04 (tol 0.02) MATCH 
+gfx1201 cfg07 seed=1 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 6.092e-04 (tol 0.02) MATCH 
+gfx1201 cfg08 seed=2 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 9.118e-04 (tol 0.02) MATCH 
+gfx1201 cfg09 seed=3 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: near-ties accepted: 1 (margin <= 0.005) last-step logits rel maxabs err 4.452e-04 (tol 0.02) MATCH 
+gfx1201 cfg10 seed=4 prompt=1,100,200,300,400,511 data=signed driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 8.840e-04 (tol 0.02) MATCH 
+gfx1201 cfg11 seed=0 prompt=1,5,6,7 data=legacy driver_exit=0 ref_exit=0 :: last-step logits rel maxabs err 1.667e-05 (tol 0.02) MATCH 
+gfx1201 tiny: 11/11 MATCH
+[20s 15:01:47Z] == mid suite gfx1201 workers=16
+emit exit 0
+wrote short4_fp32kv.npz          |   85.8 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 
+wrote chat_fp32kv.npz            |   89.4 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32kv.npz         | 2221.9 ms | kv=fp32 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)
+wrote short4_fp32_bf16kv.npz     |   82.7 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 
+wrote chat_fp32_bf16kv.npz       |   85.5 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32_bf16kv.npz    | 2213.3 ms | kv=bf16 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)
+PASS  chat_fp32_bf16kv.npz               case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=3.23e-04 step_rel=4.28e-04  router-tie L2@pos19 12->7 gap 4.17e-05
+PASS  chat_fp32kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.69e-07 step_rel=1.10e-06  
+PASS  short4_fp32_bf16kv.npz             case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=6.55e-04 step_rel=9.24e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.76e-07 step_rel=1.10e-06  
+PASS  wrap512_fp32_bf16kv.npz            case=wrap512  ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=1.35e-04 step_rel=1.86e-04  router-tie L1@pos175 14->18 gap 1.78e-05
+PASS  wrap512_fp32kv.npz                 case=wrap512  ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=1.23e-06 step_rel=1.44e-06  
+6/6 PASS; (case, kv tier) without a passing run: none; reference torch-fp32@cpu; sign-off run: yes
+matrix exit 0
+[59s 15:02:26Z] == mid suite gfx1201 workers=64
+emit exit 0
+wrote short4_fp32kv.npz          |   46.8 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 
+wrote chat_fp32kv.npz            |   47.0 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32kv.npz         | 1433.9 ms | kv=fp32 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)
+wrote short4_fp32_bf16kv.npz     |   42.9 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 
+wrote chat_fp32_bf16kv.npz       |   44.6 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32_bf16kv.npz    | 1483.6 ms | kv=bf16 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)
+PASS  chat_fp32_bf16kv.npz               case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=3.23e-04 step_rel=4.28e-04  router-tie L2@pos19 12->7 gap 4.17e-05
+PASS  chat_fp32kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.69e-07 step_rel=1.10e-06  
+PASS  short4_fp32_bf16kv.npz             case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=6.55e-04 step_rel=9.24e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.76e-07 step_rel=1.10e-06  
+PASS  wrap512_fp32_bf16kv.npz            case=wrap512  ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=1.35e-04 step_rel=1.86e-04  router-tie L1@pos175 14->18 gap 1.78e-05
+PASS  wrap512_fp32kv.npz                 case=wrap512  ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=1.23e-06 step_rel=1.44e-06  
+6/6 PASS; (case, kv tier) without a passing run: none; reference torch-fp32@cpu; sign-off run: yes
+matrix exit 0
+[97s 15:03:04Z] ===== gfx906 (HIP device 1, card2)
+tiny build exit 0 errors=0
+mid build exit 0 errors=0
+occupancy: 60 {'cus': 60, 'max_blocks_per_cu': 1, 'max_co_resident_workers': 60, 'wave_size': 64, 'compiled_hard_cap': 64}
+[102s 15:03:09Z] == tiny matrix gfx906
+./run_a4w.sh: line 39: 17448 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg01 seed=0 prompt=1,5,6,7 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1835119614 us:  Callback: Queue 0x7e02d3e00000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 17513 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg02 seed=1 prompt=1,5,6,7 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1836432920 us:  Callback: Queue 0x7b1704200000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 17580 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg03 seed=2 prompt=1,5,6,7 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1837774253 us:  Callback: Queue 0x7749b1c00000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 17646 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg04 seed=3 prompt=1,5,6,7 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1839057221 us:  Callback: Queue 0x7eb0aca00000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 17727 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg05 seed=4 prompt=1,5,6,7 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1840364482 us:  Callback: Queue 0x795d4d800000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 17788 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg06 seed=0 prompt=1,100,200,300,400,511 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1841666059 us:  Callback: Queue 0x7ae90ce00000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 17850 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg07 seed=1 prompt=1,100,200,300,400,511 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1842976123 us:  Callback: Queue 0x71986c800000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 17913 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg08 seed=2 prompt=1,100,200,300,400,511 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1844294513 us:  Callback: Queue 0x7de1b4400000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 17992 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg09 seed=3 prompt=1,100,200,300,400,511 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1845607819 us:  Callback: Queue 0x733a1fc00000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 18053 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg10 seed=4 prompt=1,100,200,300,400,511 data=signed driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1846936132 us:  Callback: Queue 0x7c1259200000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+./run_a4w.sh: line 39: 18120 Aborted                    (core dumped) $PY tiny_mk_driver.py --seed="$seed" --prompt="$prompt" --n-out=24 --data="$data" --out="$OUT/io_$name.npz" > $OUT/tiny_$name.log 2>&1
+gfx906 cfg11 seed=0 prompt=1,5,6,7 data=legacy driver_exit=134 ref_exit=1 :: GPU coredump: handler exited with error (status: 1) :0:rocdevice.cpp            :3588: 1848278742 us:  Callback: Queue 0x714001000000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016 FileNotFou
+gfx906 tiny: 0/11 MATCH
+[116s 15:03:23Z] == mid suite gfx906 workers=16
+emit exit 0
+wrote short4_fp32kv.npz          |  125.5 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 
+wrote chat_fp32kv.npz            |  127.2 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32kv.npz         | 3388.7 ms | kv=fp32 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)
+wrote short4_fp32_bf16kv.npz     |  122.1 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 
+wrote chat_fp32_bf16kv.npz       |  126.3 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32_bf16kv.npz    | 3430.7 ms | kv=bf16 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)
+PASS  chat_fp32_bf16kv.npz               case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=3.23e-04 step_rel=4.28e-04  router-tie L2@pos19 12->7 gap 4.17e-05
+PASS  chat_fp32kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.69e-07 step_rel=1.10e-06  
+PASS  short4_fp32_bf16kv.npz             case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=6.55e-04 step_rel=9.24e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.76e-07 step_rel=1.10e-06  
+PASS  wrap512_fp32_bf16kv.npz            case=wrap512  ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=1.35e-04 step_rel=1.86e-04  router-tie L1@pos175 14->18 gap 1.78e-05
+PASS  wrap512_fp32kv.npz                 case=wrap512  ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=1.23e-06 step_rel=1.44e-06  
+6/6 PASS; (case, kv tier) without a passing run: none; reference torch-fp32@cpu; sign-off run: yes
+matrix exit 0
+[158s 15:04:05Z] == mid suite gfx906 workers=60
+emit exit 0
+wrote short4_fp32kv.npz          |   84.0 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 
+wrote chat_fp32kv.npz            |   83.8 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32kv.npz         | 2547.9 ms | kv=fp32 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)
+wrote short4_fp32_bf16kv.npz     |   81.3 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939, 145985, 17939, 145985] | chosen_experts=(24, 8, 
+wrote chat_fp32_bf16kv.npz       |   83.8 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998, 26998, 26998, 536] | chosen_experts=(24, 8, 2)
+wrote wrap512_fp32_bf16kv.npz    | 2585.7 ms | kv=bf16 | tokens[:6]=[132421, 115526, 44734, 83939, 35350, 22141] | chosen_experts=(24, 8, 2)
+PASS  chat_fp32_bf16kv.npz               case=chat     ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=3.23e-04 step_rel=4.28e-04  router-tie L2@pos19 12->7 gap 4.17e-05
+PASS  chat_fp32kv.npz                    case=chat     ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.69e-07 step_rel=1.10e-06  
+PASS  short4_fp32_bf16kv.npz             case=short4   ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=0 last_rel=6.55e-04 step_rel=9.24e-04  
+PASS  short4_fp32kv.npz                  case=short4   ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=8.76e-07 step_rel=1.10e-06  
+PASS  wrap512_fp32_bf16kv.npz            case=wrap512  ref=torch-fp32@cpu ref_kv=bf16 tokens_exact=True ties=1 last_rel=1.35e-04 step_rel=1.86e-04  router-tie L1@pos175 14->18 gap 1.78e-05
+PASS  wrap512_fp32kv.npz                 case=wrap512  ref=torch-fp32@cpu ref_kv=fp32 tokens_exact=True ties=0 last_rel=1.23e-06 step_rel=1.44e-06  
+6/6 PASS; (case, kv tier) without a passing run: none; reference torch-fp32@cpu; sign-off run: yes
+matrix exit 0
+[198s 15:04:45Z] DONE

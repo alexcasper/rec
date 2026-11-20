@@ -1,0 +1,12 @@
+Failed to write segment data to pipe: Broken pipe
+GPU coredump: handler exited with error (status: 1)
+GPU core dump failed
+:0:rocdevice.cpp            :3588: 1835119614 us:  Callback: Queue 0x7e02d3e00000 aborting with error : HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception. code: 0x1016
+Traceback (most recent call last):
+  File "/home/albion/rec-ve/a4w/mk-gfx906/tiny_mk_np_reference.py", line 134, in <module>
+    sys.exit(0 if check(np.load(path)) else 1)
+                        ^^^^^^^^^^^^^
+  File "/home/albion/rec-ve/.venv/lib/python3.12/site-packages/numpy/lib/_npyio_impl.py", line 454, in load
+    fid = stack.enter_context(open(os.fspath(file), "rb"))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/albion/rec-ve/a4w/out-gfx906/io_cfg01.npz'
