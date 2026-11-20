@@ -88,7 +88,14 @@ the bf16-KV reference it lands at 4.2e-4 to 9.0e-4: under 1e-3 and the same
 size as the correct bf16-KV floor (5.0e-4), so the bf16 tier cannot see it.
 Against the fp32 reference it is 2.5e-4 to 1.05e-3 (`step_logits`), at least
 2.5× over the 1e-4 gate and about 70× over the correct fp32 floor. Measured
-results are in section 6.
+results are in section 6. **Reference device (rec-s3m, adopted 2026-11-20):** the sign-off reference is torch fp32 on
+the **CPU** (`mid_mk_check.py` default, `SIGNOFF_REF_DEVICE`), the same reference rec-ft9 adopted
+for the engine e2e. Every matrix line records `ref=torch-fp32@<device>`; a matrix with any other
+reference device is diagnostic only and exits 2 even when it passes. Reason: the bf16-KV tier is
+reference-device sensitive. On albion the same gfx1201 kernel outputs score short4 bf16-KV
+9.24e-4 (PASS) against the CPU reference but 1.056e-3 (FAIL) against a torch 2.10/ROCm 7 R9700
+reference, and dusk's d1f6208 run-of-record outputs fail that cell on the R9700 reference too
+(1.096e-3); the fp32 tier is unaffected (<= 3.3e-6).
 
 Compute must be fp32 (fp32 accumulators and intermediates, with bf16 only for
 stored KV). A kernel with bf16 activations end to end lands at ~1.5e-2 to

@@ -511,6 +511,14 @@ def produce(ckpt: Path, case: str, out: Path, impl: str, device: str, fault: str
 
 
 # ---------------------------------------------------------------- CLI
+# rec-s3m (adopted 2026-11-20): the sign-off reference is torch fp32 on the CPU -- the same
+# reference rec-ft9 adopted for the engine e2e. The bf16-KV tier is reference-device sensitive
+# (albion R9700 torch 2.10/rocm7 reference: short4 1.056e-3 FAIL vs 9.24e-4 PASS on CPU for the
+# same kernel outputs), so only CPU-reference matrices count as sign-off; any other device is a
+# diagnostic run (exit 2 when it would otherwise pass).
+SIGNOFF_REF_DEVICE = "cpu"
+
+
 def _default_device() -> str:
     try:
         import torch
@@ -535,12 +543,14 @@ def main(argv=None) -> int:
     k = sub.add_parser("check")
     k.add_argument("--ckpt", type=Path, required=True)
     k.add_argument("kernel_out", type=Path)
-    k.add_argument("--ref-device", default=None)
+    k.add_argument("--ref-device", default=SIGNOFF_REF_DEVICE,
+                   help="reference device; sign-off requires %(default)s (rec-s3m)")
     k.add_argument("--ref-kv", choices=("auto", "fp32", "bf16"), default="auto")
     m = sub.add_parser("matrix")
     m.add_argument("--ckpt", type=Path, required=True)
     m.add_argument("kernel_dir", type=Path)
-    m.add_argument("--ref-device", default=None)
+    m.add_argument("--ref-device", default=SIGNOFF_REF_DEVICE,
+                   help="reference device; sign-off requires %(default)s (rec-s3m)")
     m.add_argument("--ref-kv", choices=("auto", "fp32", "bf16"), default="auto")
     a = ap.parse_args(argv)
     if a.cmd == "cases":
@@ -550,15 +560,18 @@ def main(argv=None) -> int:
     if a.cmd == "produce":
         print(produce(a.ckpt, a.case, a.out, a.impl, a.device or _default_device(), a.fault))
         return 0
-    device = a.ref_device or _default_device()
+    device = a.ref_device
+    signoff = device == SIGNOFF_REF_DEVICE
     if a.cmd == "check":
-        return 0 if check(a.ckpt, a.kernel_out, device, ref_kv=a.ref_kv)["pass"] else 1
+        ok = check(a.ckpt, a.kernel_out, device, ref_kv=a.ref_kv)["pass"]
+        print(f"ref=torch-fp32@{device} sign-off={'yes' if signoff else 'NO (diagnostic, rec-s3m)'}")
+        return (0 if signoff else 2) if ok else 1
     sha = shard_sha256(a.ckpt)
     files = sorted(a.kernel_dir.glob("*.npz"))
     results = [check(a.ckpt, f, device, sha, verbose=False, ref_kv=a.ref_kv) for f in files]
     for f, r in zip(files, results):
         print(f"{'PASS' if r['pass'] else 'FAIL'}  {f.name:34} case={r.get('case', '?'):8} "
-              f"ref_kv={r.get('ref_kv', '?'):4} "
+              f"ref=torch-fp32@{device} ref_kv={r.get('ref_kv', '?'):4} "
               f"tokens_exact={r.get('tokens_exact')} ties={len(r.get('near_ties_accepted', []))} "
               f"last_rel={r.get('last_logits_rel', float('nan')):.2e} "
               f"step_rel={r.get('step_logits_max_rel') or float('nan'):.2e}  {'; '.join(r['problems'])}"
@@ -568,8 +581,10 @@ def main(argv=None) -> int:
     covered = {(r.get("case"), r.get("ref_kv")) for r in results if r["pass"]}
     missing = {(c, t) for c in case_matrix(vocab_of(a.ckpt)) for t in LOGIT_RTOL} - covered
     print(f"{sum(r['pass'] for r in results)}/{len(results)} PASS; (case, kv tier) without a passing run: "
-          f"{sorted(missing) or 'none'}")
-    return 0 if results and all(r["pass"] for r in results) and not missing else 1
+          f"{sorted(missing) or 'none'}; reference torch-fp32@{device}; sign-off run: "
+          f"{'yes' if signoff else f'NO (diagnostic; sign-off reference is {SIGNOFF_REF_DEVICE}, rec-s3m)'}")
+    ok = bool(results) and all(r["pass"] for r in results) and not missing
+    return (0 if signoff else 2) if ok else 1
 
 
 if __name__ == "__main__":
