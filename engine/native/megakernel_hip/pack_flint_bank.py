@@ -108,13 +108,15 @@ class ShardIndex:
             return f.read(t["nbytes"])
 
     def read_slice(self, name: str, r0: int, r1: int) -> np.ndarray:
-        """Read a contiguous row-range [r0, r1) of a tensor (row-major)."""
+        """Read a contiguous row-range [r0, r1) of a tensor, FLAT (row-major):
+        returns (r1-r0, trailing-storage-units). Row-wise dequant only needs
+        the last dim's units, and r0/r1 need not align with shape[0]."""
         t = self.tensors[name]
         row = t["nbytes"] // max(1, int(np.prod(t["shape"][:-1])))
         with open(t["path"], "rb") as f:
             f.seek(t["abs_start"] + r0 * row)
             buf = f.read((r1 - r0) * row)
-        return np.frombuffer(buf, dtype=ST_DTYPES[t["dtype"]]).reshape(r1 - r0, *t["shape"][1:])
+        return np.frombuffer(buf, dtype=ST_DTYPES[t["dtype"]]).reshape(r1 - r0, t["shape"][-1])
 
 
 def f32_to_bf16(v: np.ndarray) -> np.ndarray:
