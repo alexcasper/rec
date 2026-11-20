@@ -185,7 +185,8 @@ def pack(ckpt_dir: Path, out_bank: Path, out_off: Path) -> None:
         if e["kind"] not in ("bf16", "qlinear"):
             continue
         name = e["name"] + ".weight" if e["kind"] == "qlinear" else e["name"]
-        if name not in idx.tensors and e["name"] not in idx.tensors:
+        has_fallback = e["kind"] == "bf16" and "fallback" in e
+        if not has_fallback and name not in idx.tensors and e["name"] not in idx.tensors:
             missing.append(e["name"])
     if missing:
         raise KeyError(f"tensors missing from shards: {missing[:8]}...")
@@ -312,7 +313,10 @@ def verify(ckpt_dir: Path, bank_path: Path, off_path: Path) -> int:
         end = int(offsets[i + 1]) if i + 1 < len(offsets) else int(offsets[-1])
         # byte identity: bank region must equal source bytes (packed w + bf16 s/b)
         if e["kind"] == "bf16":
-            src = to_bf16_bits(idx.read(e["name"]), idx.tensors[e["name"]]["dtype"]).tobytes()
+            if e["name"] not in idx.tensors:
+                src = np.zeros(e.get("fallback", 0), dtype=np.uint16).tobytes()
+            else:
+                src = to_bf16_bits(idx.read(e["name"]), idx.tensors[e["name"]]["dtype"]).tobytes()
         else:
             s_name, b_name = e["name"] + ".scales", e["name"] + ".biases"
             src = (idx.read_bytes(e["name"] + ".weight")
