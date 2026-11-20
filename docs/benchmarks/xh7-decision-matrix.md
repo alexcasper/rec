@@ -33,24 +33,34 @@ deltas = depth (2→49), experts (8→256), top-k (2→6).
 | R5 | llama.cpp-Vulkan, **full Flint via :8080** server | full 49L | **26.6** (qwen stopped) / 26.8 (qwen up) | 8k | mixed (recorded per run) | rec-xh7 step 0, 2ea0c9f |
 | R6 | engine e2e, rocm backend, **real mid-8L weights bf16** (rocm-bf16) | real mid-8L | **7.22** | greedy gen, torch-native sampling | 3 llama-servers UP | rec-9na comment 2026-11-20 (torch-fp32 gate; fp32 row: 5.94/808.1) |
 | R7 | engine e2e rocm-fp32 | real mid-8L | **5.94** / prefill 808.1 | same as R6 | same | same |
-| R8 | **full-config megakernel** (49L / 256E / top-6, bank `~/xh7/flint-int4.bank` 21.019 GiB, bit-exact verified) | **full Flint INT4-affine** | **35.45** decode32 (w64; w32 34.91, w16 31.43; ABBA pairs valid) | after 512; short-ctx 54.1/67.6/69.9; e2e-516 39.5–47.1 pos/s | recorded per log line | **HOST: albion R9700 (discrete 32 GB)** — rec-u9q GREEN, e3c5ed6 on rec/gemini-kernels, docs/benchmarks/u9q-albion-2026-11-20/; sign-off: fp32-KV 3/3 under adopted spec (a), step_rel ≤2.3e-6; bf16-KV 0/3 = reference-sensitivity artifact (ref itself moves 5.5e-2–8.5e-2 fp32→bf16 KV; router gaps to 3e-7 cascade over 49 layers) — **judged by token agreement**, no logit-rel gate. Scaling context: same-card mid-8L 196–261 tok/s |
+| R8 | **full-config megakernel** (49L / 256E / top-6, bank `~/xh7/flint-int4.bank` 21.019 GiB, bit-exact verified) | **full Flint INT4-affine** (~4.5 bpw-equiv) | **35.45** decode32 (w64; w32 34.91, w16 31.43; ABBA pairs valid) | after 512; short-ctx 54.1/67.6/69.9; e2e-516 39.5–47.1 pos/s | recorded per log line | **HOST: albion R9700 (discrete 32 GB)** — rec-u9q GREEN, e3c5ed6 on rec/gemini-kernels, docs/benchmarks/u9q-albion-2026-11-20/; sign-off: fp32-KV 3/3 under adopted spec (a), step_rel ≤2.3e-6; bf16-KV 0/3 = reference-sensitivity artifact (ref itself moves 5.5e-2–8.5e-2 fp32→bf16 KV; router gaps to 3e-7 cascade over 49 layers) — **judged by token agreement**, no logit-rel gate. Scaling context: same-card mid-8L 196–261 tok/s |
+| R9 | **llama.cpp-HIP build 513ad7ae** (ROCm/HIP backend, NOT Vulkan; -ngl 99 -fa on, 8 threads), **UD-Q3_K_XL as-shipped** (~3.5–3.9 bpw mix) | **full Flint** | **76.3 ± 3.2** decode32@512 (5 reps 70.9–79.1); prefill512 **4162.8 ± 143.5** (3 reps) | 512 | **none** | rec-b3u 17:27Z, albion:~/models/u9q_inc_mix_{d512,p512}.jsonl (+ .err, u9q_incumbent.sh) |
 
 Cross-reads (with caveats): R1 vs R2 = **parity on the shipped mix**
 (1.006×); R1 vs R4 = **0.60× at equal bytes** (~38 vs ~64 GB/s effective)
 — the gap fused-dequant depth must close. R6's do-not-compare note: the
 stale rec-rfp 2463 prefill / 37.2 decode rows are superseded.
 **HOST WARNING: R8 (albion R9700 discrete) must NOT be compared against
-R5 (dusk 890M UMA) — different silicon and memory path; the incumbent
-row on R9700 is the missing like-for-like partner (rec-b3u, w11:p1F).**
+R5 (dusk 890M UMA) — different silicon and memory path.**
+**Same-card head-to-head (R8 vs R9, albion R9700, full Flint): incumbent
+llama.cpp-HIP is 2.15× faster at the as-shipped quant** — but bpw
+asymmetric (UD-Q3 ~3.5–3.9 vs affine INT4 ~4.5 bpw-equiv). The
+bandwidth-fair pure-q4_0 row (byte-matched to affine INT4 g64+bf16) is
+IN FLIGHT via p1F (f16 base GGUF → `llama-quantize --pure q4_0`;
+llama-quantize refuses requantize from q8_0 tensors, so the shipped mix
+cannot be requantized directly). The decision read flips or holds on
+that row. Backend note: R9 is ROCm/HIP; R2–R5 were recorded as Vulkan
+(step-0) — the mission's "Vulkan incumbent" framing should read
+"llama.cpp (Vulkan on dusk, HIP on albion)".
 
 ## Rows (open)
 
 | # | arm | config | owner | status |
 |---|---|---|---|---|
 | O1 | ~~full-config megakernel~~ → **FILLED as R8** | full Flint INT4-affine | w11:p1F | rec-u9q closed GREEN (e3c5ed6) |
-| O2 | llama.cpp-Vulkan **Q4_K_M bpw-matched** full Flint — **no GGUF built yet**; needs MLX-affine→GGUF conversion or fp16-source quantize | full Flint | w11:p1F (rec-b3u build) | OPEN |
+| O2 | ~~Q4_K_M bpw-matched~~ → **SUPERSEDED by the pure-q4_0 row** (byte-matched to affine INT4; Q4_K_M kept only if a quality anchor is wanted) — no GGUF built yet; needs MLX-affine→GGUF conversion or fp16-source quantize (llama-quantize refuses requantize from q8_0) | full Flint | w11:p1F (in flight) | OPEN — the decision row |
 | O3 | quality row: ppl/agreement affine-INT4 vs UD-Q3_K_XL vs unquantized | full Flint | — | MOOTED pending Alex |
-| O4 | **llama.cpp-Vulkan incumbent on albion R9700** — the R8 like-for-like partner | full Flint | w11:p1F (rec-b3u, claimed) | OPEN — decision row |
+| O4 | ~~llama.cpp incumbent on albion R9700~~ → **FILLED as R9** (UD mix) | full Flint | w11:p1F | rec-b3u IN_PROGRESS: pure-q4_0 byte-fair row + origin push of e3c5ed6 remaining |
 
 ## Provenance / hygiene notes
 
