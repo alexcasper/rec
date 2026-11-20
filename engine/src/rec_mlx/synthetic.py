@@ -257,6 +257,55 @@ def repair_tokenizer(src: Path, dst: Path) -> Path:
     return dst
 
 
+def repair_added_specials(src: Path, dst: Path) -> Path:
+    """Copy a PRODUCTION checkpoint whose chat-special tokens were registered
+    past the vocab (e.g. cpu-baseline-mid: <|system|>/<|user|>/<|assistant|>
+    at ids 150144..150146 for vocab 150144) and remap those added-token ids
+    deterministically onto the highest in-vocab slots.
+
+    The model cannot embed ids >= vocab_size (embed_tokens/lm_head have
+    exactly vocab_size rows), so the originals could only gather OOB. The
+    remap ALIASES the specials onto existing real tokens (vocab_size-k..):
+    no id outside the vocab can reach the model any more, which is what the
+    engine's structural guard requires. Decoded text for the three aliased
+    tokens may render as the special strings — this copy is for engine
+    runtime/benchmarks, not chat curation. Weights, config and manifest are
+    copied unchanged; the source directory is never modified.
+    """
+    import shutil
+
+    from .checkpoint import validate
+
+    src, dst = Path(src), Path(dst)
+    tok = json.loads((src / "tokenizer.json").read_text())
+    vocab_size = json.loads((src / "config.json").read_text())["vocab_size"]
+    added = tok.get("added_tokens")
+    if added is None:
+        raise ValueError(f"{src}: tokenizer.json has no added_tokens section")
+    offending = sorted((a for a in added if a["id"] >= vocab_size), key=lambda a: a["id"])
+    if not offending:
+        raise ValueError(f"{src}: no added tokens at or above vocab_size {vocab_size}")
+    if dst.exists():
+        raise FileExistsError(dst)
+    shutil.copytree(src, dst)
+    remapped = [(entry["content"], entry["id"]) for entry in offending]
+    for rank, entry in enumerate(offending):
+        entry["id"] = vocab_size - len(offending) + rank
+    (dst / "tokenizer.json").write_text(json.dumps(tok, ensure_ascii=False, indent=2))
+    notes = [
+        "# Vocab repair (rec_mlx.synthetic --repair-added-specials)",
+        f"source: {src}",
+        f"remapped added tokens (original id -> id, all >= vocab_size {vocab_size}):",
+        *[f"  {content!r}: {orig} -> {entry['id']}" for (content, orig), entry in
+          zip(remapped, offending)],
+        "weights/config/manifest copied unchanged; the aliased in-vocab tokens",
+        "may detokenize as the special strings. Benchmark/runtime copy only.",
+    ]
+    (dst / "REPAIR-NOTES.md").write_text("\n".join(notes) + "\n")
+    validate(dst, dst / "manifest.json")
+    return dst
+
+
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--preset", choices=sorted(PRESETS), default="tiny")
@@ -266,10 +315,16 @@ def main(argv=None) -> None:
     parser.add_argument("--format", choices=FORMATS, default="synthetic")
     parser.add_argument("--repair-tokenizer", type=Path, metavar="SRC",
                         help="copy SRC to --out with a fixed tokenizer (pre-92f9bc2 checkpoints; rec-jow)")
+    parser.add_argument("--repair-added-specials", type=Path, metavar="SRC",
+                        help="copy PRODUCTION ckpt SRC to --out with chat specials remapped into the vocab")
     args = parser.parse_args(argv)
     if args.repair_tokenizer:
         path = repair_tokenizer(args.repair_tokenizer, args.out)
         print(f"wrote {path}: tokenizer rewritten, weights/config/manifest copied from {args.repair_tokenizer}")
+        return
+    if args.repair_added_specials:
+        path = repair_added_specials(args.repair_added_specials, args.out)
+        print(f"wrote {path}: added specials remapped into vocab, weights copied from {args.repair_added_specials}")
         return
     path = build_checkpoint(args.out, args.preset, args.seed, args.model_id, args.format)
     print(f"wrote {path} ({args.preset}, {args.format}, seed {args.seed}); validate() OK, "
