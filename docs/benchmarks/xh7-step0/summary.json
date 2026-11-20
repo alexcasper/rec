@@ -1,0 +1,148 @@
+{
+ "mid-pure-q4_0.gguf|d512|flint:up,e4b:up,qwen:stopped": {
+  "mean": 201.87,
+  "min": 201.75,
+  "max": 202.0,
+  "n_runs": 2,
+  "windows": [
+   6,
+   6
+  ]
+ },
+ "mid-pure-q4_0.gguf|d8192|flint:up,e4b:up,qwen:stopped": {
+  "mean": 168.59,
+  "min": 165.06,
+  "max": 172.11,
+  "n_runs": 2,
+  "windows": [
+   6,
+   6
+  ]
+ },
+ "mid-ud-iq3s.gguf|d512|flint:up,e4b:up,qwen:stopped": {
+  "mean": 120.83,
+  "min": 119.35,
+  "max": 122.3,
+  "n_runs": 2,
+  "windows": [
+   1,
+   4
+  ]
+ },
+ "mid-ud-iq3s.gguf|d512|flint:up,e4b:up,qwen:up": {
+  "mean": 121.06,
+  "min": 120.64,
+  "max": 121.48,
+  "n_runs": 2,
+  "windows": [
+   2,
+   3
+  ]
+ },
+ "mid-ud-iq3s.gguf|d8192|flint:up,e4b:up,qwen:stopped": {
+  "mean": 109.09,
+  "min": 108.71,
+  "max": 109.47,
+  "n_runs": 2,
+  "windows": [
+   1,
+   4
+  ]
+ },
+ "mid-ud-iq3s.gguf|d8192|flint:up,e4b:up,qwen:up": {
+  "mean": 107.58,
+  "min": 107.0,
+  "max": 108.15,
+  "n_runs": 2,
+  "windows": [
+   2,
+   3
+  ]
+ },
+ "mid-ud-iq3xxs-lmq4.gguf|d512|flint:up,e4b:up,qwen:stopped": {
+  "mean": 161.49,
+  "min": 160.93,
+  "max": 161.95,
+  "n_runs": 4,
+  "windows": [
+   5,
+   5,
+   6,
+   6
+  ]
+ },
+ "mid-ud-iq3xxs-lmq4.gguf|d8192|flint:up,e4b:up,qwen:stopped": {
+  "mean": 139.26,
+  "min": 138.75,
+  "max": 140.18,
+  "n_runs": 4,
+  "windows": [
+   5,
+   5,
+   6,
+   6
+  ]
+ },
+ "mid-ud-iq3xxs.gguf|d512|flint:up,e4b:up,qwen:stopped": {
+  "mean": 120.11,
+  "min": 118.68,
+  "max": 121.68,
+  "n_runs": 4,
+  "windows": [
+   1,
+   4,
+   5,
+   5
+  ]
+ },
+ "mid-ud-iq3xxs.gguf|d512|flint:up,e4b:up,qwen:up": {
+  "mean": 120.62,
+  "min": 120.18,
+  "max": 121.06,
+  "n_runs": 2,
+  "windows": [
+   2,
+   3
+  ]
+ },
+ "mid-ud-iq3xxs.gguf|d8192|flint:up,e4b:up,qwen:stopped": {
+  "mean": 108.12,
+  "min": 107.12,
+  "max": 108.89,
+  "n_runs": 4,
+  "windows": [
+   1,
+   4,
+   5,
+   5
+  ]
+ },
+ "mid-ud-iq3xxs.gguf|d8192|flint:up,e4b:up,qwen:up": {
+  "mean": 109.9,
+  "min": 109.66,
+  "max": 110.14,
+  "n_runs": 2,
+  "windows": [
+   2,
+   3
+  ]
+ },
+ "full-flint-:8080|d8192|flint:up,e4b:up,qwen:stopped": {
+  "decode_mean": 26.56,
+  "decode": [
+   26.71,
+   26.42
+  ],
+  "prefill_mean": 464.3,
+  "n_predict": 64
+ },
+ "full-flint-:8080|d8192|flint:up,e4b:up,qwen:up": {
+  "decode_mean": 26.77,
+  "decode": [
+   26.86,
+   26.69
+  ],
+  "prefill_mean": 465.6,
+  "n_predict": 64
+ }
+}

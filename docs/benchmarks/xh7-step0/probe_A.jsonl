@@ -1,0 +1,49 @@
+{"sizes_GiB": {"params_q4": 36.457, "bank_requant_int4": 21.018, "bank_requant_int4_lm8": 21.162, "bank_gguf_as_is": 17.217, "kv_fp32_8192": 0.506, "kv_bf16_8192": 0.253, "kv_fp32_131072": 7.068, "kv_bf16_131072": 3.534, "kv_fp32_262144": 14.068, "kv_bf16_262144": 7.034}}
+{"t": 0.1, "tag": "start", "vram_used": 28.814, "gtt_used": 3.763, "mem_avail": 35.217, "busy": 2, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 47.842}
+{"t": 0.3, "tag": "vram", "vram_used": 28.814, "gtt_used": 3.763, "mem_avail": 35.126, "busy": 3, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 47.842, "held": 0.0}
+{"t": 0.3, "tag": "vram", "vram_used": 29.961, "gtt_used": 3.765, "mem_avail": 35.127, "busy": 6, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 46.699, "held": 1.0}
+{"t": 0.4, "tag": "vram", "vram_used": 30.961, "gtt_used": 3.765, "mem_avail": 35.127, "busy": 9, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 45.691, "held": 2.0}
+{"t": 0.4, "tag": "vram", "vram_used": 31.961, "gtt_used": 3.765, "mem_avail": 35.127, "busy": 11, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 44.699, "held": 3.0}
+{"t": 0.4, "tag": "vram", "vram_used": 32.961, "gtt_used": 3.765, "mem_avail": 35.126, "busy": 14, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 43.699, "held": 4.0}
+{"t": 0.5, "tag": "vram", "vram_used": 33.961, "gtt_used": 3.765, "mem_avail": 35.126, "busy": 16, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 42.699, "held": 5.0}
+{"t": 0.5, "tag": "vram", "vram_used": 34.961, "gtt_used": 3.765, "mem_avail": 35.126, "busy": 19, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 41.699, "held": 6.0}
+{"t": 0.5, "tag": "vram", "vram_used": 35.961, "gtt_used": 3.765, "mem_avail": 35.126, "busy": 21, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 40.699, "held": 7.0}
+{"t": 0.5, "tag": "vram", "vram_used": 36.961, "gtt_used": 3.765, "mem_avail": 35.126, "busy": 23, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 39.699, "held": 8.0}
+{"t": 0.6, "tag": "vram", "vram_used": 37.961, "gtt_used": 3.765, "mem_avail": 35.126, "busy": 25, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 38.699, "held": 9.0}
+{"t": 0.6, "tag": "vram", "vram_used": 38.961, "gtt_used": 3.765, "mem_avail": 35.126, "busy": 27, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 37.691, "held": 10.0}
+{"t": 0.6, "tag": "vram", "vram_used": 39.961, "gtt_used": 3.765, "mem_avail": 35.125, "busy": 29, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 36.699, "held": 11.0}
+{"t": 0.7, "tag": "vram", "vram_used": 40.942, "gtt_used": 3.765, "mem_avail": 35.125, "busy": 31, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 35.699, "held": 12.0}
+{"t": 0.7, "tag": "vram", "vram_used": 41.942, "gtt_used": 3.765, "mem_avail": 35.125, "busy": 33, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 34.699, "held": 13.0}
+{"t": 0.7, "tag": "vram", "vram_used": 42.942, "gtt_used": 3.765, "mem_avail": 35.125, "busy": 35, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 33.699, "held": 14.0}
+{"t": 0.7, "tag": "vram", "vram_used": 43.942, "gtt_used": 3.765, "mem_avail": 35.125, "busy": 37, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 32.699, "held": 15.0}
+{"t": 0.8, "tag": "vram", "vram_used": 44.942, "gtt_used": 3.765, "mem_avail": 35.124, "busy": 38, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 31.699, "held": 16.0}
+{"t": 0.8, "tag": "vram", "vram_used": 45.942, "gtt_used": 3.765, "mem_avail": 35.124, "busy": 40, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 30.699, "held": 17.0}
+{"t": 0.8, "tag": "vram", "vram_used": 46.942, "gtt_used": 3.765, "mem_avail": 35.124, "busy": 42, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 29.699, "held": 18.0}
+{"t": 0.9, "tag": "vram", "vram_used": 46.92, "gtt_used": 4.773, "mem_avail": 34.111, "busy": 45, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 28.699, "held": 19.0}
+{"t": 1.0, "tag": "vram", "vram_used": 46.924, "gtt_used": 5.769, "mem_avail": 33.098, "busy": 48, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0}
+{"t": 1.0, "tag": "vram-done", "vram_used": 46.924, "gtt_used": 5.769, "mem_avail": 33.1, "busy": 48, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "stop": "host floor / gtt spill"}
+{"t": 1.1, "tag": "host", "vram_used": 46.924, "gtt_used": 5.779, "mem_avail": 33.08, "busy": 43, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 0.0}
+{"t": 1.3, "tag": "host", "vram_used": 46.924, "gtt_used": 5.779, "mem_avail": 32.074, "busy": 39, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 1.0}
+{"t": 1.5, "tag": "host", "vram_used": 46.926, "gtt_used": 5.777, "mem_avail": 31.174, "busy": 31, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 2.0}
+{"t": 1.7, "tag": "host", "vram_used": 46.926, "gtt_used": 5.777, "mem_avail": 30.174, "busy": 26, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 3.0}
+{"t": 1.9, "tag": "host", "vram_used": 46.926, "gtt_used": 5.777, "mem_avail": 29.144, "busy": 21, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 4.0}
+{"t": 2.5, "tag": "host", "vram_used": 46.926, "gtt_used": 5.769, "mem_avail": 28.152, "busy": 14, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 5.0}
+{"t": 3.0, "tag": "host", "vram_used": 46.926, "gtt_used": 5.769, "mem_avail": 26.901, "busy": 8, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 6.0}
+{"t": 3.7, "tag": "host", "vram_used": 46.92, "gtt_used": 5.767, "mem_avail": 26.134, "busy": 4, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 7.0}
+{"t": 4.3, "tag": "host", "vram_used": 46.92, "gtt_used": 5.767, "mem_avail": 25.153, "busy": 2, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 8.0}
+{"t": 5.0, "tag": "host", "vram_used": 46.92, "gtt_used": 5.769, "mem_avail": 24.151, "busy": 2, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 9.0}
+{"t": 5.7, "tag": "host", "vram_used": 46.895, "gtt_used": 5.765, "mem_avail": 23.153, "busy": 2, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 10.0}
+{"t": 6.5, "tag": "host", "vram_used": 46.895, "gtt_used": 5.765, "mem_avail": 22.151, "busy": 1, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 11.0}
+{"t": 7.2, "tag": "host", "vram_used": 46.89, "gtt_used": 5.765, "mem_avail": 20.886, "busy": 1, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 12.0}
+{"t": 7.5, "tag": "host", "vram_used": 46.884, "gtt_used": 5.765, "mem_avail": 20.148, "busy": 1, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 13.0}
+{"t": 7.9, "tag": "host", "vram_used": 46.886, "gtt_used": 5.767, "mem_avail": 19.141, "busy": 2, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 14.0}
+{"t": 8.4, "tag": "host", "vram_used": 46.886, "gtt_used": 5.767, "mem_avail": 18.14, "busy": 2, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 15.0}
+{"t": 8.9, "tag": "host", "vram_used": 46.886, "gtt_used": 5.767, "mem_avail": 17.142, "busy": 1, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 16.0}
+{"t": 9.3, "tag": "host", "vram_used": 46.91, "gtt_used": 5.778, "mem_avail": 16.177, "busy": 2, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 17.0}
+{"t": 9.6, "tag": "host", "vram_used": 46.91, "gtt_used": 5.778, "mem_avail": 15.176, "busy": 2, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 18.0}
+{"t": 10.0, "tag": "host", "vram_used": 46.903, "gtt_used": 5.763, "mem_avail": 14.2, "busy": 2, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 19.0}
+{"t": 10.4, "tag": "host", "vram_used": 46.907, "gtt_used": 5.777, "mem_avail": 13.326, "busy": 3, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.691, "held": 20.0, "host_held": 20.0}
+{"t": 10.8, "tag": "host", "vram_used": 46.9, "gtt_used": 5.781, "mem_avail": 12.368, "busy": 4, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 21.0}
+{"t": 11.2, "tag": "host-done", "vram_used": 46.885, "gtt_used": 5.767, "mem_avail": 11.331, "busy": 4, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 27.699, "held": 20.0, "host_held": 22.0, "stop": "target"}
+{"t": 14.6, "tag": "freed", "vram_used": 26.932, "gtt_used": 5.775, "mem_avail": 32.351, "busy": 10, "cotenants": "flint:up,e4b:up,qwen:up", "hip_free": 47.699}
+{"RESULT": {"cotenants": "flint:up,e4b:up,qwen:up", "vram_held_GiB": 20.0, "vram_stop": "host floor / gtt spill", "vram_free_at_start_GiB": 47.841796875, "vram_free_while_held_GiB": 27.69921875, "host_held_GiB": 22.0, "host_stop": "target", "mem_avail_while_both_GiB": 11.330596923828125, "gtt_growth_GiB": 2.0057220458984375, "restored_vram_used_GiB": 26.931655883789062}}
