@@ -1,0 +1,289 @@
+"""Full-Flint persistent megakernel driver (rec-u9q / rec-xh7 step 1). Torch-free.
+
+Loads the prebuilt zero-copy bank (pack_flint_bank.py: <bank> + <bank>.off.npy, 17*NL+4
+entries) by memmap -- never materialised in host RAM -- into `flint_full.so`
+(flint_mid_megakernel.hip built with -DFLINT_CFG_FULL=1) and either
+
+  --emit-suite DIR   rec-mk-out/1 npz per rec-pp2 case (short4, chat, wrap512) and build
+                     (fp32kv | fp32_bf16kv | bf16kv), for mid_mk_check.py matrix (CPU reference)
+  --bench OUT.json   decode32 differential ABBA (run-definitions R1-R8): warmup 516, then 4
+                     pairs (516, 548) in AB BA AB BA order; also the short-ctx pair (8, 40)
+
+    python flint_full_driver.py --bank ~/xh7/flint-int4.bank --ckpt ~/xh7/flint-int4 \\
+        (--emit-suite out/ [--builds fp32kv,fp32_bf16kv] [--cases short4,chat,wrap512]
+         | --bench bench.json [--mode 0]) [--workers 16] [--lib flint_full.so]
+
+Never run under HSA_OVERRIDE_GFX_VERSION (rec-tan.5: the launch no-ops and returns 0); the
+driver refuses. A VRAM preflight reads sysfs (hipMemGetInfo cannot see other processes'
+Vulkan allocations on dusk) and refuses to start if bank + session would spill into GTT.
+"""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import glob
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+from mid_mk_driver import case_matrix, shard_sha256  # noqa: E402
+
+VOCAB, HID, NKV, HDIM, WIN = 150144, 2048, 4, 128, 513
+VRAM_SLACK = int(1.5 * 2**30)
+BUILDS = {  # name -> (mode, kv_dtype, impl)
+    "fp32kv": (2, "fp32", "flint_mid_megakernel.hip[FULL]:mid_generate_fp32kv (fp32-compute, fp32-KV)"),
+    "fp32_bf16kv": (1, "bf16", "flint_mid_megakernel.hip[FULL]:mid_generate_fp32_bf16kv (fp32-compute, bf16-KV)"),
+    "bf16kv": (0, "bf16", "flint_mid_megakernel.hip[FULL]:mid_generate (production bf16-KV build)"),
+}
+
+
+def log(msg: str) -> None:
+    print(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+
+
+def cotenants() -> str:
+    """Cotenant state for every log line (benchmark hygiene protocol)."""
+    host = "100.98.73.29"
+    st = []
+    for name, port in (("flint", 8080), ("e4b", 8090), ("qwen", 8091)):
+        try:
+            out = subprocess.run(["curl", "-s", "-m", "2", f"http://{host}:{port}/slots"],
+                                 capture_output=True, text=True, timeout=5).stdout
+            st.append(f"{name}:{'busy' if '\"is_processing\":true' in out else 'idle'}" if out else f"{name}:down")
+        except Exception:
+            st.append(f"{name}:?")
+    return ",".join(st) + f",gpu_busy={_busy()}"
+
+
+def _busy() -> str:
+    for p in glob.glob("/sys/class/drm/card*/device/gpu_busy_percent"):
+        try:
+            return open(p).read().strip()
+        except OSError:
+            pass
+    return "?"
+
+
+def vram_free_bytes() -> int | None:
+    for d in glob.glob("/sys/class/drm/card*/device"):
+        try:
+            return int(open(f"{d}/mem_info_vram_total").read()) - int(open(f"{d}/mem_info_vram_used").read())
+        except OSError:
+            continue
+    return None
+
+
+def load_lib(path: Path) -> tuple[ctypes.CDLL, dict]:
+    lib = ctypes.CDLL(str(path))
+    cfg = (ctypes.c_int * 8)()
+    lib.mid_config(cfg)
+    c = dict(zip(("nl", "nexp", "topk", "n_dense", "dense_i", "n_offsets", "n_full", "full"), list(cfg)))
+    lib.mid_session_create.restype = ctypes.c_void_p
+    lib.mid_session_create.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
+    lib.mid_session_run_ex2.restype = ctypes.c_int
+    lib.mid_session_run_ex2.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p,
+                                        ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int,
+                                        ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p]
+    lib.mid_session_free.restype = None
+    lib.mid_session_free.argtypes = [ctypes.c_void_p]
+    lib.mid_query_occupancy.restype = ctypes.c_int
+    lib.mid_query_occupancy.argtypes = [ctypes.c_int] + [ctypes.c_void_p] * 4
+    return lib, c
+
+
+def occupancy(lib, mode: int) -> dict:
+    v = [ctypes.c_int(0) for _ in range(4)]
+    assert lib.mid_query_occupancy(mode, *[ctypes.byref(x) for x in v]) == 0
+    return dict(zip(("cus", "max_blocks_per_cu", "max_co_resident_workers", "wave_size"), [x.value for x in v]))
+
+
+def open_bank(bank_path: Path, cfg: dict) -> tuple[np.memmap, np.ndarray]:
+    off = np.load(str(bank_path) + ".off.npy").astype(np.int64)
+    if len(off) != cfg["n_offsets"]:
+        raise SystemExit(f"offset table has {len(off)} entries, {cfg['n_offsets']} expected by the .so (NL={cfg['nl']})")
+    size = os.path.getsize(bank_path)
+    if int(off[-1]) != size or bool((np.diff(off) < 0).any()):
+        raise SystemExit(f"bad offset table: sentinel {int(off[-1])} vs bank {size} bytes, monotonic={not (np.diff(off) < 0).any()}")
+    return np.memmap(bank_path, dtype=np.uint8, mode="r"), off
+
+
+def session_bytes(bank_size: int, cfg: dict, max_total: int) -> int:
+    n_sl = cfg["nl"] - cfg["n_full"]
+    kv = (n_sl * 2 * NKV * WIN * HDIM + cfg["n_full"] * 2 * NKV * max_total * HDIM) * (2 + 4)  # bf16 + fp32 copies
+    return bank_size + kv + 64 * VOCAB * 4 + 2 * (60000 + VOCAB) * 4 + max_total * cfg["nl"] * cfg["topk"] * 4
+
+
+def create_session(lib, cfg, bank, off, max_total: int):
+    need = session_bytes(len(bank), cfg, max_total)
+    free = vram_free_bytes()
+    log(f"VRAM preflight: need {need / 2**30:.2f} GiB + {VRAM_SLACK / 2**30:.1f} slack, sysfs free "
+        f"{'?' if free is None else f'{free / 2**30:.2f}'} GiB | {cotenants()}")
+    if free is not None and need + VRAM_SLACK > free:
+        raise SystemExit("REFUSING: session would spill past the VRAM carve-out into GTT/host RAM "
+                         "(stop llama-qwen :8091 first; see rec-xh7 step 0)")
+    t0 = time.perf_counter()
+    sess = lib.mid_session_create(bank.ctypes.data, off.ctypes.data, ctypes.c_int(max_total))
+    if not sess:
+        raise SystemExit("mid_session_create failed (allocation or bank copy)")
+    log(f"session created in {time.perf_counter() - t0:.1f} s (bank {len(bank) / 2**30:.3f} GiB H2D) | {cotenants()}")
+    return sess
+
+
+def run(lib, sess, cfg, prompt: np.ndarray, n_out: int, workers: int, mode: int,
+        step_logits: bool = False, experts: bool = False):
+    tokens = np.zeros(n_out, dtype=np.int32)
+    last = np.zeros(VOCAB, dtype=np.float32)
+    step = np.zeros((n_out, VOCAB), dtype=np.float32) if step_logits else None
+    exp = np.full((len(prompt) + n_out, cfg["nl"], cfg["topk"]), -1, dtype=np.int32) if experts else None
+    ctrl = np.zeros(4, dtype=np.uint32)
+    t0 = time.perf_counter()
+    rc = lib.mid_session_run_ex2(sess, prompt.ctypes.data, len(prompt), tokens.ctypes.data, n_out,
+                                 step.ctypes.data if step is not None else None, last.ctypes.data,
+                                 workers, mode, ctrl.ctypes.data, exp.ctypes.data if exp is not None else None)
+    dt = time.perf_counter() - t0
+    # rec-tan.5 validity: rc, barrier abort, executed, written outputs, routed layers written
+    bad = []
+    if rc != 0 or int(ctrl[2]) != 0 or int(ctrl[1]) == 0:
+        bad.append(f"rc={rc} control={ctrl.tolist()}")
+    if n_out and not tokens.any():
+        bad.append("all-zero tokens")
+    if not last.any():
+        bad.append("all-zero last_logits")
+    if step is not None and not step.any():
+        bad.append("all-zero step_logits")
+    if exp is not None and bool((exp[:, cfg["n_dense"]:, :] < 0).any()):
+        bad.append("unwritten -1 entries in MoE layers of step_experts")
+    if bool(((tokens < 0) | (tokens >= VOCAB)).any()):
+        bad.append("token id outside vocab")
+    return dt, tokens, last, step, exp, ctrl, bad
+
+
+def emit_suite(lib, cfg, bank, off, ckpt: Path, out: Path, workers: int, builds, cases) -> int:
+    out.mkdir(parents=True, exist_ok=True)
+    sha = shard_sha256(ckpt)
+    log(f"ckpt {ckpt} shard sha256 {sha[:16]} | bank {len(bank)} B | cfg {cfg} | {cotenants()}")
+    matrix = case_matrix(VOCAB)
+    sess = create_session(lib, cfg, bank, off, max_total=600)
+    fails = 0
+    try:
+        for b in builds:
+            mode, kv_dtype, impl = BUILDS[b]
+            for cname in cases:
+                c = matrix[cname]
+                prompt = np.array(c["prompt"], dtype=np.int32)
+                dt, tok, last, step, exp, ctrl, bad = run(lib, sess, cfg, prompt, int(c["n_out"]), workers, mode,
+                                                         step_logits=True, experts=True)
+                if bad:
+                    fails += 1
+                    log(f"INVALID {cname}_{b}: {bad} | {cotenants()}")
+                    continue
+                p = len(prompt)
+                assert step is not None and exp is not None  # requested above
+                np.savez(out / f"{cname}_{b}.npz", schema=np.array("rec-mk-out/1"), case=np.array(cname),
+                         ckpt_sha256=np.array(sha), impl=np.array(f"{impl} workers={workers}"),
+                         kv_dtype=np.array(kv_dtype), prompt=prompt, tokens=tok, step_logits=step,
+                         last_logits=last, chosen_experts=exp[p - 1:p - 1 + len(tok)], step_experts=exp)
+                log(f"wrote {cname}_{b}.npz | {dt:7.2f} s | {(p + len(tok)) / dt:6.1f} pos/s | "
+                    f"tokens[:6]={tok[:6].tolist()} | {cotenants()}")
+    finally:
+        lib.mid_session_free(sess)
+    return fails
+
+
+def bench(lib, cfg, bank, off, ckpt: Path, out_json: Path, workers: int, mode: int) -> int:
+    sess = create_session(lib, cfg, bank, off, max_total=600)
+    prompt512 = np.random.default_rng(0).integers(3, VOCAB, size=512, dtype=np.int32)
+    prompt4 = np.array([1, 5, 6, 7], dtype=np.int32)
+    occ = occupancy(lib, mode)
+    res = {"protocol": "run-definitions R1-R8 differential ABBA (4 pairs), rec-u9q full-Flint",
+           "ckpt": str(ckpt), "ckpt_sha256": shard_sha256(ckpt), "bank_bytes": int(len(bank)),
+           "config": cfg, "mode": mode, "workers": workers, "occupancy": occ,
+           "prompt512_int32_sha256": hashlib.sha256(prompt512.tobytes()).hexdigest(),
+           "host": os.uname().nodename, "pairs": {}}
+    try:
+        def pairs(prompt, na, nb, label):
+            rows = []
+            for i, order in enumerate(("AB", "BA", "AB", "BA")):
+                seq = [(na, "a"), (nb, "b")] if order == "AB" else [(nb, "b"), (na, "a")]
+                r = {}
+                for n, tag in seq:
+                    pre = cotenants()
+                    dt, tok, _, _, _, ctrl, bad = run(lib, sess, cfg, prompt, n, workers, mode)
+                    r[tag] = (dt, tok, bad, pre, cotenants())
+                (ta, toka, bada, prea, posta), (tb, tokb, badb, preb, postb) = r["a"], r["b"]
+                d = tb - ta
+                row = {"pair": i, "order": order, f"t{len(prompt) + na}_s": round(ta, 5),
+                       f"t{len(prompt) + nb}_s": round(tb, 5), "dt32_s": round(d, 5),
+                       "decode32_tok_s": round(32.0 / d, 3) if d > 0 else 0.0,
+                       "prefix4_match": toka.tolist() == tokb[:na].tolist(), "invalid": bada + badb,
+                       "cotenants": [prea, posta, preb, postb]}
+                row["valid"] = not row["invalid"] and row["prefix4_match"] and d > 0
+                log(f"{label} pair {i} {order}: ta={ta:.3f}s tb={tb:.3f}s -> {row['decode32_tok_s']} tok/s "
+                    f"valid={row['valid']} | {postb}")
+                rows.append(row)
+            ta_m = sum(r[f"t{len(prompt) + na}_s"] for r in rows) / 4
+            tb_m = sum(r[f"t{len(prompt) + nb}_s"] for r in rows) / 4
+            rates = [r["decode32_tok_s"] for r in rows]
+            return {"valid": all(r["valid"] for r in rows), "differential_tok_s": round(32.0 / (tb_m - ta_m), 3),
+                    "pair_min": min(rates), "pair_max": max(rates), "ta_mean_s": round(ta_m, 4),
+                    "tb_mean_s": round(tb_m, 4), "pairs": rows}
+
+        for _ in range(2):
+            run(lib, sess, cfg, prompt4, 8, workers, mode)  # warmup
+        res["pairs"]["decode32_short_ctx"] = pairs(prompt4, 4, 36, "short")
+        w = run(lib, sess, cfg, prompt512, 4, workers, mode)
+        log(f"warmup 516: {w[0]:.3f}s invalid={w[6]}")
+        res["pairs"]["decode32_after_512"] = pairs(prompt512, 4, 36, "ctx512")
+    finally:
+        lib.mid_session_free(sess)
+    out_json.write_text(json.dumps(res, indent=1))
+    a = res["pairs"]["decode32_after_512"]
+    s = res["pairs"]["decode32_short_ctx"]
+    log(f"RESULT decode32_after_512 {a['differential_tok_s']} tok/s (pairs {a['pair_min']}..{a['pair_max']}, "
+        f"valid={a['valid']}); short_ctx {s['differential_tok_s']} (valid={s['valid']}); "
+        f"t516 {a['ta_mean_s']}s -> end_to_end_516 {516 / a['ta_mean_s']:.2f} pos/s")
+    return 0 if a["valid"] and s["valid"] else 1
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--bank", type=Path, required=True)
+    ap.add_argument("--ckpt", type=Path, required=True, help="HF flint-int4 dir (shard sha, recorded in npz)")
+    ap.add_argument("--lib", type=Path, default=HERE / "flint_full.so")
+    ap.add_argument("--workers", type=int, default=16)
+    ap.add_argument("--emit-suite", type=Path)
+    ap.add_argument("--builds", default="fp32kv,fp32_bf16kv")
+    ap.add_argument("--cases", default="short4,chat,wrap512")
+    ap.add_argument("--bench", type=Path)
+    ap.add_argument("--mode", type=int, default=0)
+    a = ap.parse_args(argv)
+    if os.environ.get("HSA_OVERRIDE_GFX_VERSION"):
+        raise SystemExit("refusing: HSA_OVERRIDE_GFX_VERSION is set (rec-tan.5: native launch no-ops)")
+    lib, cfg = load_lib(a.lib)
+    if not cfg["full"]:
+        raise SystemExit(f"{a.lib} is not a FLINT_CFG_FULL build: {cfg}")
+    if not 1 <= a.workers <= 64:
+        raise SystemExit("workers must be in [1, 64]")
+    occ = occupancy(lib, a.mode)
+    if a.workers > occ["max_co_resident_workers"]:
+        raise SystemExit(f"workers={a.workers} > max co-resident {occ['max_co_resident_workers']} ({occ})")
+    bank, off = open_bank(a.bank, cfg)
+    log(f"lib {a.lib.name} cfg {cfg} | occupancy {occ} | workers {a.workers}")
+    if a.emit_suite:
+        return 1 if emit_suite(lib, cfg, bank, off, a.ckpt, a.emit_suite, a.workers,
+                               a.builds.split(","), a.cases.split(",")) else 0
+    if a.bench:
+        return bench(lib, cfg, bank, off, a.ckpt, a.bench, a.workers, a.mode)
+    ap.error("one of --emit-suite / --bench")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -225,24 +225,54 @@ __device__ inline void q4_block512(const uint8_t* w, const bf16* s, const bf16* 
     flint_q4_gemv_op<K, ROUND_BF16>(w, s, b, x, out_bf, out_f, n, lane, sg, groups);
 }
 
-// ---- Mid-8L Flint constants ----
+// ---- Model config (rec-u9q): FLINT_CFG_FULL=0 -> mid-8L (default, run-of-record d1f6208),
+//      FLINT_CFG_FULL=1 -> full Flint (RecursiveSI/flint-int4 config.json). Everything that differs
+//      between the two is here; the per-token math is shared. ----
+#ifndef FLINT_CFG_FULL
+#define FLINT_CFG_FULL 0
+#endif
+#if FLINT_CFG_FULL
+constexpr int MID_NL = 49;
+constexpr int MID_N_DENSE = 2;          // mlp_only_layers [0, 1] (must be leading)
+constexpr int MID_DENSE_I = 6144;       // intermediate_size
+constexpr int MID_NEXP = 256;
+constexpr int MID_TOPK = 6;
+// layer_types full_attention == no_rope_layer_indices: [0,1,5,9,...,45,48]
+constexpr uint64_t MID_FULL_MASK = (1ull << 0) | (1ull << 1) | (1ull << 5) | (1ull << 9) | (1ull << 13) |
+                                   (1ull << 17) | (1ull << 21) | (1ull << 25) | (1ull << 29) | (1ull << 33) |
+                                   (1ull << 37) | (1ull << 41) | (1ull << 45) | (1ull << 48);
+#else
 constexpr int MID_NL = 8;
+constexpr int MID_N_DENSE = 1;          // mlp_only_layers [0]
+constexpr int MID_DENSE_I = 2048;
+constexpr int MID_NEXP = 32;
+constexpr int MID_TOPK = 2;
+constexpr uint64_t MID_FULL_MASK = 0xAAull; // odd layers full attention (no rope)
+#endif
+static_assert(MID_NL <= 64, "MID_FULL_MASK is 64-bit");
+static_assert(MID_TOPK <= 16, "ws_i_sel has 16 slots");
+static_assert(MID_TOPK <= 32, "ws_f_wsel has 32 slots");
+constexpr int MID_N_FULL = __builtin_popcountll(MID_FULL_MASK);
+constexpr int MID_N_SLIDING = MID_NL - MID_N_FULL;
+__host__ __device__ constexpr bool mid_layer_full(int l) { return (MID_FULL_MASK >> l) & 1ull; }
+// index of layer l among the full (resp. sliding) layers, for the per-type KV caches
+__host__ __device__ constexpr int mid_full_idx(int l) { return __builtin_popcountll(MID_FULL_MASK & ((1ull << l) - 1ull)); }
+__host__ __device__ constexpr int mid_sliding_idx(int l) { return l - mid_full_idx(l); }
 constexpr int MID_HID = 2048;
 constexpr int MID_HEADS = 32;
 constexpr int MID_NKV = 4;
 constexpr int MID_HDIM = 128;
 constexpr int MID_QDIM = MID_HEADS * MID_HDIM;   // 4096
 constexpr int MID_KVDIM = MID_NKV * MID_HDIM;    // 512
-constexpr int MID_DENSE_I = 2048;
 constexpr int MID_MOE_I = 512;
 constexpr int MID_SH_I = 1024;
-constexpr int MID_NEXP = 32;
-constexpr int MID_TOPK = 2;
 constexpr int MID_VOCAB = 150144;
 constexpr int MID_WIN = 513;
 constexpr float MID_EPS = 1e-6f;
 constexpr float MID_ATTN_SCALE = 0.08838834764831845f; // 1/sqrt(128)
 constexpr float MID_ROPE_LOGBASE = 13.28771237954945f; // log2(10000)
+constexpr int mid_max3(int a, int b, int c) { return a > b ? (a > c ? a : c) : (b > c ? b : c); }
+constexpr int MID_FFN_MAX = mid_max3(MID_DENSE_I, MID_SH_I, MID_MOE_I);
 
 // ---- Mid-8L bank offset table indices ----
 // Each Q4 tensor has 1 offset entry pointing to packed [out, K/2];
@@ -275,11 +305,15 @@ constexpr float MID_ROPE_LOGBASE = 13.28771237954945f; // log2(10000)
 //   Global Q4:
 //     138: lm_head  [150144, 2048]
 //   Total offset entries = 139 (off[139] = total bank size in bytes).
-constexpr int MID_OFF_FINAL_NORM = 56;
-constexpr int MID_OFF_EMBED = 57;
-constexpr int MID_OFF_LAYER_Q4_BASE = 58;
-constexpr int MID_OFF_LM_HEAD = 138;
-constexpr int MID_NUM_OFFSETS = 140;
+// Generalized: 7*NL dense entries, final norm, embed, 10*NL q4 entries, lm_head, size sentinel
+// (mid-8L: 56/57/58/138/140; full Flint NL=49: 343/344/345/835/837 = pack_flint_bank.py).
+constexpr int MID_OFF_FINAL_NORM = 7 * MID_NL;
+constexpr int MID_OFF_EMBED = 7 * MID_NL + 1;
+constexpr int MID_OFF_LAYER_Q4_BASE = 7 * MID_NL + 2;
+constexpr int MID_OFF_LM_HEAD = MID_OFF_LAYER_Q4_BASE + 10 * MID_NL;
+constexpr int MID_NUM_OFFSETS = MID_OFF_LM_HEAD + 2;
+static_assert(FLINT_CFG_FULL || (MID_OFF_LM_HEAD == 138 && MID_NUM_OFFSETS == 140), "mid layout drifted");
+static_assert(!FLINT_CFG_FULL || MID_NUM_OFFSETS == 837, "full layout must match pack_flint_bank (837)");
 
 // 256-thread block RMSNorm over HID=2048 (8 elems/thread) from float `in_f` to shared float `out_sh`.
 __device__ inline void mid_rmsnorm_2048(const float* in_f, const bf16* w_bf,
@@ -389,11 +423,16 @@ __device__ inline bf16 kv_store<bf16>(float v) { return tobf(v); }
 template <>
 __device__ inline float kv_store<float>(float v) { return v; }
 
+constexpr int MID_WS_SCORES = MID_NEXP > 32 ? MID_NEXP : 32;
+constexpr int MID_WS_LOGITS_OFF = 2 * MID_HID + 2 * MID_QDIM + 2 * MID_KVDIM + 3 * MID_FFN_MAX +
+                                  (MID_TOPK + 1) * MID_HID + MID_WS_SCORES + 32 + 64;
+static_assert(FLINT_CFG_FULL || MID_WS_LOGITS_OFF == 25728, "mid workspace layout drifted");
+
 template <typename KVT, bool PURE_FP32>
 __device__ inline void mid_generate_impl(
     const uint8_t* bank, const int64_t* off,
-    KVT* kv_sliding,                         // [4][2 (K|V)][4][513][128] (layers 0,2,4,6)
-    KVT* kv_full,                            // [4][2 (K|V)][4][full_cap][128] (layers 1,3,5,7)
+    KVT* kv_sliding,                         // [N_SLIDING][2 (K|V)][4][513][128] (mid-8L: layers 0,2,4,6)
+    KVT* kv_full,                            // [N_FULL][2 (K|V)][4][full_cap][128] (mid-8L: layers 1,3,5,7)
     int full_cap,
     const int* prompt, int prompt_len,
     int* out_tokens, int n_out,
@@ -412,20 +451,21 @@ __device__ inline void mid_generate_impl(
     const int total = prompt_len + n_out;
 
     // Partition device workspace pointers (float precision matching tiny_megakernel.hip)
+    // Sequential layout (mid-8L offsets unchanged: act 23552, scores 25600, logits 25728).
     float* ws_x      = ws_f + 0;
-    float* ws_q      = ws_f + 2048;
-    float* ws_k      = ws_f + 2048 + 4096;
-    float* ws_v      = ws_f + 2048 + 4096 + 512;
-    float* ws_attn   = ws_f + 2048 + 4096 + 1024;
-    float* ws_o      = ws_f + 2048 + 8192 + 1024;
-    float* ws_gate   = ws_f + 4096 + 8192 + 1024;
-    float* ws_up     = ws_f + 6144 + 8192 + 1024;
-    float* ws_down   = ws_f + 8192 + 8192 + 1024; // 3 * 2048 = 6144 elems
-    float* ws_f_act    = ws_f + 14336 + 8192 + 1024;
-    float* ws_f_scores = ws_f_act + 2048;
-    float* ws_f_wsel   = ws_f_scores + 32;
-    float* ws_f_maxval = ws_f_scores + 64;
-    float* ws_f_logits = ws_f_scores + 128;
+    float* ws_q      = ws_x + MID_HID;
+    float* ws_k      = ws_q + MID_QDIM;
+    float* ws_v      = ws_k + MID_KVDIM;
+    float* ws_attn   = ws_v + MID_KVDIM;
+    float* ws_o      = ws_attn + MID_QDIM;
+    float* ws_gate   = ws_o + MID_HID;
+    float* ws_up     = ws_gate + MID_FFN_MAX;
+    float* ws_down   = ws_up + MID_FFN_MAX;           // (TOPK routed + 1 shared) * HID
+    float* ws_f_act    = ws_down + (MID_TOPK + 1) * MID_HID;
+    float* ws_f_scores = ws_f_act + MID_FFN_MAX;      // NEXP slots (>= 32)
+    float* ws_f_wsel   = ws_f_scores + MID_WS_SCORES;  // 32 slots
+    float* ws_f_maxval = ws_f_wsel + 32;              // 64 slots
+    float* ws_f_logits = ws_f_maxval + 64;
     (void)ws_bf;
 
     int* ws_i_sel    = ws_i + 0;
@@ -472,8 +512,8 @@ __device__ inline void mid_generate_impl(
             const bf16* rb_bf  = B(layer * 7 + 6);
 
             int qbase = MID_OFF_LAYER_Q4_BASE + layer * 10;
-            int is_sliding = (layer % 2 == 0);
-            int rotary = is_sliding; // in Flint mid-8L, no_rope_layer_indices = odd layers
+            int is_sliding = !mid_layer_full(layer);
+            int rotary = is_sliding; // Flint: no_rope_layer_indices == full-attention layers (both configs)
 
             // ---- 2. Input RMSNorm (replicated in each workgroup's sh_xn) ----
             mid_rmsnorm_2048(ws_x, ln_w, sh_xn, sh_red);
@@ -493,7 +533,7 @@ __device__ inline void mid_generate_impl(
             SYNC_ALL();
 
             // ---- 5. Write K, V to head-major KV cache (KVT = bf16 or float) ----
-            int l_idx = layer / 2;
+            int l_idx = is_sliding ? mid_sliding_idx(layer) : mid_full_idx(layer); // mid-8L: layer / 2
             size_t l_cap = is_sliding ? (size_t)MID_WIN : (size_t)full_cap;
             size_t slot  = is_sliding ? (size_t)(pos % MID_WIN) : (size_t)pos;
             KVT* l_kv    = is_sliding
@@ -562,11 +602,10 @@ __device__ inline void mid_generate_impl(
             mid_rmsnorm_2048(ws_x, post_w, sh_xn, sh_red);
 
             // ---- 9. MLP (Layer 0 Dense vs Layers 1..7 MoE) ----
-            if (layer == 0) {
+            if (layer < MID_N_DENSE) {
                 if (group == 0 && tid == 0 && out_chosen_experts != nullptr) {
                     int* exp_dst = out_chosen_experts + ((size_t)pos * MID_NL + layer) * MID_TOPK;
-                    exp_dst[0] = -1;
-                    exp_dst[1] = -1;
+                    for (int t = 0; t < MID_TOPK; ++t) exp_dst[t] = -1;
                 }
                 q4_block512<MID_HID>(Q_W(qbase + 4), Q_S(qbase + 4, MID_DENSE_I, MID_HID), Q_B(qbase + 4, MID_DENSE_I, MID_HID),
                                      sh_xn, nullptr, ws_gate, MID_DENSE_I, lane, sg, groups);
@@ -606,28 +645,34 @@ __device__ inline void mid_generate_impl(
                 }
                 SYNC_ALL();
                 if (group == 0 && tid == 0) {
-                    int top0 = 0, top1 = 0;
-                    float tv0 = -1e30f, tv1 = -1e30f;
+                    // top-K by insertion, strict '>' (an equal later expert never displaces an
+                    // earlier one): for TOPK == 2 this is exactly the original two-slot update.
+                    int   ti[MID_TOPK];
+                    float tv[MID_TOPK];
+                    for (int t = 0; t < MID_TOPK; ++t) { ti[t] = 0; tv[t] = -1e30f; }
                     for (int e = 0; e < MID_NEXP; ++e) {
                         float choice = ws_f_scores[e] + tofloat(rb_bf[e]);
-                        if (choice > tv0) {
-                            tv1 = tv0; top1 = top0;
-                            tv0 = choice; top0 = e;
-                        } else if (choice > tv1) {
-                            tv1 = choice; top1 = e;
-                        }
+                        if (!(choice > tv[MID_TOPK - 1])) continue;
+                        int p = MID_TOPK - 1;
+                        while (p > 0 && choice > tv[p - 1]) { tv[p] = tv[p - 1]; ti[p] = ti[p - 1]; --p; }
+                        tv[p] = choice; ti[p] = e;
                     }
-                    ws_i_sel[0] = top0;
-                    ws_i_sel[1] = top1;
+                    for (int t = 0; t < MID_TOPK; ++t) ws_i_sel[t] = ti[t];
                     if (out_chosen_experts != nullptr) {
                         int* exp_dst = out_chosen_experts + ((size_t)pos * MID_NL + layer) * MID_TOPK;
-                        exp_dst[0] = top0;
-                        exp_dst[1] = top1;
+                        for (int t = 0; t < MID_TOPK; ++t) exp_dst[t] = ti[t];
                     }
-                    float s0 = ws_f_scores[top0], s1 = ws_f_scores[top1];
-                    float wsum = s0 + s1 + 1e-20f;
-                    ws_f_wsel[0] = s0 / wsum;
-                    ws_f_wsel[1] = s1 / wsum;
+                    if constexpr (MID_TOPK == 2) {
+                        float s0 = ws_f_scores[ti[0]], s1 = ws_f_scores[ti[1]];
+                        float wsum = s0 + s1 + 1e-20f;
+                        ws_f_wsel[0] = s0 / wsum;
+                        ws_f_wsel[1] = s1 / wsum;
+                    } else {
+                        float wsum = 0.0f;
+                        for (int t = 0; t < MID_TOPK; ++t) wsum += ws_f_scores[ti[t]];
+                        wsum += 1e-20f;
+                        for (int t = 0; t < MID_TOPK; ++t) ws_f_wsel[t] = ws_f_scores[ti[t]] / wsum;
+                    }
                 }
                 SYNC_ALL();
 
@@ -684,12 +729,23 @@ __device__ inline void mid_generate_impl(
                 }
                 SYNC_ALL();
                 q4_block512<MID_SH_I>(Q_W(qbase + 9), Q_S(qbase + 9, MID_HID, MID_SH_I), Q_B(qbase + 9, MID_HID, MID_SH_I),
-                                      ws_f_act, nullptr, ws_down + 2 * MID_HID, MID_HID, lane, sg, groups);
+                                      ws_f_act, nullptr, ws_down + MID_TOPK * MID_HID, MID_HID, lane, sg, groups);
                 SYNC_ALL();
 
-                float w0 = ws_f_wsel[0], w1 = ws_f_wsel[1];
-                for (int i = gtid; i < MID_HID; i += gthreads) {
-                    ws_x[i] += w0 * ws_down[i] + w1 * ws_down[MID_HID + i] + ws_down[2 * MID_HID + i];
+                if constexpr (MID_TOPK == 2) {
+                    float w0 = ws_f_wsel[0], w1 = ws_f_wsel[1];
+                    for (int i = gtid; i < MID_HID; i += gthreads) {
+                        ws_x[i] += w0 * ws_down[i] + w1 * ws_down[MID_HID + i] + ws_down[2 * MID_HID + i];
+                    }
+                } else {
+                    float wt[MID_TOPK];
+                    for (int t = 0; t < MID_TOPK; ++t) wt[t] = ws_f_wsel[t];
+                    for (int i = gtid; i < MID_HID; i += gthreads) {
+                        float acc = 0.0f;
+                        #pragma unroll
+                        for (int t = 0; t < MID_TOPK; ++t) acc += wt[t] * ws_down[(size_t)t * MID_HID + i];
+                        ws_x[i] += acc + ws_down[(size_t)MID_TOPK * MID_HID + i];
+                    }
                 }
                 SYNC_ALL();
             }
@@ -1004,18 +1060,33 @@ extern "C" int mid_query_occupancy(int mode, int* out_cus, int* out_max_blocks_p
     return 0;
 }
 
+extern "C" void mid_session_free(void* handle);
+
+// Compile-time config, so a driver can refuse a .so built for the other model.
+extern "C" int mid_config(int* out) {
+    out[0] = MID_NL; out[1] = MID_NEXP; out[2] = MID_TOPK; out[3] = MID_N_DENSE;
+    out[4] = MID_DENSE_I; out[5] = MID_NUM_OFFSETS; out[6] = MID_N_FULL; out[7] = FLINT_CFG_FULL;
+    return 8;
+}
+
 extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off, int max_total) {
     MidSession* s = new MidSession();
     s->max_total = max_total;
     size_t bank_sz = (size_t)h_off[MID_NUM_OFFSETS - 1];
     size_t off_sz  = MID_NUM_OFFSETS * sizeof(int64_t);
-    size_t kvs_elems = (size_t)4 * 2 * MID_NKV * MID_WIN * MID_HDIM;
-    size_t kvf_elems = (size_t)4 * 2 * MID_NKV * (size_t)max_total * MID_HDIM;
+    size_t kvs_elems = (size_t)MID_N_SLIDING * 2 * MID_NKV * MID_WIN * MID_HDIM;
+    size_t kvf_elems = (size_t)MID_N_FULL * 2 * MID_NKV * (size_t)max_total * MID_HDIM;
     size_t ws_bf_sz = 1024 * sizeof(bf16);
-    size_t ws_f_sz  = (32768 + 128 + MID_VOCAB) * sizeof(float);
+    size_t ws_f_sz  = ((MID_WS_LOGITS_OFF > 32896 ? (size_t)MID_WS_LOGITS_OFF : (size_t)32896) + MID_VOCAB) * sizeof(float);
     size_t ws_i_sz  = 128 * sizeof(int);
 
-    chk_hip(hipMalloc(&s->d_bank, bank_sz), "hipMalloc bank");
+    // rec-u9q: a failed allocation or bank copy must not leave a session that launches on garbage
+    // (chk_hip only logs). The 21 GiB full-Flint bank is the first allocation that can fail.
+    if (hipMalloc(&s->d_bank, bank_sz) != hipSuccess) {
+        fprintf(stderr, "flint_mid session_create: hipMalloc bank (%zu bytes) FAILED\n", bank_sz);
+        delete s;
+        return nullptr;
+    }
     chk_hip(hipMalloc(&s->d_off, off_sz), "hipMalloc off");
     chk_hip(hipMalloc(&s->d_kv_sliding, kvs_elems * sizeof(bf16)), "hipMalloc kv_sliding");
     chk_hip(hipMalloc(&s->d_kv_full, kvf_elems * sizeof(bf16)), "hipMalloc kv_full");
@@ -1031,8 +1102,15 @@ extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off,
     chk_hip(hipMalloc(&s->d_logits, (size_t)MID_VOCAB * sizeof(float)), "hipMalloc logits");
     chk_hip(hipMalloc(&s->d_chosen_experts, (size_t)max_total * MID_NL * MID_TOPK * sizeof(int)), "hipMalloc chosen_experts");
 
-    chk_hip(hipMemcpy(s->d_bank, h_bank, bank_sz, hipMemcpyHostToDevice), "hipMemcpy bank");
-    chk_hip(hipMemcpy(s->d_off, h_off, off_sz, hipMemcpyHostToDevice), "hipMemcpy off");
+    hipError_t cb = hipMemcpy(s->d_bank, h_bank, bank_sz, hipMemcpyHostToDevice);
+    hipError_t co = hipMemcpy(s->d_off, h_off, off_sz, hipMemcpyHostToDevice);
+    hipError_t ce = hipGetLastError();
+    if (cb != hipSuccess || co != hipSuccess || ce != hipSuccess || !s->d_chosen_experts || !s->d_logits) {
+        fprintf(stderr, "flint_mid session_create: bank/offset copy or allocation FAILED (%s)\n",
+                hipGetErrorString(cb != hipSuccess ? cb : (co != hipSuccess ? co : ce)));
+        mid_session_free(s);
+        return nullptr;
+    }
     return s;
 }
 
@@ -1041,7 +1119,7 @@ extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off,
 //   1 = pure-fp32 compute + bf16-KV build (`mid_generate_fp32_bf16kv`, KVT=bf16, PURE_FP32=true)
 //   2 = pure-fp32 compute + fp32-KV validation build (`mid_generate_fp32kv`, KVT=float, PURE_FP32=true)
 // h_out_chosen_experts (optional, default nullptr):
-//   int32 buffer of shape [prompt_len + n_out, MID_NL (8), MID_TOPK (2)].
+//   int32 buffer of shape [prompt_len + n_out, MID_NL, MID_TOPK] (mid-8L: 8 x 2; full Flint: 49 x 6).
 //   When nullptr, costs zero device work (null pointer passed to kernel).
 // Returns 0 on success (with control[2] == 0), nonzero on invalid arguments, HIP error, or barrier abort.
 extern "C" int mid_session_run_ex2(void* handle, const int* h_prompt, int prompt_len,
