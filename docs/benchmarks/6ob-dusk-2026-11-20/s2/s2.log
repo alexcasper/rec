@@ -1,0 +1,31 @@
+[19:11:04Z] build old exit 0 sha=92947d61d70a | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[19:11:06Z] build new exit 0 sha=f6c17e811bb2 | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[19:11:07Z] G0 emit old (short4,chat x fp32kv,fp32_bf16kv,bf16kv) | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[19:11:10Z] emit old exit 0 | busy=61 | flint:idle,e4b:idle,qwen:inactive
+wrote short4_fp32kv.npz          |  162.4 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939
+wrote chat_fp32kv.npz            |  167.5 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998,
+wrote short4_fp32_bf16kv.npz     |  161.2 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939
+wrote chat_fp32_bf16kv.npz       |  168.4 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998,
+wrote short4_bf16kv.npz          |  164.2 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939
+wrote chat_bf16kv.npz            |  168.2 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998,
+[19:11:14Z] G0 emit new (short4,chat x fp32kv,fp32_bf16kv,bf16kv) | busy=4 | flint:idle,e4b:idle,qwen:inactive
+[19:11:17Z] emit new exit 0 | busy=65 | flint:idle,e4b:idle,qwen:inactive
+wrote short4_fp32kv.npz          |  183.3 ms | kv=fp32 | tokens[:6]=[124538, 146358, 17939
+wrote chat_fp32kv.npz            |  189.4 ms | kv=fp32 | tokens[:6]=[53529, 111431, 26998,
+wrote short4_fp32_bf16kv.npz     |  182.9 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939
+wrote chat_fp32_bf16kv.npz       |  189.3 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998,
+wrote short4_bf16kv.npz          |  183.5 ms | kv=bf16 | tokens[:6]=[124538, 146358, 17939
+wrote chat_bf16kv.npz            |  188.8 ms | kv=bf16 | tokens[:6]=[53529, 111431, 26998,
+old vs new DIFF chat_bf16kv.npz ['tokens', 'step_logits', 'last_logits', 'chosen_experts', 'step_experts']
+old vs new DIFF chat_fp32_bf16kv.npz ['step_logits', 'last_logits', 'chosen_experts', 'step_experts']
+new vs run-of-record DIFF chat_fp32_bf16kv.npz ['step_logits', 'last_logits', 'chosen_experts', 'step_experts']
+old vs new DIFF chat_fp32kv.npz ['step_logits', 'last_logits', 'step_experts']
+new vs run-of-record DIFF chat_fp32kv.npz ['step_logits', 'last_logits', 'step_experts']
+old vs new DIFF short4_bf16kv.npz ['step_logits', 'last_logits']
+old vs new DIFF short4_fp32_bf16kv.npz ['step_logits', 'last_logits']
+new vs run-of-record DIFF short4_fp32_bf16kv.npz ['step_logits', 'last_logits']
+old vs new DIFF short4_fp32kv.npz ['step_logits', 'last_logits', 'chosen_experts', 'step_experts']
+new vs run-of-record DIFF short4_fp32kv.npz ['step_logits', 'last_logits', 'chosen_experts', 'step_experts']
+G0 new vs rebuilt d1f6208 control: 0/6 npz byte-identical (all arrays except impl)
+G0 new vs stored run-of-record npz (/home/dusk/rec-ve/megakernel_hip/pp2_aip_exp): 0/4 identical
+[19:11:17Z] G0 FAILED -> no timing | busy=52 | flint:idle,e4b:idle,qwen:inactive

@@ -493,7 +493,7 @@ def assert_valid_launch_outputs(
 
 def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
                            builds: tuple[str, ...] = ("fp32kv", "bf16kv", "fp32_bf16kv"),
-                           emit_experts: bool = False) -> None:
+                           emit_experts: bool = False, only_cases: tuple[str, ...] | None = None) -> None:
     """Emit rec-mk-out/1 npz files for cases (short4, chat, wrap512) across requested builds:
       - fp32kv      : mode=2 (`mid_generate_fp32kv`, kv_dtype='fp32', pure fp32 compute + fp32 KV)
       - bf16kv      : mode=0 (`mid_generate`, kv_dtype='bf16', production c264e52 bf16 build)
@@ -509,6 +509,11 @@ def emit_conformance_suite(ckpt_dir: Path, out_dir: Path, workers: int = 16,
     print(f"ckpt: {ckpt_dir} | sha256: {sha} | emit_experts={emit_experts}")
     bank, off, _ = pack_mid_bank(ckpt_dir)
     cases = case_matrix(MID_VOCAB)
+    if only_cases:  # e.g. ('short4', 'chat'): skip wrap512's multi-second launch on display GPUs (rec-6ob)
+        unknown = set(only_cases) - set(cases)
+        if unknown:
+            raise SystemExit(f"unknown --cases {sorted(unknown)}; known {sorted(cases)}")
+        cases = {k: v for k, v in cases.items() if k in only_cases}
 
     lib = load_lib()
     max_total = 600
@@ -974,6 +979,7 @@ def main(argv: list[str]) -> int:
     verify_path: Path | None = None
     emit_suite_dir: Path | None = None
     suite_builds = ("fp32kv", "bf16kv", "fp32_bf16kv")
+    suite_cases: tuple[str, ...] | None = None
     emit_experts = False
     bench = False
     q4_bench = False
@@ -1022,6 +1028,8 @@ def main(argv: list[str]) -> int:
             emit_suite_dir = Path(val)
         elif key == "--builds":
             suite_builds = tuple(val.split(","))
+        elif key == "--cases":
+            suite_cases = tuple(val.split(","))
         elif key == "--emit-experts":
             emit_experts = val.lower() not in ("0", "false", "no", "off")
         else:
@@ -1039,7 +1047,8 @@ def main(argv: list[str]) -> int:
 
     if emit_suite_dir is not None:
         emit_conformance_suite(
-            ckpt, emit_suite_dir, workers=workers, builds=suite_builds, emit_experts=emit_experts
+            ckpt, emit_suite_dir, workers=workers, builds=suite_builds, emit_experts=emit_experts,
+            only_cases=suite_cases,
         )
         return 0
 

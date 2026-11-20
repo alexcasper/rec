@@ -88,3 +88,32 @@ megakernel. 4 ABBA rounds, all gated clean, all variants byte-identical:
 
 Projected from the lab ratios: O-proj ~152 -> ~80 us/layer, about 0.6-0.7 ms of 5.87 ms/token
 (~11%) on mid-8L. On full Flint the expert-heavy MLP phases weigh more; the R9700 confirm needs albion.
+
+## 4. Step 2: porting batched loads into the run-of-record gemv (G0 FAILED; kernel NOT changed)
+
+Patch: `batched_loads_attempt.patch` (against HEAD; NOT applied). Logs and scripts: `s2/`. dusk solo,
+launches <= 0.26 s, cotenants idle, busy-gated. G0 = short4 + chat x {fp32kv, fp32_bf16kv, bf16kv}
+with experts, new vs the rebuilt untouched d1f6208 source.
+
+- **Bonus G0 for rec-u9q:** the committed config refactor (HEAD) is byte-identical to d1f6208 on
+  gfx1150 (short4 + chat, fp32kv, every array). That dusk G0 had been cut short by the 16:03Z wedge.
+- **Attempt 1 failed G0 at 1e-1 relative.** Bisect:
+  - generic-path hunk: 6e-7;
+  - K=2048 hunk: 0.7.
+  Cause of the K=2048 failure: the batched path stored `uint2` into a register array and passed
+  `&wq[..]` to `dot16`, which re-reads it as `uint32_t*`. That type-puns private memory: 3-6 of
+  150144 lm_head rows came out wrong, always the 4th row of a quad, at any grid (`s2/lmh_dbg.py`).
+  The lab variants used the same idiom and happened not to hit it. Fix: `dot16v(u01, u23, ...)` on
+  packed words by value, with `dot16` as a wrapper. Afterwards lm_head is byte-identical at every
+  grid and `--q4-bench` passes.
+- **Attempt 2 (by-value) still fails G0.**
+  - fp32-KV differs at 6-7e-7 relative: last-bit fp-contraction differences. hipcc defaults to
+    `-ffp-contract=fast`, so restructuring the loads changes which mul+add pairs get fused.
+  - The bf16-KV tiers amplify those bits through KV rounding and router flips into token
+    differences (rel up to 0.59).
+  - The restructure also raised the gemv to 256 VGPRs plus 900 B/lane scratch spills; standalone
+    o_proj slowed to 0.552 ms from 0.177 ms.
+- Conclusion: under context-dependent contraction, a load-schedule change cannot be proven
+  byte-identical in the megakernel; the lab's identity did not transfer. Decision needed (see the
+  rec-6ob bead): either a one-time explicit-contraction re-baseline signed off under spec (a), or
+  waive G0 for this change in favour of the fp32-KV tier vs the CPU reference.

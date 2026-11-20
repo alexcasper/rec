@@ -1,0 +1,138 @@
+diff --git a/engine/native/megakernel_hip/flint_mid_megakernel.hip b/engine/native/megakernel_hip/flint_mid_megakernel.hip
+index e8e0111..3e6d840 100644
+--- a/engine/native/megakernel_hip/flint_mid_megakernel.hip
++++ b/engine/native/megakernel_hip/flint_mid_megakernel.hip
+@@ -104,10 +104,10 @@ __device__ inline float load16_bf(const bf16* x, float* v) {
+     return sum;
+ }
+ 
+-__device__ inline float dot16(const uint8_t* w, const float* x, float s, float b, float sum) {
+-    const uint32_t* p32 = (const uint32_t*)w;
+-    uint32_t u01 = p32[0];
+-    uint32_t u23 = p32[1];
++// dot16 on packed words passed BY VALUE (rec-6ob batched loads). Taking the address of a register
++// array (uint2 wq[..]) and re-reading it through uint32_t* type-puns private memory; on gfx1150 that
++// corrupted ~1 in 50k lm_head rows. Same arithmetic as dot16.
++__device__ inline float dot16v(uint32_t u01, uint32_t u23, const float* x, float s, float b, float sum) {
+     float a = 0.0f;
+     a += x[0]  * (float)(u01 & 0x0000000fu)
+        + x[1]  * (float)(u01 & 0x000000f0u)
+@@ -130,6 +130,11 @@ __device__ inline float dot16(const uint8_t* w, const float* x, float s, float b
+     return s * a + sum * b;
+ }
+ 
++__device__ inline float dot16(const uint8_t* w, const float* x, float s, float b, float sum) {
++    const uint32_t* p32 = (const uint32_t*)w;
++    return dot16v(p32[0], p32[1], x, s, b, sum);
++}
++
+ // Unified device function for fused INT4-affine dequant-matmul (rec-aip / rec-tan)
+ // consuming the zero-copy layout from docs/rocm-model-layer.md s2:
+ //   w: uint8_t [N, K/2] (2 nibbles/byte, low nibble = even element),
+@@ -166,17 +171,50 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
+ 
+         for (int first = sg * 4; first < n; first += groups * 4) {
+             float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+-            #pragma unroll
+-            for (int r = 0; r < 4; ++r) {
+-                int row = first + r;
+-                if (row < n) {
+-                    const uint8_t* wr = w + (size_t)row * 1024;
+-                    const bf16*    sr = s + (size_t)row * 32;
+-                    const bf16*    br = b + (size_t)row * 32;
+-                    a[r] += dot16(wr + (sc0 >> 1), v0, tofloat(sr[g0]), tofloat(br[g0]), sum0);
+-                    a[r] += dot16(wr + (sc1 >> 1), v1, tofloat(sr[g1]), tofloat(br[g1]), sum1);
+-                    a[r] += dot16(wr + (sc2 >> 1), v2, tofloat(sr[g2]), tofloat(br[g2]), sum2);
+-                    a[r] += dot16(wr + (sc3 >> 1), v3, tofloat(sr[g3]), tofloat(br[g3]), sum3);
++            if (first + 4 <= n) {
++                // rec-6ob: full row-quad -> issue all four rows' weight/scale/bias loads before the
++                // first use (the per-row guard below serialized them: one row in flight per wave).
++                // Per-row fp32 operation order is unchanged (byte-identical, G0).
++                uint32_t wl[4][4], wh[4][4];
++                float sc[4][4], bi[4][4];
++                #pragma unroll
++                for (int r = 0; r < 4; ++r) {
++                    const uint8_t* wr = w + (size_t)(first + r) * 1024;
++                    const bf16*    sr = s + (size_t)(first + r) * 32;
++                    const bf16*    br = b + (size_t)(first + r) * 32;
++                    wl[r][0] = ((const uint32_t*)(wr + (sc0 >> 1)))[0];
++                    wh[r][0] = ((const uint32_t*)(wr + (sc0 >> 1)))[1];
++                    wl[r][1] = ((const uint32_t*)(wr + (sc1 >> 1)))[0];
++                    wh[r][1] = ((const uint32_t*)(wr + (sc1 >> 1)))[1];
++                    wl[r][2] = ((const uint32_t*)(wr + (sc2 >> 1)))[0];
++                    wh[r][2] = ((const uint32_t*)(wr + (sc2 >> 1)))[1];
++                    wl[r][3] = ((const uint32_t*)(wr + (sc3 >> 1)))[0];
++                    wh[r][3] = ((const uint32_t*)(wr + (sc3 >> 1)))[1];
++                    sc[r][0] = tofloat(sr[g0]); bi[r][0] = tofloat(br[g0]);
++                    sc[r][1] = tofloat(sr[g1]); bi[r][1] = tofloat(br[g1]);
++                    sc[r][2] = tofloat(sr[g2]); bi[r][2] = tofloat(br[g2]);
++                    sc[r][3] = tofloat(sr[g3]); bi[r][3] = tofloat(br[g3]);
++                }
++                #pragma unroll
++                for (int r = 0; r < 4; ++r) {
++                    a[r] += dot16v(wl[r][0], wh[r][0], v0, sc[r][0], bi[r][0], sum0);
++                    a[r] += dot16v(wl[r][1], wh[r][1], v1, sc[r][1], bi[r][1], sum1);
++                    a[r] += dot16v(wl[r][2], wh[r][2], v2, sc[r][2], bi[r][2], sum2);
++                    a[r] += dot16v(wl[r][3], wh[r][3], v3, sc[r][3], bi[r][3], sum3);
++                }
++            } else {
++                #pragma unroll
++                for (int r = 0; r < 4; ++r) {
++                    int row = first + r;
++                    if (row < n) {
++                        const uint8_t* wr = w + (size_t)row * 1024;
++                        const bf16*    sr = s + (size_t)row * 32;
++                        const bf16*    br = b + (size_t)row * 32;
++                        a[r] += dot16(wr + (sc0 >> 1), v0, tofloat(sr[g0]), tofloat(br[g0]), sum0);
++                        a[r] += dot16(wr + (sc1 >> 1), v1, tofloat(sr[g1]), tofloat(br[g1]), sum1);
++                        a[r] += dot16(wr + (sc2 >> 1), v2, tofloat(sr[g2]), tofloat(br[g2]), sum2);
++                        a[r] += dot16(wr + (sc3 >> 1), v3, tofloat(sr[g3]), tofloat(br[g3]), sum3);
++                    }
+                 }
+             }
+             #pragma unroll
+@@ -191,18 +229,37 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
+     } else {
+         for (int first = sg * 4; first < n; first += groups * 4) {
+             float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
++            const bool full = first + 4 <= n;
+             #pragma unroll
+             for (int block = 0; block < K; block += 512) {
+                 int scalar = block + lane * 16;
+                 float v[16];
+                 float sum = load16_f(x + scalar, v);
+-                #pragma unroll
+-                for (int r = 0; r < 4; ++r) {
+-                    int row = first + r;
+-                    if (row < n) {
+-                        int gi = row * (K / 64) + scalar / 64;
+-                        a[r] += dot16(w + (size_t)row * (K / 2) + scalar / 2,
+-                                      v, tofloat(s[gi]), tofloat(b[gi]), sum);
++                if (full) {
++                    // rec-6ob: batched row loads (o_proj K=4096, down K=512/1024; lab 1.1-1.9x,
++                    // byte-identical): same per-row operation order as the guarded form below.
++                    uint32_t wl[4], wh[4];
++                    float sc[4], bi[4];
++                    #pragma unroll
++                    for (int r = 0; r < 4; ++r) {
++                        int gi = (first + r) * (K / 64) + scalar / 64;
++                        const uint32_t* p32 = (const uint32_t*)(w + (size_t)(first + r) * (K / 2) + scalar / 2);
++                        wl[r] = p32[0];
++                        wh[r] = p32[1];
++                        sc[r] = tofloat(s[gi]);
++                        bi[r] = tofloat(b[gi]);
++                    }
++                    #pragma unroll
++                    for (int r = 0; r < 4; ++r) a[r] += dot16v(wl[r], wh[r], v, sc[r], bi[r], sum);
++                } else {
++                    #pragma unroll
++                    for (int r = 0; r < 4; ++r) {
++                        int row = first + r;
++                        if (row < n) {
++                            int gi = row * (K / 64) + scalar / 64;
++                            a[r] += dot16(w + (size_t)row * (K / 2) + scalar / 2,
++                                          v, tofloat(s[gi]), tofloat(b[gi]), sum);
++                        }
+                     }
+                 }
+             }
