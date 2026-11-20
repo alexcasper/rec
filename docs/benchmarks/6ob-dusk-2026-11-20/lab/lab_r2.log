@@ -1,0 +1,61 @@
+18:14:40Z expert_gate_up_512x2048 grid=16 round=0 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:41Z expert_gate_up_512x2048 grid=16 round=1 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:42Z expert_gate_up_512x2048 grid=16 round=2 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:42Z expert_gate_up_512x2048 grid=16 round=3 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=3 flint:idle,e4b:idle,qwen:down
+  prod              0.0103 ms   57.73 GB/s x1.0 ident=True
+  gx_prod_op        0.0078 ms   76.51 GB/s x1.325 ident=True
+  gx_generic_batched   0.0072 ms   82.62 GB/s x1.431 ident=True
+  gx_batched_lds    0.0103 ms   58.14 GB/s x1.007 ident=True
+  v2_batched        0.0090 ms   66.40 GB/s x1.15 ident=True
+  stream_ceiling    0.0064 ms   81.73 GB/s x1.609 ident=None
+18:14:43Z expert_down_2048x512 grid=16 round=0 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:44Z expert_down_2048x512 grid=16 round=1 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:44Z expert_down_2048x512 grid=16 round=2 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:45Z expert_down_2048x512 grid=16 round=3 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+  prod              0.0111 ms   53.89 GB/s x1.0 ident=True
+  gx_prod_op        0.0101 ms   59.08 GB/s x1.096 ident=True
+  gx_generic_batched   0.0091 ms   65.70 GB/s x1.219 ident=True
+  gx_batched_lds    0.0093 ms   64.33 GB/s x1.194 ident=True
+  v2_batched        0.0099 ms   60.52 GB/s x1.123 ident=True
+  stream_ceiling    0.0065 ms   80.18 GB/s x1.7 ident=None
+18:14:45Z shared_gate_up_1024x2048 grid=16 round=0 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:46Z shared_gate_up_1024x2048 grid=16 round=1 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:47Z shared_gate_up_1024x2048 grid=16 round=2 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:47Z shared_gate_up_1024x2048 grid=16 round=3 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+  prod              0.0139 ms   85.57 GB/s x1.0 ident=True
+  gx_prod_op        0.0121 ms   98.12 GB/s x1.147 ident=True
+  gx_generic_batched   0.0112 ms  105.60 GB/s x1.234 ident=True
+  gx_batched_lds    0.0155 ms   76.71 GB/s x0.896 ident=True
+  v2_batched        0.0131 ms   90.84 GB/s x1.062 ident=True
+  stream_ceiling    0.0070 ms  150.75 GB/s x1.996 ident=None
+18:14:48Z shared_down_2048x1024 grid=16 round=0 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:49Z shared_down_2048x1024 grid=16 round=1 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:49Z shared_down_2048x1024 grid=16 round=2 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+18:14:50Z shared_down_2048x1024 grid=16 round=3 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=4 flint:idle,e4b:idle,qwen:down
+  prod              0.0175 ms   67.99 GB/s x1.0 ident=True
+  gx_prod_op        0.0166 ms   71.84 GB/s x1.057 ident=True
+  gx_generic_batched   0.0119 ms   99.90 GB/s x1.469 ident=True
+  gx_batched_lds    0.0154 ms   77.32 GB/s x1.137 ident=True
+  v2_batched        0.0133 ms   89.63 GB/s x1.318 ident=True
+  stream_ceiling    0.0069 ms  151.17 GB/s x2.523 ident=None
+18:14:51Z q_proj_4096x2048 grid=16 round=0 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=7 flint:idle,e4b:idle,qwen:down
+18:14:53Z q_proj_4096x2048 grid=16 round=1 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=6 flint:idle,e4b:idle,qwen:down
+18:14:54Z q_proj_4096x2048 grid=16 round=2 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=7 flint:idle,e4b:idle,qwen:down
+18:14:56Z q_proj_4096x2048 grid=16 round=3 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=7 flint:idle,e4b:idle,qwen:down
+  prod              0.0798 ms   59.42 GB/s x1.0 ident=True
+  gx_prod_op        0.0784 ms   60.44 GB/s x1.017 ident=True
+  gx_generic_batched   0.0748 ms   63.38 GB/s x1.067 ident=True
+  gx_batched_lds    0.1012 ms   46.83 GB/s x0.788 ident=True
+  v2_batched        0.0741 ms   63.97 GB/s x1.077 ident=True
+  stream_ceiling    0.0526 ms   79.71 GB/s x1.516 ident=None
+18:14:58Z o_proj_2048x4096 grid=16 round=0 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=7 flint:idle,e4b:idle,qwen:down
+18:15:00Z o_proj_2048x4096 grid=16 round=1 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=7 flint:idle,e4b:idle,qwen:down
+18:15:02Z o_proj_2048x4096 grid=16 round=2 order=['prod', 'gx_prod_op', 'gx_generic_batched', 'gx_batched_lds', 'v2_batched', 'stream_ceiling'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=7 flint:idle,e4b:idle,qwen:down
+18:15:04Z o_proj_2048x4096 grid=16 round=3 order=['stream_ceiling', 'v2_batched', 'gx_batched_lds', 'gx_generic_batched', 'gx_prod_op', 'prod'] | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=7 flint:idle,e4b:idle,qwen:down
+  prod              0.1445 ms   32.76 GB/s x1.0 ident=True
+  gx_prod_op        0.1436 ms   32.97 GB/s x1.006 ident=True
+  gx_generic_batched   0.0765 ms   61.86 GB/s x1.888 ident=True
+  gx_batched_lds    0.0751 ms   63.04 GB/s x1.924 ident=True
+  v2_batched        0.0891 ms   53.12 GB/s x1.622 ident=True
+  stream_ceiling    0.0538 ms   77.91 GB/s x2.685 ident=None
+BYTE-IDENTITY: all variants identical to prod
