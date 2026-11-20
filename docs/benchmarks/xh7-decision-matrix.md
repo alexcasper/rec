@@ -33,19 +33,24 @@ deltas = depth (2→49), experts (8→256), top-k (2→6).
 | R5 | llama.cpp-Vulkan, **full Flint via :8080** server | full 49L | **26.6** (qwen stopped) / 26.8 (qwen up) | 8k | mixed (recorded per run) | rec-xh7 step 0, 2ea0c9f |
 | R6 | engine e2e, rocm backend, **real mid-8L weights bf16** (rocm-bf16) | real mid-8L | **7.22** | greedy gen, torch-native sampling | 3 llama-servers UP | rec-9na comment 2026-11-20 (torch-fp32 gate; fp32 row: 5.94/808.1) |
 | R7 | engine e2e rocm-fp32 | real mid-8L | **5.94** / prefill 808.1 | same as R6 | same | same |
+| R8 | **full-config megakernel** (49L / 256E / top-6, bank `~/xh7/flint-int4.bank` 21.019 GiB, bit-exact verified) | **full Flint INT4-affine** | **35.45** decode32 (w64; w32 34.91, w16 31.43; ABBA pairs valid) | after 512; short-ctx 54.1/67.6/69.9; e2e-516 39.5–47.1 pos/s | recorded per log line | **HOST: albion R9700 (discrete 32 GB)** — rec-u9q GREEN, e3c5ed6 on rec/gemini-kernels, docs/benchmarks/u9q-albion-2026-11-20/; sign-off: fp32-KV 3/3 under adopted spec (a), step_rel ≤2.3e-6; bf16-KV 0/3 = reference-sensitivity artifact (ref itself moves 5.5e-2–8.5e-2 fp32→bf16 KV; router gaps to 3e-7 cascade over 49 layers) — **judged by token agreement**, no logit-rel gate. Scaling context: same-card mid-8L 196–261 tok/s |
 
 Cross-reads (with caveats): R1 vs R2 = **parity on the shipped mix**
 (1.006×); R1 vs R4 = **0.60× at equal bytes** (~38 vs ~64 GB/s effective)
 — the gap fused-dequant depth must close. R6's do-not-compare note: the
 stale rec-rfp 2463 prefill / 37.2 decode rows are superseded.
+**HOST WARNING: R8 (albion R9700 discrete) must NOT be compared against
+R5 (dusk 890M UMA) — different silicon and memory path; the incumbent
+row on R9700 is the missing like-for-like partner (rec-b3u, w11:p1F).**
 
 ## Rows (open)
 
 | # | arm | config | owner | status |
 |---|---|---|---|---|
-| O1 | **full-config megakernel** (49L / 256E / top-6, bank `~/xh7/flint-int4.bank` 21.019 GiB + 837-entry offsets, bit-exact verified) | full Flint INT4-affine | w11:p1F via rec-u9q | OPEN — workers/shm retune + UMA run on dusk |
-| O2 | llama.cpp-Vulkan **Q4_K_M bpw-matched** full Flint (offline quantize of the same source) | full Flint | unassigned | OPEN — cheap, no kernel work; needs the quantize run + llama-bench window |
-| O3 | quality row: ppl/agreement for affine-INT4 vs UD-Q3_K_XL vs unquantized (only needed if requant path were taken — mooted by step-0a unless Alex reopens) | full Flint | — | MOOTED pending Alex |
+| O1 | ~~full-config megakernel~~ → **FILLED as R8** | full Flint INT4-affine | w11:p1F | rec-u9q closed GREEN (e3c5ed6) |
+| O2 | llama.cpp-Vulkan **Q4_K_M bpw-matched** full Flint — **no GGUF built yet**; needs MLX-affine→GGUF conversion or fp16-source quantize | full Flint | w11:p1F (rec-b3u build) | OPEN |
+| O3 | quality row: ppl/agreement affine-INT4 vs UD-Q3_K_XL vs unquantized | full Flint | — | MOOTED pending Alex |
+| O4 | **llama.cpp-Vulkan incumbent on albion R9700** — the R8 like-for-like partner | full Flint | w11:p1F (rec-b3u, claimed) | OPEN — decision row |
 
 ## Provenance / hygiene notes
 
