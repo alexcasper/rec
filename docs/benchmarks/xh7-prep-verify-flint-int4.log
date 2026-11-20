@@ -1,0 +1,30 @@
+2026-11-20T15:33:43Z shard index: 1751 tensors, 21.02 GiB
+2026-11-20T15:33:43Z verify: bank 21.019 GiB (memmap), 837 entries | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=3%
+2026-11-20T15:33:43Z verified 0/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:33:43Z verified 32/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:33:43Z verified 64/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:33:43Z verified 96/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:33:44Z verified 128/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:33:44Z verified 160/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:33:44Z verified 192/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:33:44Z verified 224/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=3%
+2026-11-20T15:33:44Z verified 256/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=3%
+2026-11-20T15:33:44Z verified 288/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:33:44Z verified 320/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:33:57Z verified 384/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:34:13Z verified 416/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:34:28Z verified 448/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:34:47Z verified 480/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:35:04Z verified 512/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:35:19Z verified 544/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=0%
+2026-11-20T15:35:35Z verified 576/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:35:50Z verified 608/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:36:09Z verified 640/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:36:26Z verified 672/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=0%
+2026-11-20T15:36:42Z verified 704/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=2%
+2026-11-20T15:36:57Z verified 736/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:37:13Z verified 768/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:37:31Z verified 800/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:37:48Z verified 832/837 | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+2026-11-20T15:37:50Z VERIFY PASS | cotenants[flint=4,e4b=5,qwen=2] gpu_busy=1%
+EXIT_0

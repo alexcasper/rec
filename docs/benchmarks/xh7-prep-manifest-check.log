@@ -1,0 +1,15 @@
+# rec-xh7 step 1: flint-int4 download manifest check + pack run (2026-11-20)
+# revision pinned: RecursiveSI/flint-int4 @ 3b93f9053b530488405ae9fca51d4900d6ce21f0
+# manifest: 16/16 files present; 5 safetensors shards Content-Length-matched:
+#   model-00000 4.420 GiB | 00001 4.360 | 00002 4.360 | 00003 4.360 | 00004 3.518  (PASS)
+# pack (config-driven pack_flint_bank.py @ rec/qwen-aip-prep 00ceea2):
+#   1751 tensors / 21.02 GiB indexed; 837 bank entries (NL=49, E=256, topk=6,
+#   dense [0,1]); bank dusk:~/xh7/flint-int4.bank = 21.019 GiB + off table 837 int64
+# verify: byte identity every region + row-chunked dequant identity (BF16-rounded
+#   s/b, low nibble even) over all 837 entries -> VERIFY PASS, EXIT_0
+# cotenant state per protocol (every line carries it): llama-servers up
+#   (flint :8080, E4B :8090, llama-qwen :8091), gpu_busy 0-2%; no pause needed
+#   (pack/verify are CPU/disk-only; no timed GPU benchmark in this step)
+# environment: dusk NixOS, python 3.12 ~/rec-ve/.venv, numpy 2.5.5,
+#   LD_LIBRARY_PATH += gcc-15.3.0-lib + zstd-1.5.7 (nix store)
+# full verify log: xh7-prep-verify-flint-int4.log (same directory)
