@@ -166,6 +166,15 @@ __device__ inline void q4_stage_block(const uint8_t* __restrict__ w, size_t row_
     __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
 }
 
+// rec-9t8: ONE 2 KiB LDS double buffer per logical warp, shared by every generic-K gemv instantiation.
+// (A function-local __shared__ per template instantiation costs 8+ KiB each; rec-6ob.1 showed that
+// mid_generate LDS growth past ~33 KiB breaks persistent-workgroup co-residency on dusk.) A warp's gemv
+// ops run one after another and every rewrite is behind a wave fence pair, so sharing is safe.
+__device__ inline uint8_t* q4_gen_pool(int warp) {
+    __shared__ __attribute__((aligned(16))) uint8_t q4_gen_db[8][2048];
+    return q4_gen_db[warp];
+}
+
 template <int K, bool ROUND_BF16 = false>
 __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         const bf16* __restrict__ s,
@@ -214,42 +223,37 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 }
             }
         }
-    } else {
+    } else if constexpr (K == 512) {
+        // One 512-element block per row: a stage is a whole quad, so pipelining buys only a prologue
+        // (measured 0.91x standalone, rec-9t8 b3). Keep the VCgen single-stage staging (39629e7).
+        uint8_t* const lds = q4_gen_pool(sg % 8);
         for (int first = sg * 4; first < n; first += groups * 4) {
             float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-            const bool full = first + 4 <= n;
-            // rec-6ob: bounded unroll (full unroll of 8 blocks x batched rows spilled 900 B/lane at
-            // K=4096) and, on full row-quads, the four rows' loads for a block issued together.
-            #pragma unroll 2
-            for (int block = 0; block < K; block += 512) {
-                int scalar = block + lane * 16;
-                float v[16];
-                float sum = load16_f(x + scalar, v);
-                if (full) {
-                    __shared__ __attribute__((aligned(16))) uint8_t q4_stage_gen[8][1024];
-                    uint8_t* lds = q4_stage_gen[(sg % 8)];
-                    q4_stage_block(w, (size_t)(K / 2), first, block / 2, lane, lds);
-                    float sc[4], bi[4];
-                    #pragma unroll
-                    for (int r = 0; r < 4; ++r) {
-                        int gi = (first + r) * (K / 64) + scalar / 64;
-                        sc[r] = tofloat(s[gi]);
-                        bi[r] = tofloat(b[gi]);
-                    }
-                    #pragma unroll
-                    for (int r = 0; r < 4; ++r) {
-                        const uint32_t* p = (const uint32_t*)(lds + r * 256 + lane * 8);
-                        a[r] += dot16v(p[0], p[1], v, sc[r], bi[r], sum);
-                    }
-                } else {
-                    #pragma unroll
-                    for (int r = 0; r < 4; ++r) {
-                        int row = first + r;
-                        if (row < n) {
-                            int gi = row * (K / 64) + scalar / 64;
-                            a[r] += dot16(w + (size_t)row * (K / 2) + scalar / 2,
-                                          v, tofloat(s[gi]), tofloat(b[gi]), sum);
-                        }
+            int scalar = lane * 16;
+            float v[16];
+            float sum = load16_f(x + scalar, v);
+            if (first + 4 <= n) {
+                q4_stage_block(w, (size_t)(K / 2), first, 0, lane, lds);
+                float sc[4], bi[4];
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) {
+                    int gi = (first + r) * (K / 64) + scalar / 64;
+                    sc[r] = tofloat(s[gi]);
+                    bi[r] = tofloat(b[gi]);
+                }
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) {
+                    const uint32_t* p = (const uint32_t*)(lds + r * 256 + lane * 8);
+                    a[r] += dot16v(p[0], p[1], v, sc[r], bi[r], sum);
+                }
+            } else {
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) {
+                    int row = first + r;
+                    if (row < n) {
+                        int gi = row * (K / 64) + scalar / 64;
+                        a[r] += dot16(w + (size_t)row * (K / 2) + scalar / 2,
+                                      v, tofloat(s[gi]), tofloat(b[gi]), sum);
                     }
                 }
             }
@@ -259,6 +263,123 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 if (lane == 0 && first + r < n) {
                     if (out_bf) out_bf[first + r] = tobf(val);
                     if (out_f)  out_f[first + r]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
+                }
+            }
+        }
+    } else {
+        // rec-9t8 lever 2: software-pipelined generic path (K = 1024, 4096, full-config 6144). Full row-quads form one stream of stages
+        // (quad, 512-element block). Stage t+1's weights (two b128 per lane), its 4+4 bf16 scales/biases
+        // and its 16 raw x floats are loaded into registers before stage t's compute. The weights land
+        // in the other half of a per-warp 2 KiB LDS double buffer behind a wave fence pair that guards only
+        // that half. Per lane: the same weight words (LDS readback of its own 8 B), the same scales, the same
+        // pre-scale arithmetic as load16_f, and the same block order per row -> byte-identical to the
+        // VCgen staging path (39629e7) by construction. One LDS pool is shared by every generic K.
+        constexpr int NB = K / 512;
+        constexpr int G = K / 64;
+        uint8_t* const pool = q4_gen_pool(sg % 8);
+        const int r_lo = lane >> 4, c16 = (lane & 15) * 16;
+        const int step = groups * 4;
+        int first = sg * 4;
+        uint4 cw0, cw1;            // staged-for-next weights (in flight)
+        uint16_t cs[4], cb[4];     // current stage's scale/bias bits
+        float cx[16];              // current stage's raw x
+        auto load_stage = [&](int f, int j, uint4& w0, uint4& w1, uint16_t* ss, uint16_t* bb, float* xx) {
+            const uint8_t* wq = w + (size_t)f * (K / 2) + j * 256;
+            w0 = *(const uint4*)(wq + (size_t)r_lo * (K / 2) + c16);
+            w1 = *(const uint4*)(wq + (size_t)(r_lo + 2) * (K / 2) + c16);
+            const int gl = (j * 512 + lane * 16) / 64;
+            #pragma unroll
+            for (int r = 0; r < 4; ++r) {
+                ss[r] = ((const uint16_t*)s)[(f + r) * G + gl];
+                bb[r] = ((const uint16_t*)b)[(f + r) * G + gl];
+            }
+            const float4* xp = (const float4*)(x + j * 512 + lane * 16);
+            #pragma unroll
+            for (int i = 0; i < 4; ++i) {
+                float4 t4 = xp[i];
+                xx[4 * i] = t4.x; xx[4 * i + 1] = t4.y; xx[4 * i + 2] = t4.z; xx[4 * i + 3] = t4.w;
+            }
+        };
+        auto put_stage = [&](uint8_t* buf, const uint4& w0, const uint4& w1) {
+            __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
+            __builtin_amdgcn_wave_barrier();   // last reader of this half (stage t-1) is done
+            *(uint4*)(buf + r_lo * 256 + c16) = w0;
+            *(uint4*)(buf + (r_lo + 2) * 256 + c16) = w1;
+            __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
+            __builtin_amdgcn_wave_barrier();
+            __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
+        };
+        int par = 0;
+        if (first + 4 <= n) {
+            load_stage(first, 0, cw0, cw1, cs, cb, cx);
+            put_stage(pool, cw0, cw1);
+        }
+        for (; first + 4 <= n; first += step) {
+            const int nfirst = first + step;
+            const bool nfull = nfirst + 4 <= n;
+            float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+            #pragma unroll 1
+            for (int j = 0; j < NB; ++j) {
+                const bool last = j + 1 == NB;
+                const bool pf = !last || nfull;
+                uint16_t ns[4], nb[4];
+                float nx[16];
+                if (pf) load_stage(last ? nfirst : first, last ? 0 : j + 1, cw0, cw1, ns, nb, nx);
+                // compute stage t: pre-scale exactly as load16_f
+                float v[16];
+                float sum = 0.0f;
+                #pragma unroll
+                for (int i = 0; i < 16; i += 4) {
+                    float x0 = cx[i], x1 = cx[i + 1], x2 = cx[i + 2], x3 = cx[i + 3];
+                    sum += x0 + x1 + x2 + x3;
+                    v[i]     = x0;
+                    v[i + 1] = x1 * (1.0f / 16.0f);
+                    v[i + 2] = x2 * (1.0f / 256.0f);
+                    v[i + 3] = x3 * (1.0f / 4096.0f);
+                }
+                const uint8_t* cur = pool + par * 1024;
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) {
+                    const uint32_t* p = (const uint32_t*)(cur + r * 256 + lane * 8);
+                    float sc = __uint_as_float((uint32_t)cs[r] << 16);
+                    float bi = __uint_as_float((uint32_t)cb[r] << 16);
+                    a[r] += dot16v(p[0], p[1], v, sc, bi, sum);
+                }
+                if (pf) {
+                    put_stage(pool + (par ^ 1) * 1024, cw0, cw1);
+                    #pragma unroll
+                    for (int r = 0; r < 4; ++r) { cs[r] = ns[r]; cb[r] = nb[r]; }
+                    #pragma unroll
+                    for (int i = 0; i < 16; ++i) cx[i] = nx[i];
+                }
+                par ^= 1;
+            }
+            #pragma unroll
+            for (int r = 0; r < 4; ++r) {
+                float val = simd_sum(a[r]);
+                if (lane == 0) {
+                    if (out_bf) out_bf[first + r] = tobf(val);
+                    if (out_f)  out_f[first + r]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
+                }
+            }
+        }
+        // partial trailing quad (n % 4 != 0): unstaged, one row at a time, blocks in order (as before)
+        for (; first < n; first += step) {
+            #pragma unroll 1
+            for (int row = first; row < first + 4 && row < n; ++row) {
+                float acc = 0.0f;
+                #pragma unroll 1
+                for (int block = 0; block < K; block += 512) {
+                    int scalar = block + lane * 16;
+                    float v[16];
+                    float sum = load16_f(x + scalar, v);
+                    int gi = row * (K / 64) + scalar / 64;
+                    acc += dot16(w + (size_t)row * (K / 2) + scalar / 2, v, tofloat(s[gi]), tofloat(b[gi]), sum);
+                }
+                float val = simd_sum(acc);
+                if (lane == 0) {
+                    if (out_bf) out_bf[row] = tobf(val);
+                    if (out_f)  out_f[row]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
                 }
             }
         }
@@ -734,39 +855,30 @@ __device__ inline void mid_generate_impl(
                 const bf16*    sw_ds = Q_S(qbase + 6, MID_NEXP * MID_HID, MID_MOE_I);
                 const bf16*    sw_db = Q_B(qbase + 6, MID_NEXP * MID_HID, MID_MOE_I);
 
+                // rec-9t8 lever 1: batched MoE phases. All TOPK routed experts + the shared expert run
+                // gate/up in ONE phase, act in one, down in one (was 3 barriers per expert + 3 shared).
+                // Per-row gemvs and the act formula are unchanged; only the barrier schedule differs.
+                // ws_gate/ws_up/ws_f_act are laid out [t * MOE_I] for routed t, [TOPK * MOE_I] shared.
+                static_assert(MID_TOPK * MID_MOE_I + MID_SH_I <= MID_FFN_MAX, "batched MoE ws layout");
+                constexpr int MOE_SH0 = MID_TOPK * MID_MOE_I;      // shared-expert slot offset
+                constexpr int MOE_ACT_N = MOE_SH0 + MID_SH_I;
                 for (int t = 0; t < MID_TOPK; ++t) {
                     int e = ws_i_sel[t];
                     // Expert strides: bytes for packed uint8*, ELEMENTS for bf16* scales/biases
                     size_t gw_off = (size_t)e * MID_MOE_I * (MID_HID / 2);
                     size_t gs_off = (size_t)e * MID_MOE_I * (MID_HID / 64);
                     q4_block512<MID_HID>(sw_gw + gw_off, sw_gs + gs_off, sw_gb + gs_off,
-                                         sh_xn, nullptr, ws_gate, MID_MOE_I, lane, sg, groups);
+                                         sh_xn, nullptr, ws_gate + t * MID_MOE_I, MID_MOE_I, lane, sg, groups);
                     q4_block512<MID_HID>(sw_uw + gw_off, sw_us + gs_off, sw_ub + gs_off,
-                                         sh_xn, nullptr, ws_up, MID_MOE_I, lane, sg, groups);
-                    SYNC_ALL();
-                    for (int i = gtid; i < MID_MOE_I; i += gthreads) {
-                        if constexpr (PURE_FP32) {
-                            ws_f_act[i] = silu_f(ws_gate[i]) * ws_up[i];
-                        } else {
-                            bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
-                            ws_f_act[i] = tofloat(act);
-                        }
-                    }
-                    SYNC_ALL();
-                    size_t dw_off = (size_t)e * MID_HID * (MID_MOE_I / 2);
-                    size_t ds_off = (size_t)e * MID_HID * (MID_MOE_I / 64);
-                    q4_block512<MID_MOE_I>(sw_dw + dw_off, sw_ds + ds_off, sw_db + ds_off,
-                                           ws_f_act, nullptr, ws_down + t * MID_HID, MID_HID, lane, sg, groups);
-                    SYNC_ALL();
+                                         sh_xn, nullptr, ws_up + t * MID_MOE_I, MID_MOE_I, lane, sg, groups);
                 }
-
                 // Shared expert (SH_I = 1024, HID = 2048)
                 q4_block512<MID_HID>(Q_W(qbase + 7), Q_S(qbase + 7, MID_SH_I, MID_HID), Q_B(qbase + 7, MID_SH_I, MID_HID),
-                                     sh_xn, nullptr, ws_gate, MID_SH_I, lane, sg, groups);
+                                     sh_xn, nullptr, ws_gate + MOE_SH0, MID_SH_I, lane, sg, groups);
                 q4_block512<MID_HID>(Q_W(qbase + 8), Q_S(qbase + 8, MID_SH_I, MID_HID), Q_B(qbase + 8, MID_SH_I, MID_HID),
-                                     sh_xn, nullptr, ws_up, MID_SH_I, lane, sg, groups);
+                                     sh_xn, nullptr, ws_up + MOE_SH0, MID_SH_I, lane, sg, groups);
                 SYNC_ALL();
-                for (int i = gtid; i < MID_SH_I; i += gthreads) {
+                for (int i = gtid; i < MOE_ACT_N; i += gthreads) {
                     if constexpr (PURE_FP32) {
                         ws_f_act[i] = silu_f(ws_gate[i]) * ws_up[i];
                     } else {
@@ -775,8 +887,15 @@ __device__ inline void mid_generate_impl(
                     }
                 }
                 SYNC_ALL();
+                for (int t = 0; t < MID_TOPK; ++t) {
+                    int e = ws_i_sel[t];
+                    size_t dw_off = (size_t)e * MID_HID * (MID_MOE_I / 2);
+                    size_t ds_off = (size_t)e * MID_HID * (MID_MOE_I / 64);
+                    q4_block512<MID_MOE_I>(sw_dw + dw_off, sw_ds + ds_off, sw_db + ds_off,
+                                           ws_f_act + t * MID_MOE_I, nullptr, ws_down + t * MID_HID, MID_HID, lane, sg, groups);
+                }
                 q4_block512<MID_SH_I>(Q_W(qbase + 9), Q_S(qbase + 9, MID_HID, MID_SH_I), Q_B(qbase + 9, MID_HID, MID_SH_I),
-                                      ws_f_act, nullptr, ws_down + MID_TOPK * MID_HID, MID_HID, lane, sg, groups);
+                                      ws_f_act + MOE_SH0, nullptr, ws_down + MID_TOPK * MID_HID, MID_HID, lane, sg, groups);
                 SYNC_ALL();
 
                 if constexpr (MID_TOPK == 2) {
@@ -940,7 +1059,7 @@ extern "C" __global__ __launch_bounds__(256) void flint_q4_gemv_kernel(
     int sg = blockIdx.x * (blockDim.x >> 5) + (tid >> 5);
     int groups = gridDim.x * (blockDim.x >> 5);
 
-    __shared__ float sh_x[4096];
+    __shared__ __attribute__((aligned(16))) float sh_x[4096];   // 16 B: generic path reads x as float4
     if (k <= 4096) {
         for (int i = tid; i < k; i += 256) sh_x[i] = tofloat(x[i]);
         __syncthreads();
