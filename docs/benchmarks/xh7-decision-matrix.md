@@ -30,7 +30,7 @@ deltas = depth (2→49), experts (8→256), top-k (2→6).
 | R2 | llama.cpp-Vulkan, mid-8L GGUF **UD mix (as-shipped quant mix)** | mid-8L | **120.1** | 512 / **108.1** @ 8192 | idle | rec-xh7 step 0, 2ea0c9f, docs/benchmarks/xh7-step0/README.md |
 | R3 | llama.cpp-Vulkan, mid-8L UD mix + **q4_0 lm_head** | mid-8L | **161.5** | 512 / **139.3** @ 8192 | idle | same as R2 |
 | R4 | llama.cpp-Vulkan, mid-8L **pure q4_0** (megakernel's bytes/token) | mid-8L | **201.9** | 512 / **168.6** @ 8192 | idle | same as R2 |
-| R5 | llama.cpp-Vulkan, **full Flint via :8080** server | full 49L | **26.6** (qwen stopped) / 26.8 (qwen up) | 8k | mixed (recorded per run) | rec-xh7 step 0, 2ea0c9f |
+| R5 | llama.cpp-Vulkan, **full Flint via :8080** server | full 49L | **26.61** decode @ 8k depth (26.66, 26.56 — reproduces step-0 within 0.05); 29.12 @ depth 512; prefill 442 | **8k DEPTH** (the "31.1 @8k" citation's 8k was the context *window*, not depth — see reconcile) | mixed (recorded per run); :8990 CPU qwen3vl resident in all reconcile rows | step-0 2ea0c9f + **RECONCILED** rec-b3u-adjacent ops_flint run, eb2c4b0 docs/benchmarks/xh7-r5-reconcile/ (runs.jsonl, gated busy<5 + wait-for-idle: intermittent cotenant bursts busy=16 ×2) |
 | R6 | engine e2e, rocm backend, **real mid-8L weights bf16** (rocm-bf16) | real mid-8L | **7.22** | greedy gen, torch-native sampling | 3 llama-servers UP | rec-9na comment 2026-11-20 (torch-fp32 gate; fp32 row: 5.94/808.1) |
 | R7 | engine e2e rocm-fp32 | real mid-8L | **5.94** / prefill 808.1 | same as R6 | same | same |
 | R8 | **full-config megakernel** (49L / 256E / top-6, bank `~/xh7/flint-int4.bank` 21.019 GiB, bit-exact verified) | **full Flint INT4-affine** (~4.5 bpw-equiv) | **35.45** decode32 (w64; w32 34.91, w16 31.43; ABBA pairs valid) | after 512; short-ctx 54.1/67.6/69.9; e2e-516 39.5–47.1 pos/s | recorded per log line | **HOST: albion R9700 (discrete 32 GB)** — rec-u9q GREEN, e3c5ed6 on rec/gemini-kernels, docs/benchmarks/u9q-albion-2026-11-20/; sign-off: fp32-KV 3/3 under adopted spec (a), step_rel ≤2.3e-6; bf16-KV 0/3 = reference-sensitivity artifact (ref itself moves 5.5e-2–8.5e-2 fp32→bf16 KV; router gaps to 3e-7 cascade over 49 layers) — **judged by token agreement**, no logit-rel gate. Scaling context: same-card mid-8L 196–261 tok/s |
@@ -78,10 +78,21 @@ not a matrix hole. Backend framing note: R9/R10 are llama.cpp-**HIP**
 
 ## Provenance / hygiene notes
 
-- Bedivere-cited incumbent "31.1 decode @ 8k ctx solo (~10.2 with
-  cotenants)" was **not reproduced** through the :8080 server (R5:
-  26.6–26.8); its provenance is not in the repo. R5 is the recorded
-  number; reconcile before any external quote.
+- **"31.1 solo @8k" — RETIRED as an R5 comparable (reconciled 2026-11-21,
+  ops_flint, eb2c4b0):** NOT reproduced at 8k depth (26.61, reproducing
+  step-0 within 0.05). Reproduced-under-X at shallow depth (29.12 @ 512):
+  the original probe ran on a `-c 8192` context-window server with a
+  short prompt — the "8k" in the citation was the context *window*, not
+  generation depth. Residual −6% (31.1 vs 29.1) is boot-era (Oct GTT
+  placement vs Nov VRAM carve-out + driver changes) and not
+  retroactively measurable (M1 request shape unrecorded). **Use 26.61 @
+  8k depth as the only current comparable.** All reconcile rows carried
+  the :8990 CPU qwen3vl resident, as requested.
+
+- ~~Bedivere-cited incumbent "31.1 decode @ 8k ctx solo (~10.2 with
+  cotenants)" was not reproduced through the :8080 server (R5:
+  26.6–26.8); its provenance is not in the repo.~~ **Resolved above —
+  root cause identified (context-window vs depth), 31.1 retired.**
 - The old eager-torch INT4 rows (2.25 → 3.69–3.71) and the 37.2
   dense-bf16 floor are superseded/context-only (7fc236a); not ladder rows.
 - All llama.cpp GGUF rows measured with: gated busy<5, ABBA order, 32
