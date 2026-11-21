@@ -261,3 +261,81 @@ Verdict: VCgen is committed as a small, byte-identical win (o_proj 1.06x, expert
 +1-2% decode). VA (nondeterministic) and VC2048 (slower lm_head) are rejected. The lm_head (38% of a
 token, ~77 of ~82 GB/s) and the K=2048 path have no byte-identical load-schedule headroom left on
 dusk. Full-config / R9700 effect still unknown (albion off).
+
+## 7. Step 5 (rec-6ob.1): double-buffered LDS staging on the K=2048 path, rec-6u2 fix direction 3 (`s5/`) — REJECTED
+
+Source: sunny's rec-6u2 ISA analysis (`/mnt/d/ops/sunny/research/rec6u2-gemv-k2048-row-corruption-isa.md` §3).
+On top of 39629e7 (VCgen), the K=2048 full-quad path stages each 512-element block (4 rows x 256 B, two
+b128 per lane) into one of two LDS buffers. Stage t+1's loads are issued before stage t's compute. The
+other buffer is rewritten behind a wave fence pair (`amdgcn_fence(RELEASE, wavefront)` + `wave_barrier`).
+The quad's scales and biases (512 contiguous B, one b128 per lane) are staged once per quad, double-buffered
+by quad parity. Each lane reads back exactly the words and scales it consumed unstaged, and each row
+accumulates j = 0..3 in the same order. Only 8-12 VMEM result VGPRs are live across a stage. Final source:
+`s5/variant_vd3_REJECTED.hip`; ISA `s5/vd3_gfx1150.s.gz`. dusk solo; standalone gemv launches are ms long and
+megakernel launches <= 0.243 s. busy < 5 before every round; flint :8080 / E4B :8090 logged per line and not
+touched (E4B answering again by this run); qwen disabled.
+
+Iterations:
+- **vd**: separate `__shared__` buffers. G0 PASS x280. But mid_generate LDS went from 32.9 to 57.5 KiB and
+  the standalone gemv kernel to 64 KiB. That made co-residency of the 16 persistent workgroups fragile:
+  `sync_all BARRIER ABORT` (arrived 2-4/16) in 3 of the ABBA series (`s5/run5b.log`). The barrier's spin
+  cap aborted cleanly: no GPU reset, and busy was back to 3 afterwards.
+- **vd2**: one per-warp LDS pool (`q4_lds_pool`, 3 KiB) shared by the generic VC staging and the K=2048 double
+  buffer. LDS was back to 32.9 / 40 KiB and there were no aborts.
+- **vd3**: vd2 plus a rolled tail loop (n % 4 != 0), because the K=2048 function had doubled to 3286
+  instructions. Back to 2207 instructions (vcgen 1736).
+
+**G0, byte identity vs 2fd83cb** (gate7, 7 shapes x 40 runs over grids 0/16) plus lmh_dbg rows%4 / iteration
+histograms (lm_head 150144 and q_proj 4096 at 3 grids each; tail shapes 4098 and 150142 for vd3): **PASS on
+all three variants**. Zero differing rows in every histogram. Resources K=2048: 248 VGPR. Scratch is 192 B (vd)
+or 168 B (vd3), but all of it is callee-saved save/restore at function entry and exit; the loop has zero
+scratch ops and zero `s_waitcnt_vscnt`.
+
+**Per-op, standalone (grid 16, 6 ABBA rounds, medians, ms)**
+
+| variant | o_proj | expert_down | lm_head |
+|---|---|---|---|
+| vd  | 0.1056 (1.058x) | 0.0098 (1.166x) | 2.2264 (**1.024x**) |
+| vd2 | 0.1050 (1.054x) | 0.0105 (1.083x) | 2.2244 (1.023x) |
+| vd3 | 0.1049 (1.061x) | 0.0104 (1.116x) | 2.2127 (1.023x) |
+
+So VC2048's standalone lm_head loss (0.960x) is recovered (1.023x). o_proj / expert_down are VCgen's
+unchanged generic path (s4: 1.057x / 1.101x).
+
+**G1, megakernel** short4 + chat x 3 builds: 6/6 npz byte-identical to 2fd83cb (vd, vd2), so the spec (a) matrix
+is unchanged.
+
+**ABBA decode32 short-ctx x8 (mode 0, all pairs valid, tokens identical) — REGRESSION**
+
+| A -> B | short4 tok/s | chat tok/s |
+|---|---|---|
+| 2fd83cb -> vd  | 186.00 -> 168.64 (0.907x) | (aborted, see above) |
+| vcgen -> vd2   | 189.48 -> 169.38 (**0.894x**) | 188.76 -> 169.16 (**0.896x**) |
+| 2fd83cb -> vd2 | 185.68 -> 169.69 (0.914x) | 187.78 -> 169.48 (0.903x) |
+
+**Phase profile** (mk_prof, MK_PROFILE build, prompt4 + 36, 16 workers, 3 reps; us/token):
+
+| phase | vcgen | vd2 | vd3 |
+|---|---|---|---|
+| token | 5384 | 5985 | 5877 |
+| 11 lm_head (K=2048, 1173 quads/warp) | 2226 | 2234 | 2238 |
+| 9 MLP (gate/up K=2048) | 1305 | 1611 | 1556 |
+| 7 O-proj (generic K=4096, code unchanged) | 898 | 1037 | 1003 |
+| 3 QKV (K=2048, 1-8 quads/warp) | 743 | 889 | 867 |
+
+Reading:
+1. **Megakernel lm_head does not move.** At about 163 MB per 2.23 ms (~73 GB/s vs the ~82 GB/s ceiling) the
+   register path already hides latency with 4 waves/SIMD, so double-buffering has nothing to recover in the
+   megakernel. The standalone +2.3% does not carry over.
+2. **Small-n K=2048 phases regress.** QKV and gate/up run only 1-8 quads per warp. The register path issues
+   all 16 row-block loads of a quad together (one latency per quad). The pipeline exposes about one
+   latency per stage (prefetch distance 1), plus a prologue per op.
+3. **Unexplained:** O-proj (generic K=4096, byte-identical code and instruction count) is also +12-15% inside
+   the megakernel but not standalone. Candidates: instruction-cache pressure (rolling the tail cut the
+   K=2048 function by 1079 instructions and recovered only about a third of the loss), or L2 / write
+   interaction with the preceding K=2048 phase. Not isolated; would need a control variant.
+
+Verdict: REJECTED. It is correct by every gate, but it is a 10% decode regression in the megakernel and gives
+0% on its target phase. The kernel stays at 39629e7. Of rec-6u2's fix directions, (3) double-buffering is now
+measured as no gain on dusk. (4), register batching with a shrunk preload, was not attempted: lm_head in the
+megakernel is already ~89% of the bandwidth ceiling, so its upside is bounded by ~10% of one phase.

@@ -1,0 +1,35 @@
+[21:58:06Z] emit vd short4,chat x 3 builds | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[21:58:09Z] emit vd exit 0 | busy=63 | flint:idle,e4b:idle,qwen:inactive
+  chat_bf16kv.npz IDENTICAL
+  chat_fp32_bf16kv.npz IDENTICAL
+  chat_fp32kv.npz IDENTICAL
+  short4_bf16kv.npz IDENTICAL
+  short4_fp32_bf16kv.npz IDENTICAL
+  short4_fp32kv.npz IDENTICAL
+G1 SUITE byte-identity vd vs base(2fd83cb): 6/6
+[21:58:09Z] ABBA short4: A=base B=vd, mode 0, 8 rounds | busy=52 | flint:idle,e4b:idle,qwen:inactive
+21:58:15Z round 0 AB | A 185.48 B 171.0 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:58:20Z round 1 BA | A 188.23 B 164.91 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:58:25Z round 2 AB | A 185.73 B 171.08 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:58:30Z round 3 BA | A 187.42 B 165.38 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:58:35Z round 4 AB | A 183.29 B 169.55 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:58:40Z round 5 BA | A 185.2 B 169.03 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:58:44Z round 6 AB | A 184.97 B 169.94 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:58:49Z round 7 BA | A 187.72 B 168.48 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+{"case": "short4", "A": {"valid": 8, "differential_tok_s": 186.0, "pair_min": 183.29, "pair_max": 188.23, "t36_mean_s": 0.21506}, "B": {"valid": 8, "differential_tok_s": 168.64, "pair_min": 164.91, "pair_max": 171.08, "t36_mean_s": 0.23663}, "speedup_B_over_A": 0.907, "tokens_identical_A_B": true}
+[21:58:49Z] ABBA chat: A=base B=vd, mode 0, 8 rounds | busy=44 | flint:idle,e4b:idle,qwen:inactive
+21:58:55Z round 0 AB | A 186.27 B 169.69 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=45 flint:idle,e4b:idle,qwen:down
+21:59:00Z round 1 BA | A 189.73 B 167.7 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=45 flint:idle,e4b:idle,qwen:down
+flint_mid BARRIER ABORT: control[2]=2 (phase=1, arrived=4, workers=16)
+invalid launch rc=-5 ctrl=[4, 1, 2, 0] tokens=[0 0 0 0]
+[21:59:14Z] ABBA short4: A=vcgen B=vd, mode 0, 8 rounds | busy=96 | flint:idle,e4b:idle,qwen:inactive
+21:59:20Z round 0 AB | A 187.5 B 170.06 | pre busy=3 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:59:25Z round 1 BA | A 190.24 B 170.52 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:59:30Z round 2 AB | A 188.19 B 171.15 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+21:59:35Z round 3 BA | A 188.47 B 168.17 | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=44 flint:idle,e4b:idle,qwen:down
+flint_mid BARRIER ABORT: control[2]=2 (phase=1, arrived=2, workers=16)
+invalid launch rc=-5 ctrl=[2, 1, 2, 0] tokens=[0 0 0 0]
+[21:59:48Z] ABBA chat: A=vcgen B=vd, mode 0, 8 rounds | busy=96 | flint:idle,e4b:idle,qwen:inactive
+flint_mid BARRIER ABORT: control[2]=2 (phase=1, arrived=2, workers=16)
+invalid launch rc=-5 ctrl=[2, 1, 2, 0] tokens=[0 0 0 0]
+[22:00:03Z] DONE | busy=96 | flint:idle,e4b:idle,qwen:inactive

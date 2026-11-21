@@ -1,0 +1,51 @@
+[22:08:24Z] build vd3 exit 0 | busy=3 | flint:idle,e4b:idle,qwen:inactive
+== base/flint_mid_megakernel.hip
+  _Z16flint_q4_gemv_opILi1024          vgpr=133  scratch=0
+  _Z16flint_q4_gemv_opILi2048          vgpr=248  scratch=56
+  _Z16flint_q4_gemv_opILi4096          vgpr=113  scratch=0
+  _Z16flint_q4_gemv_opILi512           vgpr=87   scratch=0
+  kernels:       5 ; NumVgprs: 248	; ScratchSize: 56
+  kernels:       1 ; NumVgprs: 87	; ScratchSize: 0
+  kernels:       1 ; NumVgprs: 133	; ScratchSize: 0
+== vcgen/flint_mid_megakernel.hip
+  _Z16flint_q4_gemv_opILi1024          vgpr=164  scratch=0
+  _Z16flint_q4_gemv_opILi2048          vgpr=248  scratch=56
+  _Z16flint_q4_gemv_opILi4096          vgpr=151  scratch=0
+  _Z16flint_q4_gemv_opILi512           vgpr=115  scratch=0
+  kernels:       5 ; NumVgprs: 248	; ScratchSize: 56
+  kernels:       1 ; NumVgprs: 164	; ScratchSize: 0
+  kernels:       1 ; NumVgprs: 151	; ScratchSize: 0
+== vd3/flint_mid_megakernel.hip
+  _Z16flint_q4_gemv_opILi1024          vgpr=164  scratch=0
+  _Z16flint_q4_gemv_opILi2048          vgpr=248  scratch=168
+  _Z16flint_q4_gemv_opILi4096          vgpr=151  scratch=0
+  _Z16flint_q4_gemv_opILi512           vgpr=115  scratch=0
+  kernels:       5 ; NumVgprs: 248	; ScratchSize: 168
+  kernels:       1 ; NumVgprs: 164	; ScratchSize: 0
+  kernels:       1 ; NumVgprs: 151	; ScratchSize: 0
+[22:08:33Z] G0 + timing: vd3 vs base(2fd83cb) | busy=3 | flint:idle,e4b:idle,qwen:inactive
+  expert_gate_512x2048     IDENTICAL x40
+  expert_down_2048x512     IDENTICAL x40
+  shared_down_2048x1024    IDENTICAL x40
+  shared_gate_1024x2048    IDENTICAL x40
+  q_proj_4096x2048         IDENTICAL x40
+  o_proj_2048x4096         IDENTICAL x40
+  lm_head_150144x2048      IDENTICAL x40
+GATE byte-identity vs base: PASS
+  round 0 BV | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=28 flint:idle,e4b:idle,qwen:down
+  round 1 VB | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 2 BV | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=28 flint:idle,e4b:idle,qwen:down
+  round 3 VB | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=28 flint:idle,e4b:idle,qwen:down
+  round 4 BV | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  round 5 VB | pre busy=4 flint:idle,e4b:idle,qwen:down | post busy=29 flint:idle,e4b:idle,qwen:down
+  TIME o_proj_2048x4096         grid16 base 0.1113 ms  var 0.1049 ms  speedup 1.061  (var range 0.1040-0.1061)
+  TIME expert_down_2048x512     grid16 base 0.0116 ms  var 0.0104 ms  speedup 1.116  (var range 0.0092-0.0111)
+  TIME lm_head_150144x2048      grid16 base 2.2632 ms  var 2.2127 ms  speedup 1.023  (var range 2.2043-2.2504)
+[22:08:59Z] rows%4 / iteration histograms: vd3 vs base (lm_head 150144, q_proj 4096) | busy=28 | flint:idle,e4b:idle,qwen:inactive
+grid   256 (2048 warps, 19 iters/warp): 0 rows differ; rows%4 [0, 0, 0, 0]; iteration hist []; first []
+grid    64 (512 warps, 74 iters/warp): 0 rows differ; rows%4 [0, 0, 0, 0]; iteration hist []; first []
+grid  4692 (37536 warps, 1 iters/warp): 0 rows differ; rows%4 [0, 0, 0, 0]; iteration hist []; first []
+grid   256 (2048 warps, 1 iters/warp): 0 rows differ; rows%4 [0, 0, 0, 0]; iteration hist []; first []
+grid    64 (512 warps, 2 iters/warp): 0 rows differ; rows%4 [0, 0, 0, 0]; iteration hist []; first []
+grid   128 (1024 warps, 1 iters/warp): 0 rows differ; rows%4 [0, 0, 0, 0]; iteration hist []; first []
+[22:09:00Z] DONE | busy=18 | flint:idle,e4b:idle,qwen:inactive
