@@ -68,3 +68,31 @@ co-residency on dusk).
 
 Net on dusk short ctx: d1f6208 ~175 -> 2fd83cb ~188 -> 39629e7 ~190 -> b4 ~203 tok/s, all byte-identical to
 the 2fd83cb numerics, so the spec (a) matrix is unchanged. wrap512 / ctx512 / R9700 full-Flint rows: albion.
+
+## 3. Lever 3: barrier cuts (b5/b6, parked) and segmented K=2048 gemv (b7, adopted)
+
+**b5/b6, barrier cuts:** every WG computes the deterministic top-K itself (the grid barrier becomes
+`__syncthreads`), and the residual add is fused into the O-proj / dense-down gemv store
+(`out = out + v`, same float add). That is -16 barriers/token on mid (98 -> 82). G0 + G1 6/6 byte-identical.
+- b5 (ACC as a template parameter): 0.943x / 0.943x vs b4. It instantiated two more gemv bodies:
+  mid_generate + callees went 11 763 -> 13 107 instructions.
+- b6 (ACC as a runtime flag): 0.991x / 0.976x vs b4.
+
+On dusk mid-8L a barrier costs ~1.8 us, so 16 of them (~30 us/token) don't pay for the extra work and
+layout change. Parked as `variant_b6_barriercuts_ALBION_CANDIDATE.hip`: on full Flint (49 layers, TOPK 6,
+wider grid) barriers cost more. Measure there.
+
+Hot-code observation (mid_generate + gemv callees): vcgen 13 747, b4 11 763 (faster), b5 13 107
+(slower). Together with rec-6ob.1's unexplained O-proj slowdown, this points at instruction-cache
+sensitivity of the megakernel. Not proven; keep the hot code small (runtime flags over template variants).
+
+**b7, segmented K=2048 gemv** (on b4): matrices that share the input x run as one round-robin quad stream
+over a per-WG LDS segment table (`Q4Seg sh_seg[2*TOPK+2]`) with ONE x preload: Q/K/V (3 segments) and all
+routed + shared gate/up (2*TOPK+2). There is no new instantiation; with no table, the quad assignment is
+exactly the single-matrix one. Per-row arithmetic is unchanged.
+- G0 PASS (7 x 40); G1 6/6 byte-identical to 2fd83cb.
+- ABBA vs b4: short4 201.94 -> **209.06 (1.035x)**, chat 200.90 -> **207.30 (1.032x)**; tokens identical,
+  no aborts.
+
+**Net, all byte-identical to 2fd83cb:** 39629e7 ~188-190 -> b7 ~207-209 tok/s, about **+10-11%** on dusk
+short ctx (b4 1.075-1.086x x b7 1.032-1.035x).

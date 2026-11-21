@@ -175,6 +175,19 @@ __device__ inline uint8_t* q4_gen_pool(int warp) {
     return q4_gen_db[warp];
 }
 
+// rec-9t8 lever 3b: K=2048 multi-matrix ("segmented") gemv. Matrices that share the input x (Q/K/V; all
+// routed + shared expert gate/up) are one round-robin stream of row-quads over the concatenated quad list,
+// with ONE x preload, instead of one call (and one preload + ragged tail) per matrix. Every row's
+// arithmetic is unchanged. The table lives in LDS (uniform reads); with no table the quad assignment is
+// exactly the single-matrix one (quad gq = sg + k*groups -> first = 4*gq).
+struct Q4Seg {
+    const uint8_t* w;
+    const bf16* s;
+    const bf16* b;
+    float* out;
+    int n;
+};
+
 template <int K, bool ROUND_BF16 = false>
 __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         const bf16* __restrict__ s,
@@ -182,7 +195,8 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         const float* __restrict__ x,
                                         bf16* __restrict__ out_bf,
                                         float* __restrict__ out_f,
-                                        int n, int lane, int sg, int groups) {
+                                        int n, int lane, int sg, int groups,
+                                        const Q4Seg* segs = nullptr, int nseg = 0) {
     static_assert(K % 512 == 0, "flint_q4_gemv_op requires K % 512 == 0");
     if constexpr (K == 2048) {
         float v0[16], v1[16], v2[16], v3[16];
@@ -199,29 +213,43 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
         int g2 = sc2 >> 6;
         int g3 = sc3 >> 6;
 
-        for (int first = sg * 4; first < n; first += groups * 4) {
-            float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-            #pragma unroll
-            for (int r = 0; r < 4; ++r) {
-                int row = first + r;
-                if (row < n) {
-                    const uint8_t* wr = w + (size_t)row * 1024;
-                    const bf16*    sr = s + (size_t)row * 32;
-                    const bf16*    br = b + (size_t)row * 32;
-                    a[r] += dot16(wr + (sc0 >> 1), v0, tofloat(sr[g0]), tofloat(br[g0]), sum0);
-                    a[r] += dot16(wr + (sc1 >> 1), v1, tofloat(sr[g1]), tofloat(br[g1]), sum1);
-                    a[r] += dot16(wr + (sc2 >> 1), v2, tofloat(sr[g2]), tofloat(br[g2]), sum2);
-                    a[r] += dot16(wr + (sc3 >> 1), v3, tofloat(sr[g3]), tofloat(br[g3]), sum3);
+        const int nsegs = segs ? nseg : 1;
+        int base = 0;          // first global quad index of segment i
+        int gq = sg;           // this warp's next global quad index
+        for (int i = 0; i < nsegs; ++i) {
+            const uint8_t* const W  = segs ? segs[i].w : w;
+            const bf16* const    S  = segs ? segs[i].s : s;
+            const bf16* const    Bq = segs ? segs[i].b : b;
+            float* const         OF = segs ? segs[i].out : out_f;
+            bf16* const          OB = segs ? nullptr : out_bf;
+            const int            N  = segs ? segs[i].n : n;
+            const int nq = (N + 3) >> 2;
+            for (; gq < base + nq; gq += groups) {
+                const int first = (gq - base) * 4;
+                float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) {
+                    int row = first + r;
+                    if (row < N) {
+                        const uint8_t* wr = W + (size_t)row * 1024;
+                        const bf16*    sr = S + (size_t)row * 32;
+                        const bf16*    br = Bq + (size_t)row * 32;
+                        a[r] += dot16(wr + (sc0 >> 1), v0, tofloat(sr[g0]), tofloat(br[g0]), sum0);
+                        a[r] += dot16(wr + (sc1 >> 1), v1, tofloat(sr[g1]), tofloat(br[g1]), sum1);
+                        a[r] += dot16(wr + (sc2 >> 1), v2, tofloat(sr[g2]), tofloat(br[g2]), sum2);
+                        a[r] += dot16(wr + (sc3 >> 1), v3, tofloat(sr[g3]), tofloat(br[g3]), sum3);
+                    }
+                }
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) {
+                    float val = simd_sum(a[r]);
+                    if (lane == 0 && first + r < N) {
+                        if (OB) OB[first + r] = tobf(val);
+                        if (OF) OF[first + r] = ROUND_BF16 ? tofloat(tobf(val)) : val;
+                    }
                 }
             }
-            #pragma unroll
-            for (int r = 0; r < 4; ++r) {
-                float val = simd_sum(a[r]);
-                if (lane == 0 && first + r < n) {
-                    if (out_bf) out_bf[first + r] = tobf(val);
-                    if (out_f)  out_f[first + r]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
-                }
-            }
+            base += nq;
         }
     } else if constexpr (K == 512) {
         // One 512-element block per row: a stage is a whole quad, so pipelining buys only a prologue
@@ -640,6 +668,7 @@ __device__ inline void mid_generate_impl(
     int* ws_i_maxidx = ws_i + 16;
 
     __shared__ float sh_xn[MID_HID];
+    __shared__ Q4Seg sh_seg[2 * MID_TOPK + 2];   // rec-9t8 3b segment table (QKV: 3, MoE gate/up: 2*TOPK+2)
     __shared__ float sh_red[16];
     __shared__ uint32_t sh_ready[1];
     uint32_t phase = 0;
@@ -687,12 +716,14 @@ __device__ inline void mid_generate_impl(
             mid_rmsnorm_2048(ws_x, ln_w, sh_xn, sh_red);
 
             // ---- 3. Q, K, V projections (K=2048) ----
-            q4_block512<MID_HID>(Q_W(qbase + 0), Q_S(qbase + 0, MID_QDIM, MID_HID), Q_B(qbase + 0, MID_QDIM, MID_HID),
-                                 sh_xn, nullptr, ws_q, MID_QDIM, lane, sg, groups);
-            q4_block512<MID_HID>(Q_W(qbase + 1), Q_S(qbase + 1, MID_KVDIM, MID_HID), Q_B(qbase + 1, MID_KVDIM, MID_HID),
-                                 sh_xn, nullptr, ws_k, MID_KVDIM, lane, sg, groups);
-            q4_block512<MID_HID>(Q_W(qbase + 2), Q_S(qbase + 2, MID_KVDIM, MID_HID), Q_B(qbase + 2, MID_KVDIM, MID_HID),
-                                 sh_xn, nullptr, ws_v, MID_KVDIM, lane, sg, groups);
+            // rec-9t8 3b: Q, K, V as one segmented K=2048 gemv (one x preload, one quad stream)
+            if (tid == 0) {
+                sh_seg[0] = {Q_W(qbase + 0), Q_S(qbase + 0, MID_QDIM, MID_HID), Q_B(qbase + 0, MID_QDIM, MID_HID), ws_q, MID_QDIM};
+                sh_seg[1] = {Q_W(qbase + 1), Q_S(qbase + 1, MID_KVDIM, MID_HID), Q_B(qbase + 1, MID_KVDIM, MID_HID), ws_k, MID_KVDIM};
+                sh_seg[2] = {Q_W(qbase + 2), Q_S(qbase + 2, MID_KVDIM, MID_HID), Q_B(qbase + 2, MID_KVDIM, MID_HID), ws_v, MID_KVDIM};
+            }
+            __syncthreads();
+            flint_q4_gemv_op<MID_HID>(nullptr, nullptr, nullptr, sh_xn, nullptr, nullptr, 0, lane, sg, groups, sh_seg, 3);
             SYNC_ALL();
 
             // ---- 4. Per-head RMSNorm + NeoX RoPE on ws_q (32 heads) and ws_k (4 heads) ----
@@ -862,21 +893,24 @@ __device__ inline void mid_generate_impl(
                 static_assert(MID_TOPK * MID_MOE_I + MID_SH_I <= MID_FFN_MAX, "batched MoE ws layout");
                 constexpr int MOE_SH0 = MID_TOPK * MID_MOE_I;      // shared-expert slot offset
                 constexpr int MOE_ACT_N = MOE_SH0 + MID_SH_I;
-                for (int t = 0; t < MID_TOPK; ++t) {
-                    int e = ws_i_sel[t];
+                // rec-9t8 3b: all routed gate/up + shared gate/up as one segmented K=2048 gemv
+                if (tid < MID_TOPK) {
+                    int t = tid, e = ws_i_sel[t];
                     // Expert strides: bytes for packed uint8*, ELEMENTS for bf16* scales/biases
                     size_t gw_off = (size_t)e * MID_MOE_I * (MID_HID / 2);
                     size_t gs_off = (size_t)e * MID_MOE_I * (MID_HID / 64);
-                    q4_block512<MID_HID>(sw_gw + gw_off, sw_gs + gs_off, sw_gb + gs_off,
-                                         sh_xn, nullptr, ws_gate + t * MID_MOE_I, MID_MOE_I, lane, sg, groups);
-                    q4_block512<MID_HID>(sw_uw + gw_off, sw_us + gs_off, sw_ub + gs_off,
-                                         sh_xn, nullptr, ws_up + t * MID_MOE_I, MID_MOE_I, lane, sg, groups);
+                    sh_seg[2 * t]     = {sw_gw + gw_off, sw_gs + gs_off, sw_gb + gs_off, ws_gate + t * MID_MOE_I, MID_MOE_I};
+                    sh_seg[2 * t + 1] = {sw_uw + gw_off, sw_us + gs_off, sw_ub + gs_off, ws_up + t * MID_MOE_I, MID_MOE_I};
+                } else if (tid == MID_TOPK) {
+                    // Shared expert (SH_I = 1024, HID = 2048)
+                    sh_seg[2 * MID_TOPK]     = {Q_W(qbase + 7), Q_S(qbase + 7, MID_SH_I, MID_HID), Q_B(qbase + 7, MID_SH_I, MID_HID),
+                                                ws_gate + MOE_SH0, MID_SH_I};
+                    sh_seg[2 * MID_TOPK + 1] = {Q_W(qbase + 8), Q_S(qbase + 8, MID_SH_I, MID_HID), Q_B(qbase + 8, MID_SH_I, MID_HID),
+                                                ws_up + MOE_SH0, MID_SH_I};
                 }
-                // Shared expert (SH_I = 1024, HID = 2048)
-                q4_block512<MID_HID>(Q_W(qbase + 7), Q_S(qbase + 7, MID_SH_I, MID_HID), Q_B(qbase + 7, MID_SH_I, MID_HID),
-                                     sh_xn, nullptr, ws_gate + MOE_SH0, MID_SH_I, lane, sg, groups);
-                q4_block512<MID_HID>(Q_W(qbase + 8), Q_S(qbase + 8, MID_SH_I, MID_HID), Q_B(qbase + 8, MID_SH_I, MID_HID),
-                                     sh_xn, nullptr, ws_up + MOE_SH0, MID_SH_I, lane, sg, groups);
+                __syncthreads();
+                flint_q4_gemv_op<MID_HID>(nullptr, nullptr, nullptr, sh_xn, nullptr, nullptr, 0, lane, sg, groups,
+                                          sh_seg, 2 * MID_TOPK + 2);
                 SYNC_ALL();
                 for (int i = gtid; i < MOE_ACT_N; i += gthreads) {
                     if constexpr (PURE_FP32) {
