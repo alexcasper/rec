@@ -1,0 +1,10 @@
+=== R5 reconcile start 2026-11-21T21:48:03Z ===
+2026-11-21T21:48:03Z
+  gpu_busy: 3 
+  vram_used_MiB: 
+  MemAvailable_MiB: 8221600
+  llama-servers: ---port 8991 ---port 8990 ---port 8080 ---port 8090 
+  8990_cpu_pct: 0.0
+--- rows while 8990 CPU qwen3vl lives (decode-focused per coordinator) ---
+  full8k_s0cpuqwen run3: {"label": "full8k_s0cpuqwen", "depth": 8192, "run": 3, "utc": "2026-11-21T21:48:04Z", "prompt_n": 8192, "prompt_tps": 441.78, "pred_n": 64, "pred_tps": 26.66}
+GATE-FAIL gpu_busy=16

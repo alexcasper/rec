@@ -1,0 +1,5 @@
+{"label": "full8k_s0cpuqwen", "depth": 8192, "run": 3, "utc": "2026-11-21T21:48:04Z", "prompt_n": 8192, "prompt_tps": 441.78, "pred_n": 64, "pred_tps": 26.66}
+{"label": "full8k", "depth": 8192, "run": 3, "utc": "2026-11-21T21:49:05Z", "prompt_tps": 442.45, "pred_tps": 26.56}
+{"label": "depth512", "depth": 512, "run": 1, "utc": "2026-11-21T21:50:00Z", "prompt_tps": 460.59, "pred_tps": 29.25}
+{"label": "depth512", "depth": 512, "run": 2, "utc": "2026-11-21T21:50:12Z", "prompt_tps": 449.09, "pred_tps": 29.22}
+{"label": "depth512", "depth": 512, "run": 3, "utc": "2026-11-21T21:50:23Z", "prompt_tps": 453.06, "pred_tps": 28.88}
