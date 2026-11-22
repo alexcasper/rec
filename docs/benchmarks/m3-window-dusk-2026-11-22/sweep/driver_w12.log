@@ -1,0 +1,28 @@
+2026-11-22T14:08:03Z offset table /home/dusk/xh7/flint-int4.off.npy
+2026-11-22T14:08:03Z lib flint_full.so cfg {'nl': 49, 'nexp': 256, 'topk': 6, 'n_dense': 2, 'dense_i': 6144, 'n_offsets': 837, 'n_full': 14, 'full': 1} | occupancy {'cus': 8, 'max_blocks_per_cu': 2, 'max_co_resident_workers': 16, 'wave_size': 32} | workers 12 | card /sys/class/drm/card1/device | flint:down,e4b:idle,qwen:down,gpu_busy=28,MemAvailable=17.1GiB
+2026-11-22T14:08:03Z VRAM preflight: need 21.23 GiB + 1.5 slack, sysfs free 38.61 GiB (waited 0.0 s) | flint:down,e4b:idle,qwen:down,gpu_busy=24,MemAvailable=17.1GiB
+2026-11-22T14:08:04Z bank stream   0.25/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=21,MemAvailable=16.8GiB
+2026-11-22T14:08:04Z bank stream   2.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=16.8GiB
+2026-11-22T14:08:05Z bank stream   4.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=16.8GiB
+2026-11-22T14:08:06Z bank stream   6.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=9,MemAvailable=16.8GiB
+2026-11-22T14:08:07Z bank stream   8.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.8GiB
+2026-11-22T14:08:08Z bank stream  10.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.8GiB
+2026-11-22T14:08:09Z bank stream  12.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.8GiB
+2026-11-22T14:08:10Z bank stream  14.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.8GiB
+2026-11-22T14:08:11Z bank stream  16.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.8GiB
+2026-11-22T14:08:11Z bank stream  18.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.8GiB
+2026-11-22T14:08:12Z bank stream  20.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=7,MemAvailable=16.8GiB
+2026-11-22T14:08:13Z bank stream  21.02/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=7,MemAvailable=16.8GiB
+2026-11-22T14:08:13Z session created in 9.4 s (bank 21.019 GiB streamed H2D, 2.25 GiB/s) | flint:down,e4b:idle,qwen:down,gpu_busy=7,MemAvailable=17.1GiB
+2026-11-22T14:08:14Z probe: 26.5 ms/position -> k=6 (B launch ~0.186 s); projected bench span 55 s (budget 300 s) | flint:down,e4b:idle,qwen:down,gpu_busy=17,MemAvailable=17.1GiB
+2026-11-22T14:08:29Z ctx512: prefill 512 pos in 14.33 s; 31.55 ms/position at depth 512 -> k=4 | flint:down,e4b:idle,qwen:down,gpu_busy=94,MemAvailable=17.1GiB
+2026-11-22T14:08:33Z ctx512 pair 0 AB: tA=0.0650 tB=0.1551 -> 33.29 tok/s depth 517 | flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB
+2026-11-22T14:08:35Z ctx512 pair 1 BA: tA=0.0628 tB=0.1544 -> 32.74 tok/s depth 522 | flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB
+2026-11-22T14:08:38Z ctx512 pair 2 AB: tA=0.0654 tB=0.1526 -> 34.4 tok/s depth 527 | flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB
+2026-11-22T14:08:41Z ctx512 pair 3 BA: tA=0.0609 tB=0.1580 -> 30.88 tok/s depth 532 | flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB
+2026-11-22T14:08:43Z ctx512 pair 4 AB: tA=0.0648 tB=0.1511 -> 34.75 tok/s depth 537 | flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB
+2026-11-22T14:08:46Z ctx512 pair 5 BA: tA=0.0632 tB=0.1619 -> 30.4 tok/s depth 542 | flint:down,e4b:idle,qwen:down,gpu_busy=21,MemAvailable=17.1GiB
+2026-11-22T14:08:49Z ctx512 pair 6 AB: tA=0.0654 tB=0.1560 -> 33.12 tok/s depth 547 | flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.0GiB
+2026-11-22T14:08:51Z ctx512 pair 7 BA: tA=0.0627 tB=0.1596 -> 30.96 tok/s depth 552 | flint:down,e4b:idle,qwen:down,gpu_busy=21,MemAvailable=17.0GiB
+2026-11-22T14:08:51Z ROW ctx512: decode 32.49 tok/s (8/8 stable pairs, depth 512..552); prefill 512 pos in 14.33 s | flint:down,e4b:idle,qwen:down,gpu_busy=19,MemAvailable=17.0GiB
+2026-11-22T14:08:51Z window bench ok | max launch 0.17328 s | span 47.7 s

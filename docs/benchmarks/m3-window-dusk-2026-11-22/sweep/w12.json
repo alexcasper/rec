@@ -1,0 +1,809 @@
+{
+ "protocol": "M3 continuation-chunked decode differential (A={last}+1, B={last}+k), ABBA",
+ "label": "M3 window full Flint",
+ "config": {
+  "nl": 49,
+  "nexp": 256,
+  "topk": 6,
+  "n_dense": 2,
+  "dense_i": 6144,
+  "n_offsets": 837,
+  "n_full": 14,
+  "full": 1
+ },
+ "mode": 0,
+ "workers": 12,
+ "occupancy": {
+  "cus": 8,
+  "max_blocks_per_cu": 2,
+  "max_co_resident_workers": 16,
+  "wave_size": 32
+ },
+ "cap_s": 0.25,
+ "override_approved": false,
+ "bank_bytes": 22568729664,
+ "host": "dusk",
+ "prompt512_int32_sha256": "4090cfe16f28a7deee8eadde2edf21ba8eb06655b5ad0f61c46b1f05164b4814",
+ "prompt8192_int32_sha256": "0287a5e499a858d76753c98d3181325d5ac7c697fdf7489875627551cb189c9b",
+ "max_total": 848,
+ "prefill_deadline_s": 420.0,
+ "rows": {
+  "ctx512": {
+   "valid_pairs": 8,
+   "pairs": [
+    {
+     "pair": 0,
+     "order": "AB",
+     "tA_s": 0.06497,
+     "tB_s": 0.15509,
+     "tok_s": 33.29,
+     "depth": 517,
+     "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+     "post": "flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB",
+     "stable": true
+    },
+    {
+     "pair": 1,
+     "order": "BA",
+     "tA_s": 0.06283,
+     "tB_s": 0.15445,
+     "tok_s": 32.74,
+     "depth": 522,
+     "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+     "post": "flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB",
+     "stable": true
+    },
+    {
+     "pair": 2,
+     "order": "AB",
+     "tA_s": 0.06545,
+     "tB_s": 0.15265,
+     "tok_s": 34.4,
+     "depth": 527,
+     "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+     "post": "flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB",
+     "stable": true
+    },
+    {
+     "pair": 3,
+     "order": "BA",
+     "tA_s": 0.06087,
+     "tB_s": 0.15803,
+     "tok_s": 30.88,
+     "depth": 532,
+     "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+     "post": "flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB",
+     "stable": true
+    },
+    {
+     "pair": 4,
+     "order": "AB",
+     "tA_s": 0.06477,
+     "tB_s": 0.1511,
+     "tok_s": 34.75,
+     "depth": 537,
+     "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+     "post": "flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.1GiB",
+     "stable": true
+    },
+    {
+     "pair": 5,
+     "order": "BA",
+     "tA_s": 0.0632,
+     "tB_s": 0.1619,
+     "tok_s": 30.4,
+     "depth": 542,
+     "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+     "post": "flint:down,e4b:idle,qwen:down,gpu_busy=21,MemAvailable=17.1GiB",
+     "stable": true
+    },
+    {
+     "pair": 6,
+     "order": "AB",
+     "tA_s": 0.06538,
+     "tB_s": 0.15596,
+     "tok_s": 33.12,
+     "depth": 547,
+     "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.0GiB",
+     "post": "flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.0GiB",
+     "stable": true
+    },
+    {
+     "pair": 7,
+     "order": "BA",
+     "tA_s": 0.0627,
+     "tB_s": 0.15962,
+     "tok_s": 30.96,
+     "depth": 552,
+     "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.0GiB",
+     "post": "flint:down,e4b:idle,qwen:down,gpu_busy=21,MemAvailable=17.0GiB",
+     "stable": true
+    }
+   ],
+   "depth_range": [
+    512,
+    552
+   ],
+   "k": 4,
+   "t_pos_at_depth_s": 0.03155,
+   "decode_tok_s": 32.49,
+   "prefill_positions": 512,
+   "prefill_s": 14.331,
+   "prefill_pos_s": 35.73
+  }
+ },
+ "t_pos_probe_s": 0.02653,
+ "k": 6,
+ "projected_bench_s": 55.5,
+ "status": "ok",
+ "launches": [
+  {
+   "tag": "probe2",
+   "start": 0,
+   "positions": 2,
+   "dt_s": 0.05307
+  },
+  {
+   "tag": "probe5",
+   "start": 0,
+   "positions": 5,
+   "dt_s": 0.12772
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 0,
+   "positions": 6,
+   "dt_s": 0.15061
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 6,
+   "positions": 6,
+   "dt_s": 0.15129
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 12,
+   "positions": 6,
+   "dt_s": 0.1542
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 18,
+   "positions": 6,
+   "dt_s": 0.15066
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 24,
+   "positions": 6,
+   "dt_s": 0.15246
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 30,
+   "positions": 6,
+   "dt_s": 0.15915
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 36,
+   "positions": 6,
+   "dt_s": 0.15436
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 42,
+   "positions": 6,
+   "dt_s": 0.15555
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 48,
+   "positions": 6,
+   "dt_s": 0.16357
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 54,
+   "positions": 6,
+   "dt_s": 0.1581
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 60,
+   "positions": 6,
+   "dt_s": 0.15664
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 66,
+   "positions": 6,
+   "dt_s": 0.15869
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 72,
+   "positions": 6,
+   "dt_s": 0.15495
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 78,
+   "positions": 6,
+   "dt_s": 0.15372
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 84,
+   "positions": 6,
+   "dt_s": 0.15708
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 90,
+   "positions": 6,
+   "dt_s": 0.15765
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 96,
+   "positions": 6,
+   "dt_s": 0.15457
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 102,
+   "positions": 6,
+   "dt_s": 0.15812
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 108,
+   "positions": 6,
+   "dt_s": 0.15963
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 114,
+   "positions": 6,
+   "dt_s": 0.15587
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 120,
+   "positions": 6,
+   "dt_s": 0.1576
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 126,
+   "positions": 6,
+   "dt_s": 0.16166
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 132,
+   "positions": 6,
+   "dt_s": 0.15704
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 138,
+   "positions": 6,
+   "dt_s": 0.15801
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 144,
+   "positions": 6,
+   "dt_s": 0.16371
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 150,
+   "positions": 6,
+   "dt_s": 0.15945
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 156,
+   "positions": 6,
+   "dt_s": 0.15875
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 162,
+   "positions": 6,
+   "dt_s": 0.16461
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 168,
+   "positions": 6,
+   "dt_s": 0.15969
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 174,
+   "positions": 6,
+   "dt_s": 0.15994
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 180,
+   "positions": 6,
+   "dt_s": 0.16675
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 186,
+   "positions": 6,
+   "dt_s": 0.16132
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 192,
+   "positions": 6,
+   "dt_s": 0.16147
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 198,
+   "positions": 6,
+   "dt_s": 0.16674
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 204,
+   "positions": 6,
+   "dt_s": 0.16349
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 210,
+   "positions": 6,
+   "dt_s": 0.162
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 216,
+   "positions": 6,
+   "dt_s": 0.16665
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 222,
+   "positions": 6,
+   "dt_s": 0.16536
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 228,
+   "positions": 6,
+   "dt_s": 0.16305
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 234,
+   "positions": 6,
+   "dt_s": 0.16936
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 240,
+   "positions": 6,
+   "dt_s": 0.16604
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 246,
+   "positions": 6,
+   "dt_s": 0.16409
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 252,
+   "positions": 6,
+   "dt_s": 0.16985
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 258,
+   "positions": 6,
+   "dt_s": 0.16806
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 264,
+   "positions": 6,
+   "dt_s": 0.16602
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 270,
+   "positions": 6,
+   "dt_s": 0.17027
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 276,
+   "positions": 6,
+   "dt_s": 0.16856
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 282,
+   "positions": 6,
+   "dt_s": 0.16668
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 288,
+   "positions": 6,
+   "dt_s": 0.17328
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 294,
+   "positions": 5,
+   "dt_s": 0.14078
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 299,
+   "positions": 5,
+   "dt_s": 0.13987
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 304,
+   "positions": 5,
+   "dt_s": 0.14307
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 309,
+   "positions": 5,
+   "dt_s": 0.14437
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 314,
+   "positions": 5,
+   "dt_s": 0.14068
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 319,
+   "positions": 5,
+   "dt_s": 0.14209
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 324,
+   "positions": 5,
+   "dt_s": 0.1471
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 329,
+   "positions": 5,
+   "dt_s": 0.14281
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 334,
+   "positions": 5,
+   "dt_s": 0.14183
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 339,
+   "positions": 5,
+   "dt_s": 0.14426
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 344,
+   "positions": 5,
+   "dt_s": 0.14707
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 349,
+   "positions": 5,
+   "dt_s": 0.14243
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 354,
+   "positions": 5,
+   "dt_s": 0.14408
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 359,
+   "positions": 5,
+   "dt_s": 0.14644
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 364,
+   "positions": 5,
+   "dt_s": 0.14617
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 369,
+   "positions": 5,
+   "dt_s": 0.14345
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 374,
+   "positions": 5,
+   "dt_s": 0.14774
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 379,
+   "positions": 5,
+   "dt_s": 0.14747
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 384,
+   "positions": 5,
+   "dt_s": 0.14445
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 389,
+   "positions": 5,
+   "dt_s": 0.1448
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 394,
+   "positions": 5,
+   "dt_s": 0.15017
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 399,
+   "positions": 5,
+   "dt_s": 0.14529
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 404,
+   "positions": 5,
+   "dt_s": 0.14562
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 409,
+   "positions": 5,
+   "dt_s": 0.1496
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 414,
+   "positions": 5,
+   "dt_s": 0.14802
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 419,
+   "positions": 5,
+   "dt_s": 0.14595
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 424,
+   "positions": 5,
+   "dt_s": 0.14807
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 429,
+   "positions": 5,
+   "dt_s": 0.15221
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 434,
+   "positions": 5,
+   "dt_s": 0.14693
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 439,
+   "positions": 5,
+   "dt_s": 0.14758
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 444,
+   "positions": 5,
+   "dt_s": 0.15306
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 449,
+   "positions": 5,
+   "dt_s": 0.14925
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 454,
+   "positions": 5,
+   "dt_s": 0.1481
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 459,
+   "positions": 5,
+   "dt_s": 0.15352
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 464,
+   "positions": 5,
+   "dt_s": 0.15048
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 469,
+   "positions": 5,
+   "dt_s": 0.14877
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 474,
+   "positions": 5,
+   "dt_s": 0.15195
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 479,
+   "positions": 5,
+   "dt_s": 0.15399
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 484,
+   "positions": 5,
+   "dt_s": 0.14935
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 489,
+   "positions": 5,
+   "dt_s": 0.15183
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 494,
+   "positions": 5,
+   "dt_s": 0.15571
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 499,
+   "positions": 5,
+   "dt_s": 0.15129
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 504,
+   "positions": 5,
+   "dt_s": 0.1509
+  },
+  {
+   "tag": "ctx512/prefill",
+   "start": 509,
+   "positions": 4,
+   "dt_s": 0.1262
+  },
+  {
+   "tag": "ctx512/A",
+   "start": 512,
+   "positions": 2,
+   "dt_s": 0.06497
+  },
+  {
+   "tag": "ctx512/B",
+   "start": 513,
+   "positions": 5,
+   "dt_s": 0.15509
+  },
+  {
+   "tag": "ctx512/B",
+   "start": 517,
+   "positions": 5,
+   "dt_s": 0.15445
+  },
+  {
+   "tag": "ctx512/A",
+   "start": 521,
+   "positions": 2,
+   "dt_s": 0.06283
+  },
+  {
+   "tag": "ctx512/A",
+   "start": 522,
+   "positions": 2,
+   "dt_s": 0.06545
+  },
+  {
+   "tag": "ctx512/B",
+   "start": 523,
+   "positions": 5,
+   "dt_s": 0.15265
+  },
+  {
+   "tag": "ctx512/B",
+   "start": 527,
+   "positions": 5,
+   "dt_s": 0.15803
+  },
+  {
+   "tag": "ctx512/A",
+   "start": 531,
+   "positions": 2,
+   "dt_s": 0.06087
+  },
+  {
+   "tag": "ctx512/A",
+   "start": 532,
+   "positions": 2,
+   "dt_s": 0.06477
+  },
+  {
+   "tag": "ctx512/B",
+   "start": 533,
+   "positions": 5,
+   "dt_s": 0.1511
+  },
+  {
+   "tag": "ctx512/B",
+   "start": 537,
+   "positions": 5,
+   "dt_s": 0.1619
+  },
+  {
+   "tag": "ctx512/A",
+   "start": 541,
+   "positions": 2,
+   "dt_s": 0.0632
+  },
+  {
+   "tag": "ctx512/A",
+   "start": 542,
+   "positions": 2,
+   "dt_s": 0.06538
+  },
+  {
+   "tag": "ctx512/B",
+   "start": 543,
+   "positions": 5,
+   "dt_s": 0.15596
+  },
+  {
+   "tag": "ctx512/B",
+   "start": 547,
+   "positions": 5,
+   "dt_s": 0.15962
+  },
+  {
+   "tag": "ctx512/A",
+   "start": 551,
+   "positions": 2,
+   "dt_s": 0.0627
+  }
+ ],
+ "max_launch_s": 0.17328,
+ "bench_span_s": 47.7
+}

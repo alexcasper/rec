@@ -65,3 +65,24 @@ Reading: decode at 8192 costs 46.8 ms/token vs 29.1 at 512 (+17.7 ms). The 14 fu
 14 x 8192 x 4 kv-heads x 128 x 2 x 2 B ~ 235 MB/token of bf16 KV, ~3.4 ms at 70 GB/s. So the depth attention runs ~5x off the
 bandwidth roof: the split-K path is latency-bound (one position per warp-iteration with a 32-lane reduction, splits capped at
 min(16, groups/heads)). This is the lever for the 8k row, not the weights.
+
+## Window 3: display session stopped (Alex option b), workers sweep (2026-11-22 13:59-14:10Z)
+
+ops_flint stopped :8080 at 13:59:31Z and the display session (DM + Plasma/kwin/Xwayland/chrome). MemAvailable 8.9 -> 17.0 GiB,
+VRAM free 38.7-39.7 GiB, GPU busy 0. Display stays down through the weekend (restore by Tue 2026-11-24, ops_flint backstop).
+`scripts/m3_sweep_dusk.sh` launched 14:06:37Z, once ops_flint's DOWN confirmation landed; done 14:09:40Z (rc 0, span 183 s, no override,
+max launch 0.173 s). Cotenants on every pair: `flint:down,e4b:idle,qwen:down`, kwin=0; MemAvailable 17.0-17.2 GiB (`sweep/window.log`).
+
+| workers | ctx512 decode tok/s | short decode tok/s | pairs |
+|---|---|---|---|
+| 16 | **34.74** | **39.35** | 12/12 + 12/12 |
+| 12 | 32.49 | - | 8/8 |
+| 8 | 28.78 | - | 8/8 |
+
+16 workers (the co-resident maximum) is best. Display-down vs display-up: 34.74 vs 34.40 @512, 39.35 vs 39.08 short (+1%).
+Incumbent post-restart, display down (14:10-14:12Z): depth 512 29.25 / 29.46 / 29.45 (mean 29.39), depth 8192 26.82 / 26.77 (mean 26.80);
+ops_flint in-band 29.35 @512. No display-down pre-stop rows: the earlier pre-stop rows were display-up.
+Display-down pair lines: @512 34.74 vs 29.39 = **1.18x**; @8192 megakernel not re-measured with the display down (the 5 min prefill
+didn't fit beside the sweep), so the display-up 21.35 stands against 26.80 display-down / 26.30 display-up (R5 record 26.61) = **0.80-0.81x**.
+:8080 downtime 13:59:31 -> 14:10:18Z (health 200, dawn watcher) = 10m47s. About 7 min of that was before launch: ops_flint's
+DOWN confirmation (display teardown + backstop cron) reached this seat at 14:06; the bench itself was 3m03s.

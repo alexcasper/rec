@@ -1,0 +1,16 @@
+14:06:37Z preflight sweep | 8080:000 8090:200 kwin=0 busy=0 MemAvailable=17.2GiB vram_free=38.7GiB
+6297889706cc4d549fcc0aeffae836b9ee31a1dee320747f8d97c861011d735e  /home/dusk/rec-ve/gepa/h/engine/native/megakernel_hip/flint_full.so
+14:06:37Z start w16 rows=ctx512,short pairs=12 | 8080:000 8090:200 kwin=0 busy=0 MemAvailable=17.2GiB vram_free=38.7GiB
+2026-11-22T14:07:33Z ROW ctx512: decode 34.74 tok/s (12/12 stable pairs, depth 512..572); prefill 512 pos in 13.70 s | flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB
+2026-11-22T14:08:03Z ROW short: decode 39.35 tok/s (12/12 stable pairs, depth 4..64); prefill 4 pos in 0.12 s | flint:down,e4b:idle,qwen:down,gpu_busy=17,MemAvailable=17.1GiB
+2026-11-22T14:08:03Z window bench ok | max launch 0.17217 s | span 85.3 s
+14:08:03Z w16 rc=0 | 8080:000 8090:200 kwin=0 busy=34 MemAvailable=17.2GiB vram_free=17.4GiB
+14:08:03Z start w12 rows=ctx512 pairs=8 | 8080:000 8090:200 kwin=0 busy=37 MemAvailable=17.2GiB vram_free=38.7GiB
+2026-11-22T14:08:51Z ROW ctx512: decode 32.49 tok/s (8/8 stable pairs, depth 512..552); prefill 512 pos in 14.33 s | flint:down,e4b:idle,qwen:down,gpu_busy=19,MemAvailable=17.0GiB
+2026-11-22T14:08:51Z window bench ok | max launch 0.17328 s | span 47.7 s
+14:08:51Z w12 rc=0 | 8080:000 8090:200 kwin=0 busy=37 MemAvailable=17.1GiB vram_free=17.4GiB
+14:08:51Z start w8 rows=ctx512 pairs=8 | 8080:000 8090:200 kwin=0 busy=39 MemAvailable=17.1GiB vram_free=38.7GiB
+2026-11-22T14:09:40Z ROW ctx512: decode 28.78 tok/s (8/8 stable pairs, depth 512..544); prefill 512 pos in 15.68 s | flint:down,e4b:idle,qwen:down,gpu_busy=19,MemAvailable=17.0GiB
+2026-11-22T14:09:40Z window bench ok | max launch 0.16761 s | span 48.1 s
+14:09:40Z w8 rc=0 | 8080:000 8090:200 kwin=0 busy=36 MemAvailable=17.1GiB vram_free=17.4GiB
+14:09:40Z done rc=0 elapsed 183s -> signal ops_flint to restart :8080 | 8080:000 8090:200 kwin=0 busy=39 MemAvailable=17.1GiB vram_free=38.7GiB
