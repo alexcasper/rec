@@ -1,0 +1,265 @@
+{
+ "id": "c007",
+ "time": "2026-11-22T01:10:28Z",
+ "axis": "barrier_structure",
+ "parent": "iter0",
+ "knobs": {
+  "GEPA_GEN_UNROLL": 1,
+  "GEPA_K512_PIPE": 0,
+  "GEPA_GEN_PREFETCH_X": 1,
+  "workers": 16,
+  "GEPA_TOPK_PER_WG": 1,
+  "GEPA_RESID_FUSE": 0
+ },
+ "patch": null,
+ "optimizer": "kimi",
+ "kimi_429_total": 4,
+ "optimizer_detail": {
+  "optimizer": "kimi",
+  "attempts": [
+   {
+    "model": "moonshotai-kimi-k3.1-pro-trial",
+    "status": "http_error",
+    "http": 429,
+    "latency_s": 0.17,
+    "error": ""
+   },
+   {
+    "model": "moonshotai-kimi-k3.1-pro-trial",
+    "status": "ok",
+    "http": 200,
+    "latency_s": 16.53,
+    "error": null
+   }
+  ],
+  "kimi_429_total": 4,
+  "kimi_429_consecutive": 0,
+  "usage": {
+   "total_tokens": 5133,
+   "completion_tokens": 3000,
+   "completion_tokens_details": {
+    "reasoning_tokens": 3000
+   },
+   "prompt_tokens": 2133,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "image_tokens": 0
+   }
+  },
+  "rationale": null,
+  "proposal_rejected": "no JSON object in reply",
+  "used": "grid neighbour (invalid LLM proposal)"
+ },
+ "source": "8b62e5a",
+ "after512": null,
+ "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+ "build": {
+  "status": "ok",
+  "build_s": 2.2,
+  "defines": [
+   "GEPA_GEN_PREFETCH_X=1",
+   "GEPA_GEN_UNROLL=1",
+   "GEPA_K512_PIPE=0",
+   "GEPA_RESID_FUSE=0",
+   "GEPA_TOPK_PER_WG=1"
+  ],
+  "so_sha256": "7c4a3ddb85e4f614d66f44b01564f9d83e61642fd1c42fdbe376445f82ac45c3",
+  "kernels": {
+   "mid_generate": {
+    "lds": 24968,
+    "scratch": 16,
+    "vgpr": 248
+   },
+   "mid_generate_fp32_bf16kv": {
+    "lds": 24968,
+    "scratch": 16,
+    "vgpr": 248
+   },
+   "mid_generate_fp32kv": {
+    "lds": 24968,
+    "scratch": 16,
+    "vgpr": 248
+   },
+   "flint_q4_gemv_kernel": {
+    "lds": 32768,
+    "scratch": 16,
+    "vgpr": 248
+   }
+  },
+  "hot_instr": 11823,
+  "hot_funcs": {
+   "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+   "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+   "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+   "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+   "mid_generate": 6544
+  },
+  "gemv_vgpr_scratch": {
+   "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 248
+   },
+   "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 215
+   },
+   "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 115
+   },
+   "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 214
+   }
+  },
+  "source_sha256": "5877fc58d5f573e64fb4b18d933d25ac944fa68e3894a536f2451c18c68feccb"
+ },
+ "bench": {
+  "short4": {
+   "status": "ok",
+   "case": "short4",
+   "rounds": 8,
+   "workers": {
+    "A": 16,
+    "B": 16
+   },
+   "max_launch_s": 0.1955,
+   "cotenant_states": [
+    "flint:idle,e4b:idle,qwen:inactive"
+   ],
+   "rounds_dropped_cotenant": 0,
+   "A": {
+    "valid": 8,
+    "differential_tok_s": 207.99,
+    "pair_min": 206.49,
+    "pair_max": 209.97,
+    "t36_mean_s": 0.19255
+   },
+   "B": {
+    "valid": 8,
+    "differential_tok_s": 207.65,
+    "pair_min": 205.63,
+    "pair_max": 210.01,
+    "t36_mean_s": 0.19322
+   },
+   "speedup_B_over_A": 0.9984,
+   "tokens_identical_A_B": true
+  },
+  "chat": {
+   "status": "ok",
+   "case": "chat",
+   "rounds": 8,
+   "workers": {
+    "A": 16,
+    "B": 16
+   },
+   "max_launch_s": 0.2007,
+   "cotenant_states": [
+    "flint:idle,e4b:idle,qwen:inactive"
+   ],
+   "rounds_dropped_cotenant": 0,
+   "A": {
+    "valid": 8,
+    "differential_tok_s": 208.7,
+    "pair_min": 206.19,
+    "pair_max": 212.01,
+    "t36_mean_s": 0.19687
+   },
+   "B": {
+    "valid": 8,
+    "differential_tok_s": 206.76,
+    "pair_min": 203.59,
+    "pair_max": 209.51,
+    "t36_mean_s": 0.1982
+   },
+   "speedup_B_over_A": 0.9907,
+   "tokens_identical_A_B": true
+  }
+ },
+ "tok_s": {
+  "short4": 207.65,
+  "chat": 206.76
+ },
+ "speedup_vs_best": {
+  "short4": 0.9984,
+  "chat": 0.9907
+ },
+ "emit": {
+  "status": "ok",
+  "suite_s": 2.4,
+  "npz_md5": {
+   "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+   "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+   "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+   "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+   "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+   "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+   "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+   "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+  },
+  "ppl_longest_launch_s": 0.15665179200004786
+ },
+ "gates": {
+  "ppl": {
+   "fp32kv": 114114.85273051188,
+   "bf16kv": 114217.0166227086
+  },
+  "ppl_longest_launch_s": 0.15665179200004786,
+  "ppl_rel_vs_incumbent_bf16kv": 0.0,
+  "ppl_gate": true,
+  "rec_pp2": {
+   "pass": true,
+   "items": {
+    "short4/fp32kv": {
+     "pass": true,
+     "step_rel": 1.156108498100375e-06,
+     "last_rel": 8.530526173629791e-07,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "short4/fp32_bf16kv": {
+     "pass": true,
+     "step_rel": 0.0009115004257483937,
+     "last_rel": 0.000642974166704851,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "short4/bf16kv": {
+     "pass": false,
+     "step_rel": 0.003910329026600476,
+     "last_rel": 0.0027323608449436264,
+     "tokens_exact": true,
+     "problems": [
+      "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+      "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+     ]
+    },
+    "chat/fp32kv": {
+     "pass": true,
+     "step_rel": 1.0703087227021327e-06,
+     "last_rel": 8.29351474941078e-07,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "chat/fp32_bf16kv": {
+     "pass": true,
+     "step_rel": 0.00043684485800310756,
+     "last_rel": 0.000311480451863734,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "chat/bf16kv": {
+     "pass": false,
+     "step_rel": 0.0038895373927485682,
+     "last_rel": 0.0028211513839470994,
+     "tokens_exact": true,
+     "problems": [
+      "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+      "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+     ]
+    }
+   },
+   "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+   "inherited_from": "iter0",
+   "note": "all 6 suite npz byte-identical to the incumbent's"
+  },
+  "pass": true
+ },
+ "outcome": "gates_pass"
+}

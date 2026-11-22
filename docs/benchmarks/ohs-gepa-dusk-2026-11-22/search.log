@@ -20,3 +20,25 @@
 [2026-11-22T00:32:07Z] c004: tok/s {'short4': 209.04, 'chat': 209.44} speedup vs iter0 {'short4': 1.0063, 'chat': 0.9998} (max launch 0.1979 s)
 [2026-11-22T00:33:01Z] c004: gates PASS; ppl bf16kv 114217 (+0.00e+00 vs best)
 [2026-11-22T00:33:02Z] search stopped after 4 evals; best {'id': 'iter0', 'knobs': {'GEPA_GEN_UNROLL': 1, 'GEPA_K512_PIPE': 0, 'GEPA_GEN_PREFETCH_X': 1, 'workers': 16, 'GEPA_TOPK_PER_WG': 0, 'GEPA_RESID_FUSE': 0}, 'commit': '24f167d', 'tok_s': {'short4': 207.73, 'chat': 207.18}}
+[2026-11-22T01:04:39Z] optimizer=kimi kimi_429_total=1 -> GEPA_GEN_PREFETCH_X=0,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=1,GEPA_RESID_FUSE=0,GEPA_TOPK_PER_WG=0,workers=16
+[2026-11-22T01:04:39Z] c005: build GEPA_GEN_PREFETCH_X=0,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=1,GEPA_RESID_FUSE=0,GEPA_TOPK_PER_WG=0,workers=16
+[2026-11-22T01:04:42Z] c005: built in 2.4 s; mid_generate vgpr 256 scratch 80 lds 24952; hot instr 11774
+[2026-11-22T01:05:58Z] c005: tok/s {'short4': 211.11, 'chat': 209.92} speedup vs iter0 {'short4': 1.0111, 'chat': 1.018} (max launch 0.2096 s)
+[2026-11-22T01:06:51Z] c005: gates PASS; ppl bf16kv 114217 (+0.00e+00 vs best)
+[2026-11-22T01:07:23Z] optimizer=none kimi_429_total=3 -> GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=0,GEPA_TOPK_PER_WG=0,workers=8
+[2026-11-22T01:07:23Z] c006: build GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=0,GEPA_TOPK_PER_WG=0,workers=8
+[2026-11-22T01:07:26Z] c006: built in 2.2 s; mid_generate vgpr 248 scratch 16 lds 24952; hot instr 11911
+[2026-11-22T01:08:43Z] c006: tok/s {'short4': 194.8, 'chat': 193.91} speedup vs iter0 {'short4': 0.9318, 'chat': 0.9363} (max launch 0.2138 s)
+[2026-11-22T01:09:40Z] c006: gates PASS; ppl bf16kv 114217 (+0.00e+00 vs best)
+[2026-11-22T01:10:28Z] optimizer kimi: invalid proposal (no JSON object in reply) - grid neighbour used
+[2026-11-22T01:10:28Z] optimizer=kimi kimi_429_total=4 -> GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=0,GEPA_TOPK_PER_WG=1,workers=16
+[2026-11-22T01:10:28Z] c007: build GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=0,GEPA_TOPK_PER_WG=1,workers=16
+[2026-11-22T01:10:30Z] c007: built in 2.2 s; mid_generate vgpr 248 scratch 16 lds 24968; hot instr 11823
+[2026-11-22T01:11:48Z] c007: tok/s {'short4': 207.65, 'chat': 206.76} speedup vs iter0 {'short4': 0.9984, 'chat': 0.9907} (max launch 0.2007 s)
+[2026-11-22T01:12:41Z] c007: gates PASS; ppl bf16kv 114217 (+0.00e+00 vs best)
+[2026-11-22T01:13:13Z] optimizer=none kimi_429_total=6 -> GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=1,GEPA_TOPK_PER_WG=0,workers=16
+[2026-11-22T01:13:13Z] c008: build GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=1,GEPA_TOPK_PER_WG=0,workers=16
+[2026-11-22T01:13:16Z] c008: built in 2.1 s; mid_generate vgpr 248 scratch 16 lds 24952; hot instr 11762
+[2026-11-22T01:14:34Z] c008: tok/s {'short4': 208.28, 'chat': 208.09} speedup vs iter0 {'short4': 1.0024, 'chat': 0.9928} (max launch 0.1999 s)
+[2026-11-22T01:15:27Z] c008: gates PASS; ppl bf16kv 114217 (+0.00e+00 vs best)
+[2026-11-22T01:15:28Z] search stopped after 4 evals; best {'id': 'iter0', 'knobs': {'GEPA_GEN_UNROLL': 1, 'GEPA_K512_PIPE': 0, 'GEPA_GEN_PREFETCH_X': 1, 'workers': 16, 'GEPA_TOPK_PER_WG': 0, 'GEPA_RESID_FUSE': 0}, 'commit': '24f167d', 'tok_s': {'short4': 207.73, 'chat': 207.18}}

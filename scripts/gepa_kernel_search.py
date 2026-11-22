@@ -259,7 +259,7 @@ class Optimizer:
         """Returns {"optimizer": "kimi"|"fallback-glm"|"none", "content", "attempts": [...], "kimi_429_total"}."""
         p = STATE / "prompts" / f"{tag}.json"
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"messages": messages, "max_tokens": 3000, "temperature": 0.4}))
+        p.write_text(json.dumps({"messages": messages, "max_tokens": 8000, "temperature": 0.4}))
         subprocess.run(SSH + [DUSK, f"mkdir -p {REMOTE}/prompts"], check=True)
         subprocess.run(["rsync", "-a", "-e", " ".join(SSH), str(p), f"{DUSK}:{REMOTE}/prompts/"], check=True)
         pr = f"{REMOTE}/prompts/{tag}.json"
@@ -297,6 +297,7 @@ class Optimizer:
 
     def _out(self, who: str, r: dict, attempts: list) -> dict:
         return {"optimizer": who, "content": r.get("content", ""), "usage": r.get("usage"), "attempts": attempts,
+                "finish_reason": r.get("finish_reason"), "content_chars": r.get("content_chars"),
                 "kimi_429_total": self.st["kimi_429_total"], "kimi_429_consecutive": self.st["kimi_429_consecutive"]}
 
 
@@ -496,7 +497,8 @@ def main() -> int:
             if a.proposer == "llm":
                 cid_next = f"c{len([r for r in pool['evaluations'] if r['id'].startswith('c')]) + 1:03d}"
                 r = opt.ask(reflect_prompt(pool, best, done, min_gain), cid_next)
-                opt_rec = {k: r[k] for k in ("optimizer", "attempts", "kimi_429_total", "kimi_429_consecutive", "usage")}
+                opt_rec = {k: r[k] for k in ("optimizer", "attempts", "kimi_429_total", "kimi_429_consecutive", "usage",
+                                              "finish_reason", "content_chars")}
                 if r["optimizer"] != "none":
                     k2, ax2, why = parse_proposal(r["content"], best, done)
                     opt_rec["rationale"] = why if k2 else None

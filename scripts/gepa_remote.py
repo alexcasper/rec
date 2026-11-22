@@ -312,7 +312,9 @@ def cmd_reflect(a) -> dict:
         return dict(res, status="http_error" if http else f"curl_rc_{p.returncode}", error=msg)
     try:
         d = json.loads(out)
-        res.update(status="ok", content=d["choices"][0]["message"].get("content") or "", usage=d.get("usage"))
+        ch = d["choices"][0]
+        res.update(status="ok", content=ch["message"].get("content") or "", usage=d.get("usage"),
+                   finish_reason=ch.get("finish_reason"), content_chars=len(ch["message"].get("content") or ""))
     except Exception as e:
         res.update(status="bad_response", error=str(e)[:200])
     return res
