@@ -1,0 +1,9 @@
+[
+ {"name": "s2-moe-grp",     "axis": "lds_staging", "knobs": {"GEPA_S2_MOE": 1}},
+ {"name": "s2-moe-half",    "axis": "lds_staging", "knobs": {"GEPA_S2_MOE": 2}},
+ {"name": "s2-moe-ldspack", "axis": "lds_staging", "knobs": {"GEPA_S2_MOE": 3}},
+ {"name": "s2-lmh-grp",     "axis": "lds_staging", "knobs": {"GEPA_S2_LMH": 1}},
+ {"name": "s2-lmh-half",    "axis": "lds_staging", "knobs": {"GEPA_S2_LMH": 2}},
+ {"name": "s2-lmh-ldspack", "axis": "lds_staging", "knobs": {"GEPA_S2_LMH": 3}},
+ {"name": "s2-qkv-grp",     "axis": "lds_staging", "knobs": {"GEPA_S2_QKV": 1}}
+]

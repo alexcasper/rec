@@ -46,3 +46,32 @@ kimi 429 total 6 over 8 calls. The first attempt of every call was throttled, an
 1 per 3 min, so the trial quota is tighter than the 30 s window. All 6 knobs plus the best pair have now
 been tried with none of them above the 1.6 % threshold on both cases. The byte-identical knob neighbourhood
 of 24f167d is exhausted at ~207-211 tok/s. Front: 24f167d unchanged.
+
+## Step 2 (rec-1f4, Track B relaxed): g64 group-to-lane K=2048 modes, fed as --candidate lists (9c0d30e, 3e99533)
+
+Modes per call site (GEPA_S2_{MOE,QKV,LMH,DENSE}): 1 = whole g64 group per lane (2x16 B + 1 s/b pair per
+row-lane vs 24f167d's 4x8 B + 4 s/b pairs); 2 = half-groups, contiguous fully coalesced 16 B loads;
+3 = packed row-pair staged through q4_gen_pool (2 KiB/warp), one whole group per lane consumed from LDS.
+Defaults stay byte-identical (8/8 npz). Bench = ABBA x8 vs iter0, 0 rounds dropped (single cotenant state).
+
+| id | candidate | short4 / chat | hot instr | fp32kv max rel | fp32_bf16kv max rel | ppl delta |
+|---|---|---|---|---|---|---|
+| c009 | MoE grp | 0.967 / 0.967 | 13 556 | 1.09e-6 | 8.9e-4 | +6.5e-4 |
+| c010 | MoE half | 0.949 / 0.957 | 13 579 | 1.10e-6 | 9.2e-4 | -1.6e-4 |
+| c011 | MoE LDS-packed | 0.959 / 0.967 | 14 775 | 1.09e-6 | 8.9e-4 | +6.5e-4 |
+| c012 | lm_head grp | 0.999 / 1.007 | 13 386 | 1.11e-6 | 9.1e-4 | 0 |
+| (stop rule: 4 without improvement) | | | | | | |
+| c013 | all sites grp (I-cache control) | 1.004 / 1.003 | **11 582** | 1.13e-6 | 9.3e-4 | +3.6e-4 |
+| c014 | all sites half (I-cache control) | 0.982 / 0.979 | 11 641 | 1.10e-6 | 9.0e-4 | -1.0e-3 |
+
+All pass the hard gates. None is accepted, so qgate T1-T4 was not run (it is pre-promotion evidence only).
+c013/c014 were a separately labelled 2-eval hypothesis test, not a reopened search. Per-site builds keep the
+strided GM=0 path live, so each per-site candidate carried +1.5-2.9k hot instructions. With every site
+converted (hot code BELOW default), the group mapping is neutral (1.004/1.003).
+
+Reading: K=2048 load-instruction count / coalescing is not what bounds mid-8L decode on dusk. lm_head is at
+the bandwidth roof (~78/82 GB/s, so neutral is expected). The MoE/QKV phases are short (~tens of us per
+layer-phase) and look bound by per-phase ramp + barrier latency, not issue rate. Staging through LDS adds a
+hop and fences on top (rec-6ob.1 prior, confirmed: c011 is worse than c009 at more code).
+Margin note: fp32_bf16kv max rel sits at 8.9-9.3e-4 for every build, baseline included (tier 1e-3). Any future
+relaxed lever has <= 1e-4 headroom on that tier.

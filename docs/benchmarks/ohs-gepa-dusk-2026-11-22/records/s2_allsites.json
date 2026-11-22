@@ -1,0 +1,4 @@
+[
+ {"name": "s2-all-grp",  "axis": "lds_staging", "knobs": {"GEPA_S2_MOE": 1, "GEPA_S2_QKV": 1, "GEPA_S2_LMH": 1, "GEPA_S2_DENSE": 1}},
+ {"name": "s2-all-half", "axis": "lds_staging", "knobs": {"GEPA_S2_MOE": 2, "GEPA_S2_QKV": 2, "GEPA_S2_LMH": 2, "GEPA_S2_DENSE": 2}}
+]

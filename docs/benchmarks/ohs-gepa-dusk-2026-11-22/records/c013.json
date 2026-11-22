@@ -1,0 +1,242 @@
+{
+ "id": "c013",
+ "time": "2026-11-22T02:24:43Z",
+ "axis": "lds_staging",
+ "parent": "iter0",
+ "knobs": {
+  "GEPA_GEN_UNROLL": 1,
+  "GEPA_K512_PIPE": 0,
+  "GEPA_GEN_PREFETCH_X": 1,
+  "workers": 16,
+  "GEPA_TOPK_PER_WG": 0,
+  "GEPA_RESID_FUSE": 0,
+  "GEPA_S2_MOE": 1,
+  "GEPA_S2_QKV": 1,
+  "GEPA_S2_LMH": 1,
+  "GEPA_S2_DENSE": 1
+ },
+ "patch": null,
+ "name": "s2-all-grp",
+ "optimizer": "external",
+ "kimi_429_total": 6,
+ "optimizer_detail": {
+  "optimizer": "external",
+  "name": "s2-all-grp",
+  "kimi_429_total": 6
+ },
+ "source": "3e99533",
+ "after512": null,
+ "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+ "build": {
+  "status": "ok",
+  "build_s": 2.2,
+  "defines": [
+   "GEPA_GEN_PREFETCH_X=1",
+   "GEPA_GEN_UNROLL=1",
+   "GEPA_K512_PIPE=0",
+   "GEPA_RESID_FUSE=0",
+   "GEPA_S2_DENSE=1",
+   "GEPA_S2_LMH=1",
+   "GEPA_S2_MOE=1",
+   "GEPA_S2_QKV=1",
+   "GEPA_TOPK_PER_WG=0"
+  ],
+  "so_sha256": "fa29eae77d9a7b142b32542f0cbf742e6d414cf6d129dcb8c99206ae1ac20b85",
+  "kernels": {
+   "mid_generate": {
+    "lds": 24952,
+    "scratch": 32,
+    "vgpr": 248
+   },
+   "mid_generate_fp32_bf16kv": {
+    "lds": 24952,
+    "scratch": 32,
+    "vgpr": 248
+   },
+   "mid_generate_fp32kv": {
+    "lds": 24952,
+    "scratch": 32,
+    "vgpr": 248
+   },
+   "flint_q4_gemv_kernel": {
+    "lds": 32768,
+    "scratch": 0,
+    "vgpr": 215
+   }
+  },
+  "hot_instr": 11582,
+  "hot_funcs": {
+   "_Z16flint_q4_gemv_opILi2048ELb0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1570,
+   "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+   "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+   "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+   "mid_generate": 6604
+  },
+  "gemv_vgpr_scratch": {
+   "_Z16flint_q4_gemv_opILi2048ELb0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 248
+   },
+   "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 215
+   },
+   "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 115
+   },
+   "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 214
+   }
+  },
+  "source_sha256": "b52b1624d9bc285a50bcd427eeb60f328c949ee334b2433a1ed2202f016a0416"
+ },
+ "bench": {
+  "short4": {
+   "status": "ok",
+   "case": "short4",
+   "rounds": 8,
+   "workers": {
+    "A": 16,
+    "B": 16
+   },
+   "max_launch_s": 0.1951,
+   "cotenant_states": [
+    "flint:idle,e4b:idle,qwen:inactive"
+   ],
+   "rounds_dropped_cotenant": 0,
+   "A": {
+    "valid": 8,
+    "differential_tok_s": 207.62,
+    "pair_min": 205.22,
+    "pair_max": 211.53,
+    "t36_mean_s": 0.19314
+   },
+   "B": {
+    "valid": 8,
+    "differential_tok_s": 208.54,
+    "pair_min": 206.33,
+    "pair_max": 210.39,
+    "t36_mean_s": 0.19249
+   },
+   "speedup_B_over_A": 1.0044,
+   "tokens_identical_A_B": false
+  },
+  "chat": {
+   "status": "ok",
+   "case": "chat",
+   "rounds": 8,
+   "workers": {
+    "A": 16,
+    "B": 16
+   },
+   "max_launch_s": 0.2004,
+   "cotenant_states": [
+    "flint:idle,e4b:idle,qwen:inactive"
+   ],
+   "rounds_dropped_cotenant": 0,
+   "A": {
+    "valid": 8,
+    "differential_tok_s": 206.54,
+    "pair_min": 204.6,
+    "pair_max": 208.59,
+    "t36_mean_s": 0.1979
+   },
+   "B": {
+    "valid": 8,
+    "differential_tok_s": 207.12,
+    "pair_min": 202.7,
+    "pair_max": 208.36,
+    "t36_mean_s": 0.19759
+   },
+   "speedup_B_over_A": 1.0028,
+   "tokens_identical_A_B": false
+  }
+ },
+ "tok_s": {
+  "short4": 208.54,
+  "chat": 207.12
+ },
+ "speedup_vs_best": {
+  "short4": 1.0044,
+  "chat": 1.0028
+ },
+ "emit": {
+  "status": "ok",
+  "suite_s": 2.4,
+  "npz_md5": {
+   "suite/chat_bf16kv.npz": "7e986a3f3cef35799e36d12962da6ce4",
+   "suite/chat_fp32_bf16kv.npz": "9e83bceb029b6234b507dae41942dff5",
+   "suite/chat_fp32kv.npz": "a090e4fb5f9bd6da48300b586186461d",
+   "suite/short4_bf16kv.npz": "0939913830203252d16bd1bcdd04c0d1",
+   "suite/short4_fp32_bf16kv.npz": "424f208dcda74557068acfe318adda2f",
+   "suite/short4_fp32kv.npz": "64c98e6e13fc64f0226b5258bfc7e3de",
+   "ppl/ppl__bf16kv.npz": "e9200ea9fbf3d406645daecca9b8cc9f",
+   "ppl/ppl__fp32kv.npz": "0742892daede74b326832405375364e2"
+  },
+  "ppl_longest_launch_s": 0.1561669460061239
+ },
+ "gates": {
+  "ppl": {
+   "fp32kv": 114114.85100674299,
+   "bf16kv": 114258.34571499808
+  },
+  "ppl_longest_launch_s": 0.1561669460061239,
+  "ppl_rel_vs_incumbent_bf16kv": 0.0003618470654509487,
+  "ppl_gate": true,
+  "rec_pp2": {
+   "pass": true,
+   "items": {
+    "short4/fp32kv": {
+     "pass": true,
+     "step_rel": 1.0910140007454946e-06,
+     "last_rel": 1.0831523365200985e-06,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "short4/fp32_bf16kv": {
+     "pass": true,
+     "step_rel": 0.0009304162564657432,
+     "last_rel": 0.0006366119776715803,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "short4/bf16kv": {
+     "pass": false,
+     "step_rel": 0.1331018844032941,
+     "last_rel": 0.009599302386616505,
+     "tokens_exact": false,
+     "problems": [
+      "1 token(s) differ from the fp32 reference beyond the near-tie margin",
+      "last_logits rel err 9.599e-03 > 0.001 (bf16-KV tier)",
+      "step_logits max rel err 1.331e-01 > 0.001 (bf16-KV tier)"
+     ]
+    },
+    "chat/fp32kv": {
+     "pass": true,
+     "step_rel": 1.1300294626398613e-06,
+     "last_rel": 9.470297247637984e-07,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "chat/fp32_bf16kv": {
+     "pass": true,
+     "step_rel": 0.00038068070454387815,
+     "last_rel": 0.0002699707976908033,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "chat/bf16kv": {
+     "pass": false,
+     "step_rel": 0.09070041345257593,
+     "last_rel": 0.09618401806397633,
+     "tokens_exact": true,
+     "problems": [
+      "last_logits rel err 9.618e-02 > 0.001 (bf16-KV tier)",
+      "step_logits max rel err 9.070e-02 > 0.001 (bf16-KV tier)"
+     ]
+    }
+   },
+   "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded"
+  },
+  "pass": true
+ },
+ "outcome": "gates_pass"
+}
