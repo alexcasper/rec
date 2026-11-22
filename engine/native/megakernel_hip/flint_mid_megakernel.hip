@@ -80,6 +80,17 @@
 #ifndef GEPA_DOWNCAT
 #define GEPA_DOWNCAT 0
 #endif
+// rec-ohs run 3 (per-warp depth, summation order IDENTICAL -> byte-identical outputs):
+//   GEPA_K512_DUAL: K=512 VCgen path stages TWO quads (8 rows, the full 2 KiB warp pool) per load round, all four
+//                   16 B loads issued before any LDS store (2x bytes in flight, half the exposed latencies).
+//   GEPA_GEN_DIST2: generic pipelined path (K=1024/4096/6144) prefetches 2 stages ahead (stage t in LDS, t+1 and t+2
+//                   in registers); x is read at use (same values) to pay for the extra stage's registers.
+#ifndef GEPA_K512_DUAL
+#define GEPA_K512_DUAL 0
+#endif
+#ifndef GEPA_GEN_DIST2
+#define GEPA_GEN_DIST2 0
+#endif
 #define GEPA_STR(x) #x
 #define GEPA_UNROLL(n) _Pragma(GEPA_STR(unroll n))
 #if GEPA_RESID_FUSE
@@ -497,6 +508,58 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
         // One 512-element block per row: a stage is a whole quad, so pipelining buys only a prologue
         // (measured 0.91x standalone, rec-9t8 b3). Keep the VCgen single-stage staging (39629e7).
         uint8_t* const lds = q4_gen_pool(sg % 8);
+#if GEPA_K512_DUAL
+        {
+            const int scalar = lane * 16;
+            float v[16];
+            const float sum = load16_f(x + scalar, v);
+            int first = sg * 8;
+            for (; first + 8 <= n; first += groups * 8) {
+                __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
+                __builtin_amdgcn_wave_barrier();            // previous round's LDS reads are done
+                uint4 q[4];
+                #pragma unroll
+                for (int t = 0; t < 4; ++t) {               // 128 x 16 B chunks: (row 0..7) x (chunk 0..15)
+                    int idx = t * 32 + lane, r = idx >> 4, c = idx & 15;
+                    q[t] = *(const uint4*)(w + (size_t)(first + r) * (K / 2) + c * 16);
+                }
+                float sc[8], bi[8];
+                #pragma unroll
+                for (int r = 0; r < 8; ++r) {
+                    int gi = (first + r) * (K / 64) + scalar / 64;
+                    sc[r] = tofloat(s[gi]);
+                    bi[r] = tofloat(b[gi]);
+                }
+                #pragma unroll
+                for (int t = 0; t < 4; ++t) {
+                    int idx = t * 32 + lane, r = idx >> 4, c = idx & 15;
+                    *(uint4*)(lds + r * 256 + c * 16) = q[t];
+                }
+                __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
+                __builtin_amdgcn_wave_barrier();
+                __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
+                #pragma unroll
+                for (int r = 0; r < 8; ++r) {
+                    const uint32_t* p = (const uint32_t*)(lds + r * 256 + lane * 8);
+                    float val = simd_sum(0.0f + dot16v(p[0], p[1], v, sc[r], bi[r], sum));
+                    if (lane == 0) {
+                        if (out_bf) out_bf[first + r] = tobf(val);
+                        if (out_f)  GEPA_OUT(out_f, first + r, ROUND_BF16 ? tofloat(tobf(val)) : val);
+                    }
+                }
+            }
+            // remainder rows (n % 8): per row, unstaged, identical arithmetic
+            for (int row = first; row < n && row < first + 8; ++row) {
+                int gi = row * (K / 64) + scalar / 64;
+                float val = simd_sum(0.0f + dot16(w + (size_t)row * (K / 2) + scalar / 2, v, tofloat(s[gi]), tofloat(b[gi]), sum));
+                if (lane == 0) {
+                    if (out_bf) out_bf[row] = tobf(val);
+                    if (out_f)  GEPA_OUT(out_f, row, ROUND_BF16 ? tofloat(tobf(val)) : val);
+                }
+            }
+        }
+        if (false)
+#endif
         for (int first = sg * 4; first < n; first += groups * 4) {
             float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
             int scalar = lane * 16;
@@ -582,10 +645,79 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
             __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
         };
         int par = 0;
+#if GEPA_GEN_DIST2
+        // linear stage stream (quad f, block j); stage t in LDS, t+1 (r1) and t+2 (r2) in registers.
+        auto ld_wsb = [&](int f, int j, uint4& w0, uint4& w1, uint16_t* ss, uint16_t* bb) {
+            const uint8_t* wq = w + (size_t)f * (K / 2) + j * 256;
+            w0 = *(const uint4*)(wq + (size_t)r_lo * (K / 2) + c16);
+            w1 = *(const uint4*)(wq + (size_t)(r_lo + 2) * (K / 2) + c16);
+            const int gl = (j * 512 + lane * 16) / 64;
+            #pragma unroll
+            for (int r = 0; r < 4; ++r) {
+                ss[r] = ((const uint16_t*)s)[(f + r) * G + gl];
+                bb[r] = ((const uint16_t*)b)[(f + r) * G + gl];
+            }
+        };
+        if (first + 4 <= n) {
+            int tf = first, tj = 0;
+            ld_wsb(tf, 0, cw0, cw1, cs, cb);
+            put_stage(pool, cw0, cw1);
+            int f1 = tf, j1 = 1;
+            if (j1 == NB) { f1 += step; j1 = 0; }
+            bool v1 = f1 + 4 <= n;
+            uint4 r1w0, r1w1;
+            uint16_t r1s[4], r1b[4];
+            if (v1) ld_wsb(f1, j1, r1w0, r1w1, r1s, r1b);
+            float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+            while (true) {
+                int f2 = f1, j2 = j1 + 1;
+                if (j2 == NB) { f2 += step; j2 = 0; }
+                const bool v2 = v1 && f2 + 4 <= n;
+                uint4 r2w0, r2w1;
+                uint16_t r2s[4], r2b[4];
+                if (v2) ld_wsb(f2, j2, r2w0, r2w1, r2s, r2b);
+                // compute stage t (x at use; pre-scale exactly as load16_f)
+                float v[16];
+                const float sum = load16_f(x + tj * 512 + lane * 16, v);
+                const uint8_t* cur = pool + par * 1024;
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) {
+                    const uint32_t* p = (const uint32_t*)(cur + r * 256 + lane * 8);
+                    float sc = __uint_as_float((uint32_t)cs[r] << 16);
+                    float bi = __uint_as_float((uint32_t)cb[r] << 16);
+                    a[r] += dot16v(p[0], p[1], v, sc, bi, sum);
+                }
+                if (tj == NB - 1) {
+                    #pragma unroll
+                    for (int r = 0; r < 4; ++r) {
+                        float val = simd_sum(a[r]);
+                        if (lane == 0) {
+                            if (out_bf) out_bf[tf + r] = tobf(val);
+                            if (out_f)  GEPA_OUT(out_f, tf + r, ROUND_BF16 ? tofloat(tobf(val)) : val);
+                        }
+                        a[r] = 0.0f;
+                    }
+                }
+                if (!v1) break;
+                put_stage(pool + (par ^ 1) * 1024, r1w0, r1w1);
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) { cs[r] = r1s[r]; cb[r] = r1b[r]; }
+                par ^= 1;
+                tf = f1; tj = j1;
+                f1 = f2; j1 = j2; v1 = v2;
+                r1w0 = r2w0; r1w1 = r2w1;
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) { r1s[r] = r2s[r]; r1b[r] = r2b[r]; }
+            }
+            while (first + 4 <= n) first += step;   // hand the partial trailing quad (if any) to the tail loop
+        }
+        if (false)
+#else
         if (first + 4 <= n) {
             load_stage(first, 0, cw0, cw1, cs, cb, cx);
             put_stage(pool, cw0, cw1);
         }
+#endif
         for (; first + 4 <= n; first += step) {
             const int nfirst = first + step;
             const bool nfull = nfirst + 4 <= n;
