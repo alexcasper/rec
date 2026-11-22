@@ -9013,6 +9013,176 @@
    "forced_routing_rel_max": "4.5e-6",
    "outcome": "diagnostic row (no speed). Failures past pos 3232 are a single fp32-ulp router tie, not kernel error",
    "cotenants": "8080 down 21:27:17-21:41:50Z, E4B 200, qwen3vl 200 loopback, llama-qwen inactive, display ACTIVE"
+  },
+  {
+   "id": "e5d-iter2-def0-mid",
+   "time": "2026-11-22T23:58:25Z",
+   "knobs": {
+    "GEPA_SHRINK": 0
+   },
+   "source_commit": "390c4cd",
+   "record_commit": "3d07fdb",
+   "config": "mid-8L (mid-prod), dusk, :8080 up",
+   "ctx8192_tok_s": 30.09,
+   "ctx8192_vs_split0": 0.312,
+   "projected_full_8192_tok_s": null,
+   "projection_note": null,
+   "determinism": "PASS (suite x2, wrap512 x3 KV modes, 8192 fp32kv x2 fresh sessions)",
+   "G0_vs_24f167d": "8/8",
+   "wrap512": {
+    "fp32kv": 1.1596141510917602e-06,
+    "fp32_bf16kv_step": 0.00018155958418894928,
+    "bf16kv_strict": 0.00590881770065303,
+    "bf16kv_forced": 0.0029882860283136337
+   },
+   "depth8192_fp32kv": {
+    "strict": "PASS",
+    "forced_max": 1.2444370333996968e-05,
+    "devs": []
+   },
+   "ppl": {
+    "v1_fp32kv": -3.4624960010276595e-08,
+    "v1_bf16kv": -0.0006881016911870486,
+    "full_fp32kv": 2.451354874644096e-08,
+    "full_bf16kv": 0.0001583460286624927
+   },
+   "short4_chat_vs_2b98737": [
+    0.9747,
+    0.9807
+   ],
+   "outcome": "baseline default"
+  },
+  {
+   "id": "e5d-iter2-split0-mid",
+   "time": "2026-11-22T23:58:25Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1
+   },
+   "source_commit": "390c4cd",
+   "record_commit": "3d07fdb",
+   "config": "mid-8L (mid-prod), dusk, :8080 up",
+   "ctx8192_tok_s": 96.4,
+   "ctx8192_vs_split0": 1.0,
+   "projected_full_8192_tok_s": null,
+   "projection_note": null,
+   "determinism": "PASS (suite x2, wrap512 x3 KV modes, 8192 fp32kv x2 fresh sessions)",
+   "G0_vs_24f167d": "8/8",
+   "wrap512": {
+    "fp32kv": 9.497792094656321e-07,
+    "fp32_bf16kv_step": 0.00019351268815365303,
+    "bf16kv_strict": 0.006681206247967515,
+    "bf16kv_forced": 0.0030128882604936883
+   },
+   "depth8192_fp32kv": {
+    "strict": "FAIL (1 routing deviation(s) in the fp32-KV tier)",
+    "forced_max": 1.2468647316843988e-05,
+    "devs": [
+     {
+      "layer": 6,
+      "pos": 7288,
+      "gap": 6.556510925292969e-07,
+      "k_k1_exchange": true
+     }
+    ]
+   },
+   "ppl": {
+    "v1_fp32kv": -3.4624960010276595e-08,
+    "v1_bf16kv": -0.0006881016911870486,
+    "full_fp32kv": 1.7556985421052218e-08,
+    "full_bf16kv": 0.00019622653886575137
+   },
+   "short4_chat_vs_2b98737": [
+    0.9673,
+    0.9733
+   ],
+   "outcome": "baseline split-K (as built)"
+  },
+  {
+   "id": "e5d-iter2-lop4-mid",
+   "time": "2026-11-22T23:58:25Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 4
+   },
+   "source_commit": "390c4cd",
+   "record_commit": "3d07fdb",
+   "config": "mid-8L (mid-prod), dusk, :8080 up",
+   "ctx8192_tok_s": 154.85,
+   "ctx8192_vs_split0": 1.606,
+   "projected_full_8192_tok_s": 31.4,
+   "projection_note": "per-full-attn-layer overhead transfer (mid 4 / full 14 layers); UNMEASURED at full config",
+   "determinism": "PASS (suite x2, wrap512 x3 KV modes, 8192 fp32kv x2 fresh sessions)",
+   "G0_vs_24f167d": "8/8",
+   "wrap512": {
+    "fp32kv": 1.0160428752423042e-06,
+    "fp32_bf16kv_step": 0.00019139411182154037,
+    "bf16kv_strict": 0.0057491311264339685,
+    "bf16kv_forced": 0.0029082094772436783
+   },
+   "depth8192_fp32kv": {
+    "strict": "FAIL (1 routing deviation(s) in the fp32-KV tier)",
+    "forced_max": 1.2620039343517665e-05,
+    "devs": [
+     {
+      "layer": 6,
+      "pos": 7288,
+      "gap": 6.556510925292969e-07,
+      "k_k1_exchange": true
+     }
+    ]
+   },
+   "ppl": {
+    "v1_fp32kv": -3.4624960010276595e-08,
+    "v1_bf16kv": -0.0006881016911870486,
+    "full_fp32kv": 2.4559387634681684e-08,
+    "full_bf16kv": 0.00017421344075674305
+   },
+   "short4_chat_vs_2b98737": [
+    0.9703,
+    0.971
+   ],
+   "outcome": "PROVISIONAL M3 depth build (fastest; strict 8192 fails only on 1-ulp tie L6@7288; forced PASS); short non-regression vs 2b98737 fails (SHRINK=0 pin, def0 itself 0.975/0.981); full-config confirmation needs owner window; promotion Alex-gated"
+  },
+  {
+   "id": "e5d-iter2-gqa-mid",
+   "time": "2026-11-22T23:58:25Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_GQA": 1
+   },
+   "source_commit": "390c4cd",
+   "record_commit": "3d07fdb",
+   "config": "mid-8L (mid-prod), dusk, :8080 up",
+   "ctx8192_tok_s": 144.12,
+   "ctx8192_vs_split0": 1.495,
+   "projected_full_8192_tok_s": 30.3,
+   "projection_note": "per-full-attn-layer overhead transfer (mid 4 / full 14 layers); UNMEASURED at full config",
+   "determinism": "PASS (suite x2, wrap512 x3 KV modes, 8192 fp32kv x2 fresh sessions)",
+   "G0_vs_24f167d": "8/8",
+   "wrap512": {
+    "fp32kv": 9.939549866500801e-07,
+    "fp32_bf16kv_step": 0.00018732548227464222,
+    "bf16kv_strict": 0.005932955533514187,
+    "bf16kv_forced": 0.002977525427098964
+   },
+   "depth8192_fp32kv": {
+    "strict": "PASS",
+    "forced_max": 1.2438314679333223e-05,
+    "devs": []
+   },
+   "ppl": {
+    "v1_fp32kv": -3.4624960010276595e-08,
+    "v1_bf16kv": -0.0006881016911870486,
+    "full_fp32kv": 1.8387055433777277e-08,
+    "full_bf16kv": 0.00020061154883932453
+   },
+   "short4_chat_vs_2b98737": [
+    0.9658,
+    0.9622
+   ],
+   "outcome": "strict-clean alternative depth build; same caveats"
   }
  ],
  "incumbent_history": [
