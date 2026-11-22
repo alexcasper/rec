@@ -80,6 +80,33 @@ def emit(lib, cfg, bank, off, prompt, n_out, mode, workers, max_total, deadline)
     return tok, step, last, allexp, launches, longest, tp
 
 
+def emit_ppl(lib, cfg, bank, off, items, mode, workers, deadline):
+    """Teacher-forced ppl via continuation: launch [t_i] at start=i, n_out=1 -> the logit row predicting t_{i+1}."""
+    import math
+    n = max(len(it["tokens"]) for it in items)
+    sess = fd.create_session(lib, cfg, bank, off, max_total=n + 64)
+    logp, top1, rowmax, longest = [], [], [], 0.0
+    try:
+        for it in items:
+            t = it["tokens"]
+            lp, t1, mx = [], [], []
+            for i in range(len(t) - 1):
+                dt, tok, last, step, exp, ctrl, bad = fd.run(lib, sess, cfg, np.asarray([t[i]], np.int32), 1, workers,
+                                                             mode, step_logits=True, start=i)
+                longest = max(longest, dt)
+                if bad or dt > fd.CAP_S or time.time() > deadline:
+                    raise SystemExit(f"ppl launch failed/over cap/deadline at {it['id']} pos {i}: {bad} {dt:.3f}")
+                row = step[0].astype(np.float64)
+                m = row.max()
+                lp.append(float(row[t[i + 1]] - (m + math.log(np.exp(row - m).sum()))))
+                t1.append(int(row.argmax()))
+                mx.append(float(np.abs(row).max()))
+            logp.append(lp), top1.append(t1), rowmax.append(mx)
+    finally:
+        lib.mid_session_free(sess)
+    return np.asarray(logp), np.asarray(top1, np.int32), np.asarray(rowmax), longest
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lib", type=Path, required=True)
@@ -92,12 +119,27 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--budget-s", type=float, default=300.0)
     ap.add_argument("--off", type=Path, default=None)
+    ap.add_argument("--ppl-set", type=Path, default=None, help="eval_set_full_v1.json: emit teacher-forced ppl instead")
+    ap.add_argument("--ppl-builds", default="fp32kv,bf16kv")
     ap.add_argument("--rehearsal", action="store_true", help="mid-8L dry run: skip the FLINT_CFG_FULL check")
     a = ap.parse_args()
     lib, cfg = fd.load_lib(a.lib)
     if not cfg["full"] and not a.rehearsal:
         raise SystemExit(f"{a.lib} is not a FLINT_CFG_FULL build: {cfg}")
     bank, off = fd.open_bank(a.bank, cfg, a.off)
+    if a.ppl_set:
+        ev = json.loads(a.ppl_set.read_text())
+        a.out.mkdir(parents=True, exist_ok=True)
+        deadline = time.time() + a.budget_s
+        for b in a.ppl_builds.split(","):
+            mode, kv_dtype, impl = fd.BUILDS[b]
+            t0 = time.time()
+            logp, top1, rowmax, longest = emit_ppl(lib, cfg, bank, off, ev["ppl_items"], mode, a.workers, deadline)
+            np.savez(a.out / f"ppl__{b}.npz", impl=np.array(f"{impl} build={b}"), logp=logp, top1=top1, rowmax=rowmax,
+                     evalset_sha256=np.array(ev["sha256"]), kv_dtype=np.array(kv_dtype))
+            fd.log(f"PPL {b}: {logp.shape} nll {-logp.mean():.6f} ppl {np.exp(-logp.mean()):.4f} longest {longest:.3f} s, "
+                   f"{time.time() - t0:.1f} s | {fd.cotenants()}")
+        return 0
     if a.case == "depth8192":
         prompt = np.random.default_rng(8192).integers(3, fd.VOCAB, size=8192, dtype=np.int32).tolist()
         n_out = 24
