@@ -1,0 +1,1 @@
+[{"name": "s2-bulk-dequant-lds", "axis": "lds_staging", "knobs": {"GEPA_S2_MOE": 4}, "patch": "/mnt/d/ops/rec-gemini-kernels/docs/benchmarks/ohs-gepa-dusk-2026-11-22/patches/s2_bulk_dequant_lds.patch"}]

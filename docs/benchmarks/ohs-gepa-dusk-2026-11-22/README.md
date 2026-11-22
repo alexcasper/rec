@@ -126,3 +126,30 @@ The profile's per-phase "loss vs roof" did not convert into time when the phase 
   same per-warp depth (4 quads/warp at N=2048), not by the call structure. vgpr sits at the 256 cap.
 - Every relaxed candidate moves fp32_bf16kv up by ~2e-5, leaving 6-7e-5 under 1e-3.
 Contingent items (router over all warps, attention split) were NOT started: neither candidate landed.
+
+## Run 3 (GO 2026-11-22): per-warp depth on O-proj + MoE down, then the literal Step 2 bulk dequant
+
+Depth knobs (90d0... see git log; summation order identical, so outputs are byte-identical and no headroom is spent):
+GEPA_K512_DUAL stages 2 quads (8 rows, 2 KiB) per K=512 load round, with all loads issued before the LDS stores.
+GEPA_GEN_DIST2 makes the generic path (O-proj K=4096, shared down K=1024) prefetch 2 stages ahead.
+Basis: ~128 KiB in flight GPU-wide vs ~120-165 KB needed (Little's law at 82 GB/s x ~1.5-2 us). Proposer: kimi on
+every 3rd reflection (window 180 s), grid otherwise. Kimi answered 2/2 on the first attempt (finish_reason stop),
+so the running 429 count stayed 6. 0 ABBA rounds dropped.
+
+| id | proposer | variant | short4 / chat | hot instr | fp32_bf16kv max | verdict |
+|---|---|---|---|---|---|---|
+| c026 | kimi | K512_PIPE + K512_DUAL + GEN_DIST2 (PIPE supersedes DUAL) | 1.001 / 1.016 | 12 073 | 9.115e-4 (=) | reject (< +1.6 % on short4) |
+| c027 | grid | K512_PIPE (replicate of c003: 1.015/1.009) | 1.005 / 1.010 | 12 029 | = | reject |
+| c028 | grid | GEN_DIST2 | 0.998 / 0.998 | 11 897 | = | reject |
+| c029 | kimi | K512_DUAL | 0.994 / 1.010 | 12 352 | = | reject |
+| (stop rule) | | | | | | |
+| c030 | patch | rec-1f4 Step 2 LITERAL bulk-dequant-to-LDS (fp32 w=q*s+b into the warp pool, MoE gate/up) | **0.951 / 0.949** | 12 393 | 9.31e-4 (6.9e-5 margin) FLAG | reject |
+
+Reading:
+- Doubling per-warp bytes in flight on the two slow phases moves decode by <= +1.6 % on one case and ~0 on the
+  other. So per-warp depth is NOT the binding limit either; the Little's-law margin was already sufficient.
+- Literal bulk dequant costs 5 %. Dequantizing to fp32 quadruples the LDS bytes per weight, adds a fence pair per
+  128-element stage and shrinks each load to 8 B/lane. fp16 would halve the LDS bytes but carry ~5e-4 relative
+  error per weight (fails the 1e-4 tier). With the packed-staging forms (c009-c014: 0.95-1.00), every Step 2
+  variant has now been measured at or below 24f167d on dusk. The "path toward 260" estimate in the ITER0 note is
+  refuted on this rig.

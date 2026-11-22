@@ -1,0 +1,241 @@
+{
+ "id": "c030",
+ "time": "2026-11-22T06:36:10Z",
+ "axis": "lds_staging",
+ "parent": "iter0",
+ "knobs": {
+  "GEPA_GEN_UNROLL": 1,
+  "GEPA_K512_PIPE": 0,
+  "GEPA_GEN_PREFETCH_X": 1,
+  "workers": 16,
+  "GEPA_TOPK_PER_WG": 0,
+  "GEPA_RESID_FUSE": 0,
+  "GEPA_S2_MOE": 4
+ },
+ "patch": "/mnt/d/ops/rec-gemini-kernels/docs/benchmarks/ohs-gepa-dusk-2026-11-22/patches/s2_bulk_dequant_lds.patch",
+ "name": "s2-bulk-dequant-lds",
+ "optimizer": "external",
+ "kimi_429_total": 6,
+ "optimizer_detail": {
+  "optimizer": "external",
+  "name": "s2-bulk-dequant-lds",
+  "kimi_429_total": 6
+ },
+ "source": "4bb6212",
+ "after512": null,
+ "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+ "build": {
+  "status": "ok",
+  "build_s": 2.4,
+  "defines": [
+   "GEPA_GEN_PREFETCH_X=1",
+   "GEPA_GEN_UNROLL=1",
+   "GEPA_K512_PIPE=0",
+   "GEPA_RESID_FUSE=0",
+   "GEPA_S2_MOE=4",
+   "GEPA_TOPK_PER_WG=0"
+  ],
+  "so_sha256": "c7d8c133afa21ed327c180be2467b372ade2a928e856779dac25dbe32784d46e",
+  "kernels": {
+   "mid_generate": {
+    "lds": 24952,
+    "scratch": 16,
+    "vgpr": 248
+   },
+   "mid_generate_fp32_bf16kv": {
+    "lds": 24952,
+    "scratch": 16,
+    "vgpr": 248
+   },
+   "mid_generate_fp32kv": {
+    "lds": 24952,
+    "scratch": 16,
+    "vgpr": 248
+   },
+   "flint_q4_gemv_kernel": {
+    "lds": 32768,
+    "scratch": 16,
+    "vgpr": 248
+   }
+  },
+  "hot_instr": 12393,
+  "hot_funcs": {
+   "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+   "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+   "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+   "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+   "mid_generate": 7114
+  },
+  "gemv_vgpr_scratch": {
+   "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 248
+   },
+   "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 215
+   },
+   "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 115
+   },
+   "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+    "vgpr": 214
+   }
+  },
+  "source_sha256": "c9c56f6b1825709a13eaf7e3bc277056e6516b563489ac289cbcf3c526121528"
+ },
+ "emit": {
+  "status": "ok",
+  "suite_s": 2.3,
+  "npz_md5": {
+   "suite/chat_bf16kv.npz": "5017b350c95b53af7e3ff557e7bf9346",
+   "suite/chat_fp32_bf16kv.npz": "b8410bb527a844601e6ec25742ca2e52",
+   "suite/chat_fp32kv.npz": "dbff5133b60a281af9ca580186f18649",
+   "suite/short4_bf16kv.npz": "a07e13d88d82ab441cae61e2078bbc3f",
+   "suite/short4_fp32_bf16kv.npz": "7f4e675eac6c59e2357ee37c832ce71c",
+   "suite/short4_fp32kv.npz": "a97b32774e295c74499ddf7863df7db5",
+   "ppl/ppl__bf16kv.npz": "9e2f83cbc5302cf20ed255d6d71845da",
+   "ppl/ppl__fp32kv.npz": "f316f8cce72db46209366b092a7ca5c9"
+  },
+  "ppl_longest_launch_s": 0.16481293199467473
+ },
+ "gates": {
+  "ppl": {
+   "fp32kv": 114114.8546963997,
+   "bf16kv": 114199.11133985387
+  },
+  "ppl_longest_launch_s": 0.16481293199467473,
+  "ppl_rel_vs_incumbent_bf16kv": -0.00015676545740883618,
+  "ppl_gate": true,
+  "rec_pp2": {
+   "pass": true,
+   "items": {
+    "short4/fp32kv": {
+     "pass": true,
+     "step_rel": 1.1314437286963652e-06,
+     "last_rel": 9.428476297169769e-07,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "short4/fp32_bf16kv": {
+     "pass": true,
+     "step_rel": 0.0009308206337613498,
+     "last_rel": 0.0006546316286934388,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "short4/bf16kv": {
+     "pass": false,
+     "step_rel": 0.003776306166595755,
+     "last_rel": 0.002699765450758686,
+     "tokens_exact": false,
+     "problems": [
+      "last_logits rel err 2.700e-03 > 0.001 (bf16-KV tier)",
+      "step_logits max rel err 3.776e-03 > 0.001 (bf16-KV tier)"
+     ]
+    },
+    "chat/fp32kv": {
+     "pass": true,
+     "step_rel": 1.0359759929829892e-06,
+     "last_rel": 9.414259985817641e-07,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "chat/fp32_bf16kv": {
+     "pass": true,
+     "step_rel": 0.00045752377236222907,
+     "last_rel": 0.00032802262037464995,
+     "tokens_exact": true,
+     "problems": []
+    },
+    "chat/bf16kv": {
+     "pass": false,
+     "step_rel": 0.09061518485219872,
+     "last_rel": 0.09631637137254576,
+     "tokens_exact": true,
+     "problems": [
+      "last_logits rel err 9.632e-02 > 0.001 (bf16-KV tier)",
+      "step_logits max rel err 9.062e-02 > 0.001 (bf16-KV tier)"
+     ]
+    }
+   },
+   "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded"
+  },
+  "pass": true
+ },
+ "headroom": {
+  "cand": 0.0009308206337613498,
+  "inc": 0.0009115004257483937,
+  "margin": 6.917936623865024e-05,
+  "flag": true
+ },
+ "bench": {
+  "short4": {
+   "status": "ok",
+   "case": "short4",
+   "rounds": 8,
+   "workers": {
+    "A": 16,
+    "B": 16
+   },
+   "max_launch_s": 0.2044,
+   "cotenant_states": [
+    "flint:idle,e4b:idle,qwen:inactive"
+   ],
+   "rounds_dropped_cotenant": 0,
+   "A": {
+    "valid": 8,
+    "differential_tok_s": 207.71,
+    "pair_min": 205.14,
+    "pair_max": 210.65,
+    "t36_mean_s": 0.19262
+   },
+   "B": {
+    "valid": 8,
+    "differential_tok_s": 197.5,
+    "pair_min": 194.49,
+    "pair_max": 202.47,
+    "t36_mean_s": 0.20347
+   },
+   "speedup_B_over_A": 0.9508,
+   "tokens_identical_A_B": false
+  },
+  "chat": {
+   "status": "ok",
+   "case": "chat",
+   "rounds": 8,
+   "workers": {
+    "A": 16,
+    "B": 16
+   },
+   "max_launch_s": 0.21,
+   "cotenant_states": [
+    "flint:idle,e4b:idle,qwen:inactive"
+   ],
+   "rounds_dropped_cotenant": 0,
+   "A": {
+    "valid": 8,
+    "differential_tok_s": 207.87,
+    "pair_min": 204.75,
+    "pair_max": 212.04,
+    "t36_mean_s": 0.19762
+   },
+   "B": {
+    "valid": 8,
+    "differential_tok_s": 197.35,
+    "pair_min": 195.19,
+    "pair_max": 198.76,
+    "t36_mean_s": 0.20813
+   },
+   "speedup_B_over_A": 0.9494,
+   "tokens_identical_A_B": false
+  }
+ },
+ "tok_s": {
+  "short4": 197.5,
+  "chat": 197.35
+ },
+ "speedup_vs_best": {
+  "short4": 0.9508,
+  "chat": 0.9494
+ },
+ "outcome": "gates_pass"
+}
