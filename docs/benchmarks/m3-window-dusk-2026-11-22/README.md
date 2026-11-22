@@ -86,3 +86,17 @@ Display-down pair lines: @512 34.74 vs 29.39 = **1.18x**; @8192 megakernel not r
 didn't fit beside the sweep), so the display-up 21.35 stands against 26.80 display-down / 26.30 display-up (R5 record 26.61) = **0.80-0.81x**.
 :8080 downtime 13:59:31 -> 14:10:18Z (health 200, dawn watcher) = 10m47s. About 7 min of that was before launch: ops_flint's
 DOWN confirmation (display teardown + backstop cron) reached this seat at 14:06; the bench itself was 3m03s.
+
+## R11 INVALIDATED; R11r re-run on the verified build (rec-3cr, 2026-11-22 15:09-15:11Z)
+
+Every megakernel row above ran on `flint_full.so` (HEAD + GEPA_ATTN_SPLIT=1), which rec-6ek showed is a nondeterministic,
+incorrect build at full config. Those rows are unquotable. Re-run on `full_k_5363ad5.so` (HEAD default, sha 3ab8a281...):
+fp32-KV PASS (1.55e-6), 5/5 repeats bit-identical in this window (8/8 total). w16, display down, :8080 down 15:09:04-15:11:17Z.
+
+| row | megakernel (verified) | llama.cpp (display down) | ratio |
+|---|---|---|---|
+| decode32 @512 | **24.75** (12/12, depth 512-548) | 29.39 | **0.84x** |
+| short (depth 4-76) | 39.06 (12/12) | n/a | - |
+| @8192 | no valid row | 26.80 | - |
+
+The "1.18x @512" was entirely the racy split-K path. w32 is not possible on dusk (max co-resident workers = 16).

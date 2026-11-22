@@ -163,9 +163,22 @@ def bench(a_id: str, a_w: int, b_id: str, b_w: int, rounds: int) -> dict:
     return out
 
 
-def emit(cid: str, workers: int) -> dict:
-    return remote(f"emit --so {REMOTE}/c/{cid}/flint_mid.so --out {REMOTE}/c/{cid}/emit --workers {workers} "
+def emit(cid: str, workers: int, sub: str = "emit") -> dict:
+    return remote(f"emit --so {REMOTE}/c/{cid}/flint_mid.so --out {REMOTE}/c/{cid}/{sub} --workers {workers} "
                   f"--ckpt {CK_REMOTE}", timeout=1200)
+
+
+def determinism(cid: str, workers: int, em: dict) -> dict:
+    """rec-3cr repeat-determinism gate: a second, independent emit of the same build must be byte-identical (every
+    suite/ppl npz md5). GEPA_ATTN_SPLIT=1 passed mid-shape gates while racing at full config (rec-6ek), so the check
+    runs on EVERY candidate; full-config candidates additionally need a full-config soak before promotion."""
+    em2 = emit(cid, workers, sub="emit_rep")
+    if em.get("status") != "ok" or em2.get("status") != "ok":
+        return {"pass": False, "reason": f"determinism emit: {em.get('status')}/{em2.get('status')}"}
+    a, b = em["npz_md5"], em2["npz_md5"]
+    diff = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))
+    return {"pass": not diff, "n_npz": len(a), "differ": diff,
+            "reason": f"nondeterministic: {len(diff)}/{len(a)} npz differ between two emits" if diff else ""}
 
 
 def ppl_of(npz: Path) -> float:
@@ -388,6 +401,12 @@ def evaluate(pool: dict, pool_path: Path, cid: str, knobs: dict, axis: str, pare
         # gates FIRST (rec-ohs): a candidate outside the hard gates is rejected without spending a bench window;
         # fp32_bf16kv headroom vs the incumbent is flagged before any timing.
         rec["emit"] = emit(cid, knobs["workers"])
+        rec["determinism"] = determinism(cid, knobs["workers"], rec["emit"])
+        if not rec["determinism"]["pass"]:
+            log(f"{cid}: DETERMINISM FAIL ({rec['determinism']['reason']})")
+            rec["outcome"] = "rejected"
+            rec["reason"] = "determinism: " + rec["determinism"]["reason"]
+            return finish(pool, pool_path, rec)
         rec["gates"] = run_gates(cid, rec["emit"], best)
         hr = headroom(rec["gates"], best.get("gates"))
         rec["headroom"] = hr
@@ -415,7 +434,10 @@ def evaluate(pool: dict, pool_path: Path, cid: str, knobs: dict, axis: str, pare
         f"{max(rec['bench'][c]['max_launch_s'] for c in CASES)} s)")
     if best is None:
         rec["emit"] = emit(cid, knobs["workers"])
+        rec["determinism"] = determinism(cid, knobs["workers"], rec["emit"])
         rec["gates"] = run_gates(cid, rec["emit"], best)
+        if not rec["determinism"]["pass"]:
+            rec["gates"] = dict(rec["gates"], **{"pass": False, "reason": "determinism: " + rec["determinism"]["reason"]})
     log(f"{cid}: gates {'PASS' if rec['gates']['pass'] else 'FAIL'}" +
         (f" ({rec['gates'].get('reason')})" if not rec["gates"]["pass"] else "") +
         f"; ppl bf16kv {rec['gates']['ppl']['bf16kv']:.6g} ({rec['gates']['ppl_rel_vs_incumbent_bf16kv']:+.2e} vs best)")
