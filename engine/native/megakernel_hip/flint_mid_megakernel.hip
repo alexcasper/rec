@@ -51,6 +51,9 @@
 #ifndef GEPA_S2_QKV            // segmented Q/K/V
 #define GEPA_S2_QKV 0
 #endif
+#ifndef GEPA_S2_DENSE          // non-segmented K=2048 calls via q4_block512 (dense-layer gate/up)
+#define GEPA_S2_DENSE 0
+#endif
 #ifndef GEPA_S2_LMH            // lm_head (150144 x 2048)
 #define GEPA_S2_LMH 0
 #endif
@@ -576,7 +579,8 @@ template <int K, bool ROUND_BF16 = false>
 __device__ inline void q4_block512(const uint8_t* w, const bf16* s, const bf16* b,
                                    const float* x, bf16* out_bf, float* out_f,
                                    int n, int lane, int sg, int groups GEPA_ACC_DECL) {
-    flint_q4_gemv_op<K, ROUND_BF16>(w, s, b, x, out_bf, out_f, n, lane, sg, groups, nullptr, 0 GEPA_ACC_ARG);
+    flint_q4_gemv_op<K, ROUND_BF16, (K == 2048 ? GEPA_S2_DENSE : 0)>(w, s, b, x, out_bf, out_f, n, lane, sg, groups,
+                                                                     nullptr, 0 GEPA_ACC_ARG);
 }
 
 // ---- Model config (rec-u9q): FLINT_CFG_FULL=0 -> mid-8L (default, run-of-record d1f6208),
