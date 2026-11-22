@@ -1,0 +1,2 @@
+1 npz -> 1 distinct outputs
+{"files": ["depth8192_fp32kv.npz"], "kv": "fp32", "tier": 0.0001, "tokens": [220, 16, 13, 20, 13, 16, 13, 16, 13, 16, 13, 16, 13, 16, 13, 16, 13, 16, 13, 16, 13, 16, 13, 16], "pass": false, "problems": ["last_logits rel err 7.410e-02 > 0.0001 (fp32-KV tier)", "step_logits max rel err 2.969e-01 > 0.0001 (fp32-KV tier)", "1 routing deviation(s) in the fp32-KV tier"], "last_logits_rel": 0.07409796770805309, "step_logits_max_rel": 0.29688251137567484, "n_routing_deviations": 1, "tokens_exact": true, "wall_s": 1180.8}

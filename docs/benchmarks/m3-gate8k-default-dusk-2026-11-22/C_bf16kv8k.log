@@ -1,0 +1,19 @@
+2026-11-22T20:09:39Z offset table /home/dusk/xh7/flint-int4.off.npy
+2026-11-22T20:09:41Z VRAM preflight: need 21.86 GiB + 1.5 slack, sysfs free 38.74 GiB (waited 0.0 s) | flint:down,e4b:idle,qwen:down,gpu_busy=6,MemAvailable=17.1GiB
+2026-11-22T20:09:42Z bank stream   0.25/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=6,MemAvailable=16.9GiB
+2026-11-22T20:09:42Z bank stream   2.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=7,MemAvailable=16.9GiB
+2026-11-22T20:09:43Z bank stream   4.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.9GiB
+2026-11-22T20:09:44Z bank stream   6.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.9GiB
+2026-11-22T20:09:45Z bank stream   8.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.9GiB
+2026-11-22T20:09:46Z bank stream  10.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.9GiB
+2026-11-22T20:09:47Z bank stream  12.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.9GiB
+2026-11-22T20:09:48Z bank stream  14.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.9GiB
+2026-11-22T20:09:48Z bank stream  16.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.9GiB
+2026-11-22T20:09:49Z bank stream  18.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.9GiB
+2026-11-22T20:09:50Z bank stream  20.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.9GiB
+2026-11-22T20:09:51Z bank stream  21.02/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=7,MemAvailable=16.9GiB
+2026-11-22T20:09:51Z session created in 9.1 s (bank 21.019 GiB streamed H2D, 2.31 GiB/s) | flint:down,e4b:idle,qwen:down,gpu_busy=7,MemAvailable=17.1GiB
+2026-11-22T20:20:17Z ROW depth8192: speed NOT measurable under cap (tA 245.3 ms -> k=0); lower bound 1/tA = 4.08 tok/s
+2026-11-22T20:20:17Z GATE depth8192_bf16kv.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 f5d6b66ef06b launches 6296 longest 0.247 s, 127.0 ms/pos, 635.7 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,MemAvailable=17.0GiB
+2026-11-22T20:20:17Z DETERMINISM bf16kv: not tested (1 emit) (1 fresh-session emits)
+{"case": "depth8192", "positions": 8216, "lib": "/home/dusk/rec-ve/bisect/flint_full_def_288f4fa.so", "builds": {"bf16kv": {"md5": ["f5d6b66ef06bd9fd1f11a8f3be1204fe"], "fresh_repeats": 1, "deterministic": null, "speed": {"decode_tok_s": null, "k": 0, "tA_probe_s": 0.24526, "note": "ABBA not measurable under the 0.25 s cap (2*tA > 0.9*cap); 1/tA is a lower bound on decode tok/s", "lower_bound_tok_s": 4.08}, "t_pos_s": [0.12704353101435117]}}}

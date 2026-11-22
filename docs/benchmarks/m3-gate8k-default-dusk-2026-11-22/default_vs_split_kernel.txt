@@ -1,0 +1,5 @@
+default r0 md5 8e8c01246c73dfaade99b5c0d1206072 r1 md5 8e8c01246c73dfaade99b5c0d1206072 deterministic: True
+tokens default==split: True
+last rel default-vs-split 5.994e-05
+step rel default-vs-split max 1.699e-04
+routing-differing positions default-vs-split: 65 first [3255, 3256, 3325, 3419, 3676]

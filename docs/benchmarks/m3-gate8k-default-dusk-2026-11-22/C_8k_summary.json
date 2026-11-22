@@ -1,0 +1,24 @@
+{
+ "case": "depth8192",
+ "positions": 8216,
+ "lib": "/home/dusk/rec-ve/bisect/flint_full_def_288f4fa.so",
+ "builds": {
+  "bf16kv": {
+   "md5": [
+    "f5d6b66ef06bd9fd1f11a8f3be1204fe"
+   ],
+   "fresh_repeats": 1,
+   "deterministic": null,
+   "speed": {
+    "decode_tok_s": null,
+    "k": 0,
+    "tA_probe_s": 0.24526,
+    "note": "ABBA not measurable under the 0.25 s cap (2*tA > 0.9*cap); 1/tA is a lower bound on decode tok/s",
+    "lower_bound_tok_s": 4.08
+   },
+   "t_pos_s": [
+    0.12704353101435117
+   ]
+  }
+ }
+}
