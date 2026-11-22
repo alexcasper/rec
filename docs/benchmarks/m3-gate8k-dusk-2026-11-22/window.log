@@ -1,0 +1,27 @@
+18:03:43Z +0s preflight gate8k | 8080:000 8090:200 qwen3vl:200/200 llama-qwen: display:active busy=0 MemAvailable=17.1GiB vram_free=38.7GiB
+d95d101f3ba4b7be32e7603becb1b755beff3a2db1a47756654ff76b8e1e9e30  /home/dusk/rec-ve/bisect/flint_full_split_288f4fa.so
+f217f678ad96b7893045c5bbab4db45dad7dc99d35b6e692866352be80744ddb  /home/dusk/rec-ve/bisect/flint_full_def_288f4fa.so
+18:04:24Z +41s START A_def512 (budget 160s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen: display:active busy=0 MemAvailable=17.3GiB vram_free=38.7GiB
+2026-11-22T18:05:05Z GATE wrap512_fp32kv.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 8a8fcf6dc2a3 launches 125 longest 0.167 s, 41.1 ms/pos, 36.2 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailabl
+2026-11-22T18:05:05Z DETERMINISM fp32kv: not tested (1 emit) (1 fresh-session emits)
+2026-11-22T18:05:32Z GATE wrap512_fp32_bf16kv.npz: tokens[:6]=[86, 16289, 220, 16, 13, 16] md5 616801d1afe9 launches 125 longest 0.168 s, 41.3 ms/pos, 27.3 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvai
+2026-11-22T18:05:32Z DETERMINISM fp32_bf16kv: not tested (1 emit) (1 fresh-session emits)
+2026-11-22T18:06:00Z GATE wrap512_bf16kv.npz: tokens[:6]=[86, 16289, 220, 15, 13, 15] md5 d97d2aa67693 launches 126 longest 0.167 s, 41.5 ms/pos, 27.9 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable
+2026-11-22T18:06:00Z DETERMINISM bf16kv: not tested (1 emit) (1 fresh-session emits)
+18:06:00Z +137s END A_def512 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.4GiB vram_free=38.7GiB
+18:06:00Z +137s START B_ppl (budget 220s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=86 MemAvailable=17.4GiB vram_free=38.7GiB
+2026-11-22T18:07:32Z PPL fp32kv: (8, 191) nll 1.187943 ppl 3.2803 longest 0.059 s, 91.4 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,MemAvailable=17.2GiB
+2026-11-22T18:09:07Z PPL bf16kv: (8, 191) nll 1.190007 ppl 3.2871 longest 0.058 s, 93.9 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,MemAvailable=17.2GiB
+18:09:07Z +324s END B_ppl rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen: display:active busy=0 MemAvailable=17.3GiB vram_free=38.7GiB
+18:10:37Z +414s START D_fp32kv8k (budget 480s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen: display:active busy=0 MemAvailable=17.3GiB vram_free=38.7GiB
+2026-11-22T18:16:44Z GATE depth8192_fp32kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 81560bb9b77a launches 2211 longest 0.188 s, 48.0 ms/pos, 325.4 s | flint:down,e4b:idle,qwen:down,gpu_busy=98,MemAvailable
+2026-11-22T18:16:44Z DETERMINISM fp32kv: not tested (1 emit) (1 fresh-session emits)
+18:16:44Z +781s END D_fp32kv8k rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=90 MemAvailable=17.3GiB vram_free=38.7GiB
+18:16:44Z +781s START C_bf16kv8k (budget 800s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=85 MemAvailable=17.3GiB vram_free=38.7GiB
+2026-11-22T18:22:50Z ROW depth8192: decode 21.55 tok/s (12/12 stable pairs, depth 8215..8251, k=2) | flint:down,e4b:idle,qwen:down,gpu_busy=20,MemAvailable=17.2GiB
+2026-11-22T18:22:50Z GATE depth8192_bf16kv.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 6d6ae4488852 launches 2236 longest 0.188 s, 48.2 ms/pos, 362.0 s | flint:down,e4b:idle,qwen:down,gpu_busy=40,MemAvailable
+2026-11-22T18:28:08Z GATE depth8192_bf16kv_r1.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 6d6ae4488852 launches 2202 longest 0.188 s, 47.5 ms/pos, 317.1 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvail
+2026-11-22T18:28:08Z DETERMINISM bf16kv: PASS (2 fresh-session emits)
+18:28:08Z +1465s END C_bf16kv8k rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.3GiB vram_free=38.7GiB
+18:28:08Z +1465s SKIP D2_fp32kv8k: 155s left < 450s | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=87 MemAvailable=17.3GiB vram_free=38.7GiB
+18:28:08Z +1465s done -> signal ops_flint to restart :8080 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=82 MemAvailable=17.3GiB vram_free=38.7GiB

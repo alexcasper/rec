@@ -1,0 +1,18 @@
+{
+ "case": "depth8192",
+ "positions": 8216,
+ "lib": "/home/dusk/rec-ve/bisect/flint_full_split_288f4fa.so",
+ "builds": {
+  "fp32kv": {
+   "md5": [
+    "81560bb9b77a72da5f3671fb98b25a22"
+   ],
+   "fresh_repeats": 1,
+   "deterministic": null,
+   "speed": null,
+   "t_pos_s": [
+    0.047955624342042334
+   ]
+  }
+ }
+}

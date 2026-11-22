@@ -1,0 +1,130 @@
+[
+ {
+  "files": [
+   "wrap512_bf16kv.npz"
+  ],
+  "kv": "bf16",
+  "tier": 0.001,
+  "tokens": [
+   86,
+   16289,
+   220,
+   15,
+   13,
+   15,
+   13,
+   15,
+   13,
+   15,
+   25,
+   10776,
+   15,
+   198,
+   197,
+   197,
+   567,
+   1434,
+   480,
+   197,
+   197,
+   8922,
+   858,
+   546
+  ],
+  "pass": false,
+  "problems": [
+   "3 token(s) differ from the fp32 reference beyond the near-tie margin",
+   "last_logits rel err 2.297e-02 > 0.001 (bf16-KV tier)",
+   "step_logits max rel err 2.711e-01 > 0.001 (bf16-KV tier)"
+  ],
+  "last_logits_rel": 0.02297167184032734,
+  "step_logits_max_rel": 0.2710622041582232,
+  "n_routing_deviations": 756,
+  "tokens_exact": false,
+  "wall_s": 128.6
+ },
+ {
+  "files": [
+   "wrap512_fp32_bf16kv.npz"
+  ],
+  "kv": "bf16",
+  "tier": 0.001,
+  "tokens": [
+   86,
+   16289,
+   220,
+   16,
+   13,
+   16,
+   13,
+   16,
+   13,
+   16,
+   13,
+   16,
+   13,
+   16,
+   13,
+   16,
+   13,
+   16,
+   13,
+   16,
+   13,
+   16,
+   13,
+   16
+  ],
+  "pass": false,
+  "problems": [
+   "1 token(s) differ from the fp32 reference beyond the near-tie margin",
+   "last_logits rel err 4.407e-02 > 0.001 (bf16-KV tier)",
+   "step_logits max rel err 2.105e-01 > 0.001 (bf16-KV tier)"
+  ],
+  "last_logits_rel": 0.0440739881786976,
+  "step_logits_max_rel": 0.2104792865321076,
+  "n_routing_deviations": 147,
+  "tokens_exact": false,
+  "wall_s": 230.4
+ },
+ {
+  "files": [
+   "wrap512_fp32kv.npz"
+  ],
+  "kv": "fp32",
+  "tier": 0.0001,
+  "tokens": [
+   86,
+   16289,
+   220,
+   197,
+   1,
+   764,
+   197,
+   1,
+   764,
+   197,
+   1,
+   764,
+   197,
+   1,
+   764,
+   197,
+   1,
+   764,
+   197,
+   1,
+   764,
+   197,
+   1,
+   764
+  ],
+  "pass": true,
+  "problems": [],
+  "last_logits_rel": 6.251123031616861e-07,
+  "step_logits_max_rel": 2.1444371554004373e-06,
+  "n_routing_deviations": 0,
+  "tokens_exact": true,
+  "wall_s": 327.2
+ }
+]

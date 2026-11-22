@@ -1,0 +1,13 @@
+{
+ "pass": false,
+ "problems": [
+  "last_logits rel err 7.415e-02 > 0.0001 (fp32-KV tier)",
+  "step_logits max rel err 2.969e-01 > 0.0001 (fp32-KV tier)",
+  "6 routing deviation(s) in the fp32-KV tier"
+ ],
+ "last_logits_rel": 0.07414850195030465,
+ "step_logits_max_rel": 0.29687908547490865,
+ "n_routing_deviations": 6,
+ "tokens_exact": true,
+ "rope": "kernel-style exp2f inv_freq"
+}

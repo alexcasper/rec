@@ -1,0 +1,40 @@
+{
+ "case": "wrap512",
+ "positions": 536,
+ "lib": "/home/dusk/rec-ve/bisect/flint_full_def_288f4fa.so",
+ "builds": {
+  "fp32kv": {
+   "md5": [
+    "8a8fcf6dc2a399fe52861df784eb75b5"
+   ],
+   "fresh_repeats": 1,
+   "deterministic": null,
+   "speed": null,
+   "t_pos_s": [
+    0.041128312334573515
+   ]
+  },
+  "fp32_bf16kv": {
+   "md5": [
+    "616801d1afe994745d66a9238290f71c"
+   ],
+   "fresh_repeats": 1,
+   "deterministic": null,
+   "speed": null,
+   "t_pos_s": [
+    0.04130984533306522
+   ]
+  },
+  "bf16kv": {
+   "md5": [
+    "d97d2aa67693a26598cf3bbc48b5b76e"
+   ],
+   "fresh_repeats": 1,
+   "deterministic": null,
+   "speed": null,
+   "t_pos_s": [
+    0.04151685175020248
+   ]
+  }
+ }
+}
