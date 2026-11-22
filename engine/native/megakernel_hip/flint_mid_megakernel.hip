@@ -57,6 +57,13 @@
 #ifndef GEPA_S2_LMH            // lm_head (150144 x 2048)
 #define GEPA_S2_LMH 0
 #endif
+// rec-ohs direction 1: idle-warp L2 warm-up of the NEXT weight phase during light phases (attention, top-K,
+// MoE act, combine). sync_all opens with an agent-scope fence (vmcnt(0)), so loads cannot ride across a barrier;
+// only warps with no work in the light phase prefetch, and they consume locally. GEPA_PF = bytes per idle warp
+// per site (0 = off, byte-identical). Window = contiguous prefix of the next phase in consumption order.
+#ifndef GEPA_PF
+#define GEPA_PF 0
+#endif
 #define GEPA_STR(x) #x
 #define GEPA_UNROLL(n) _Pragma(GEPA_STR(unroll n))
 #if GEPA_RESID_FUSE
@@ -252,6 +259,33 @@ __device__ inline uint8_t* q4_gen_pool(int warp) {
 // with ONE x preload, instead of one call (and one preload + ragged tail) per matrix. Every row's
 // arithmetic is unchanged. The table lives in LDS (uniform reads); with no table the quad assignment is
 // exactly the single-matrix one (quad gq = sg + k*groups -> first = 4*gq).
+// warp `widx` warms bytes [base_off + widx*GEPA_PF, +GEPA_PF) of the concatenation of up to 3 regions.
+// Out of line (idle warps only -> keeps it off the hot instruction stream), 4 x 16 B loads in flight per batch.
+__device__ __attribute__((noinline)) uint32_t pf_warm_impl(const uint8_t* r0, size_t n0, const uint8_t* r1, size_t n1,
+                                                           const uint8_t* r2, size_t n2, size_t lo, int lane) {
+    uint32_t acc = 0;
+    #pragma unroll 1
+    for (int bt = 0; bt < (GEPA_PF > 0 ? GEPA_PF : 512) / 2048; ++bt) {
+        uint4 v[4];
+        #pragma unroll
+        for (int i = 0; i < 4; ++i) {
+            size_t o = lo + (size_t)(bt * 4 + i) * 512 + lane * 16;
+            const uint8_t* p = o < n0 ? r0 + o : (o - n0 < n1 ? r1 + (o - n0) : (o - n0 - n1 < n2 ? r2 + (o - n0 - n1) : nullptr));
+            v[i] = p ? *(const uint4*)p : make_uint4(0u, 0u, 0u, 0u);
+        }
+        #pragma unroll
+        for (int i = 0; i < 4; ++i) acc ^= v[i].x ^ v[i].w;
+    }
+    return acc;
+}
+__device__ inline void pf_warm(const uint8_t* r0, size_t n0, const uint8_t* r1, size_t n1, const uint8_t* r2, size_t n2,
+                               size_t base_off, int widx, int lane, uint32_t& sink) {
+    if constexpr (GEPA_PF > 0) {
+        static_assert(GEPA_PF % 2048 == 0, "GEPA_PF must be a multiple of 2048");
+        sink ^= pf_warm_impl(r0, n0, r1, n1, r2, n2, base_off + (size_t)widx * GEPA_PF, lane);
+    }
+}
+
 struct Q4Seg {
     const uint8_t* w;
     const bf16* s;
@@ -850,6 +884,7 @@ __device__ inline void mid_generate_impl(
     const bf16* emb_s = (const bf16*)(emb_w + (size_t)MID_VOCAB * MID_HID);
     const bf16* emb_b = (const bf16*)((const uint8_t*)emb_s + (size_t)MID_VOCAB * (MID_HID / 64) * 2);
 
+    uint32_t pf_sink = 0;   // rec-ohs direction 1 (consumed after the loop under an impossible-at-runtime guard)
     for (int pos = 0; pos < total; ++pos) {
         int token = (pos < prompt_len) ? prompt[pos] : out_tokens[pos - prompt_len];
 
@@ -949,6 +984,8 @@ __device__ inline void mid_generate_impl(
                 for (int j = 0; j < 4; ++j)
                     ws_attn[(size_t)h * MID_HDIM + lane * 4 + j] = acc[j] / z;
             }
+            if (GEPA_PF > 0 && sg >= MID_HEADS)   // idle in attention: warm the O-projection prefix
+                pf_warm(Q_W(qbase + 3), (size_t)MID_HID * (MID_QDIM / 2), nullptr, 0, nullptr, 0, 0, sg - MID_HEADS, lane, pf_sink);
             SYNC_ALL();
 
             // ---- 7. O projection (K=4096 -> N=2048) + residual ----
@@ -1016,6 +1053,9 @@ __device__ inline void mid_generate_impl(
                         ws_f_scores[e] = 1.0f / (1.0f + expf(-d_in));
                     }
                 }
+                if (GEPA_PF > 0 && sg >= MID_NEXP)    // idle in the router: warm the shared gate/up prefix
+                    pf_warm(Q_W(qbase + 7), (size_t)MID_SH_I * (MID_HID / 2), Q_W(qbase + 8), (size_t)MID_SH_I * (MID_HID / 2),
+                            nullptr, 0, 0, sg - MID_NEXP, lane, pf_sink);
                 SYNC_ALL();
 #if GEPA_TOPK_PER_WG
                 __shared__ int   sh_sel[MID_TOPK];
@@ -1058,6 +1098,9 @@ __device__ inline void mid_generate_impl(
                     }
                     if (GEPA_TOPK_PER_WG && group == 0) for (int t = 0; t < MID_TOPK; ++t) ws_f_wsel[t] = GEPA_WSEL(t);
                 }
+                if (GEPA_PF > 0 && !GEPA_TOPK_PER_WG && sg >= 8)   // idle during top-K: continue the shared window
+                    pf_warm(Q_W(qbase + 7), (size_t)MID_SH_I * (MID_HID / 2), Q_W(qbase + 8), (size_t)MID_SH_I * (MID_HID / 2),
+                            nullptr, 0, (size_t)(groups > MID_NEXP ? groups - MID_NEXP : 0) * GEPA_PF, sg - 8, lane, pf_sink);
 #if GEPA_TOPK_PER_WG
                 __syncthreads();
 #else
@@ -1083,18 +1126,20 @@ __device__ inline void mid_generate_impl(
                 constexpr int MOE_SH0 = MID_TOPK * MID_MOE_I;      // shared-expert slot offset
                 constexpr int MOE_ACT_N = MOE_SH0 + MID_SH_I;
                 // rec-9t8 3b: all routed gate/up + shared gate/up as one segmented K=2048 gemv
+                // GEPA_PF: shared expert first in the quad stream (it is the prefetched window); rows/arithmetic unchanged
+                constexpr int SEG_R0 = GEPA_PF > 0 ? 2 : 0, SEG_SH = GEPA_PF > 0 ? 0 : 2 * MID_TOPK;
                 if (tid < MID_TOPK) {
                     int t = tid, e = GEPA_SEL(t);
                     // Expert strides: bytes for packed uint8*, ELEMENTS for bf16* scales/biases
                     size_t gw_off = (size_t)e * MID_MOE_I * (MID_HID / 2);
                     size_t gs_off = (size_t)e * MID_MOE_I * (MID_HID / 64);
-                    sh_seg[2 * t]     = {sw_gw + gw_off, sw_gs + gs_off, sw_gb + gs_off, ws_gate + t * MID_MOE_I, MID_MOE_I};
-                    sh_seg[2 * t + 1] = {sw_uw + gw_off, sw_us + gs_off, sw_ub + gs_off, ws_up + t * MID_MOE_I, MID_MOE_I};
+                    sh_seg[SEG_R0 + 2 * t]     = {sw_gw + gw_off, sw_gs + gs_off, sw_gb + gs_off, ws_gate + t * MID_MOE_I, MID_MOE_I};
+                    sh_seg[SEG_R0 + 2 * t + 1] = {sw_uw + gw_off, sw_us + gs_off, sw_ub + gs_off, ws_up + t * MID_MOE_I, MID_MOE_I};
                 } else if (tid == MID_TOPK) {
                     // Shared expert (SH_I = 1024, HID = 2048)
-                    sh_seg[2 * MID_TOPK]     = {Q_W(qbase + 7), Q_S(qbase + 7, MID_SH_I, MID_HID), Q_B(qbase + 7, MID_SH_I, MID_HID),
+                    sh_seg[SEG_SH]     = {Q_W(qbase + 7), Q_S(qbase + 7, MID_SH_I, MID_HID), Q_B(qbase + 7, MID_SH_I, MID_HID),
                                                 ws_gate + MOE_SH0, MID_SH_I};
-                    sh_seg[2 * MID_TOPK + 1] = {Q_W(qbase + 8), Q_S(qbase + 8, MID_SH_I, MID_HID), Q_B(qbase + 8, MID_SH_I, MID_HID),
+                    sh_seg[SEG_SH + 1] = {Q_W(qbase + 8), Q_S(qbase + 8, MID_SH_I, MID_HID), Q_B(qbase + 8, MID_SH_I, MID_HID),
                                                 ws_up + MOE_SH0, MID_SH_I};
                 }
                 __syncthreads();
@@ -1108,6 +1153,13 @@ __device__ inline void mid_generate_impl(
                         bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
                         ws_f_act[i] = tofloat(act);
                     }
+                }
+                if (GEPA_PF > 0 && sg * 32 >= MOE_ACT_N) {   // idle in act: warm down weights in consumption order
+                    constexpr size_t DB = (size_t)MID_HID * (MID_MOE_I / 2);
+                    const uint8_t* d0 = sw_dw + (size_t)GEPA_SEL(0) * DB;
+                    const uint8_t* d1 = MID_TOPK > 1 ? sw_dw + (size_t)GEPA_SEL(1) * DB : nullptr;
+                    pf_warm(d0, DB, d1, MID_TOPK > 1 ? DB : 0, Q_W(qbase + 9), (size_t)MID_HID * (MID_SH_I / 2), 0,
+                            sg - MOE_ACT_N / 32, lane, pf_sink);
                 }
                 SYNC_ALL();
                 for (int t = 0; t < MID_TOPK; ++t) {
@@ -1134,6 +1186,16 @@ __device__ inline void mid_generate_impl(
                         #pragma unroll
                         for (int t = 0; t < MID_TOPK; ++t) acc += wt[t] * ws_down[(size_t)t * MID_HID + i];
                         ws_x[i] += acc + ws_down[(size_t)MID_TOPK * MID_HID + i];
+                    }
+                }
+                if (GEPA_PF > 0 && sg * 32 >= MID_HID) {     // idle in combine: warm the next weight phase
+                    if (layer + 1 < MID_NL) {
+                        int nb = MID_OFF_LAYER_Q4_BASE + (layer + 1) * 10;
+                        pf_warm(Q_W(nb + 0), (size_t)MID_QDIM * (MID_HID / 2), nullptr, 0, nullptr, 0, 0, sg - MID_HID / 32,
+                                lane, pf_sink);
+                    } else {
+                        pf_warm(Q_W(MID_OFF_LM_HEAD), (size_t)MID_VOCAB * (MID_HID / 2), nullptr, 0, nullptr, 0, 0,
+                                sg - MID_HID / 32, lane, pf_sink);
                     }
                 }
                 SYNC_ALL();
@@ -1216,6 +1278,7 @@ __device__ inline void mid_generate_impl(
         }
         SYNC_ALL();
     }
+    if (GEPA_PF > 0 && n_out < 0 && pf_sink == 0x9e3779b9u) control[3] = pf_sink;   // never true; keeps the loads
     #undef SYNC_ALL
 }
 
