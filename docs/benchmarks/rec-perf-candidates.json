@@ -1,0 +1,147 @@
+{
+  "meta": {
+    "bead": "rec-ohs",
+    "created": "2026-11-22",
+    "purpose": "GEPA-style hill-climb candidate pool for the megakernel decode path (byte-parity relaxed to tolerance-gated non-byte-parity search)",
+    "protocol_refs": [
+      "docs/benchmarks/run-definitions.md (R1-R8 ABBA differential)",
+      "engine/validation/megakernel_mid/mid_mk_check.py (rec-pp2 two-tier gate)",
+      "docs/benchmarks/9t8-dusk-2026-11-21 (hand-pass record)",
+      "docs/benchmarks/6ob-dusk-2026-11-20/ (lab variants b1-b7)"
+    ],
+    "host_protocol": "gated busy<5 + wait-for-idle, ABBA order, cotenant state per log line",
+    "push_policy": "nothing pushed without Alex's ask"
+  },
+  "gates": {
+    "hard_constraints": {
+      "rec_pp2_max_rel": {
+        "fp32_kv": 1e-4,
+        "bf16_kv": 1e-3,
+        "reference": "torch fp32 CPU",
+        "tiers": "both must pass (spec (a): fp32-KV tier is the sign-off; bf16-KV judged by token agreement only for FULL-config builds)"
+      },
+      "perplexity": {
+        "max_delta_vs_bf16_pct": 1.0,
+        "set": "held-out set, defined by Claude arm gate review"
+      }
+    },
+    "auto_reject": "any candidate outside gates is rejected regardless of speed; rejection reason recorded in this pool under rejected[].reason",
+    "note": "byte-parity itself is RELAXED for this search; the gates above are the only numerics contract"
+  },
+  "target_ladder": {
+    "current": 209,
+    "next_ceiling": 260,
+    "beyond": "bandwidth levers (fused-dequant effective bandwidth: ~38 vs ~64 GB/s on R9700, rec-xh7 matrix)",
+    "metric": "decode32 tok/s, short-ctx + after-512 both recorded"
+  },
+  "byte_identity_reference": {
+    "commit": "2fd83cb",
+    "what": "rec-6ob explicit-contraction dot16v + batched/bounded-unroll generic gemv (option A re-baseline); bitwise identical under -ffp-contract=off vs fast",
+    "role": "byte-identity reference only — NOT the sweep incumbent"
+  },
+  "incumbent": {
+    "commit": "24f167d",
+    "label": "b7-chain (rec-9t8 levers 1+2+3)",
+    "status": "incumbent",
+    "metrics": {
+      "short4_tok_s": "203.62 -> ~207-209 after L3",
+      "chat_tok_s": "203.39 -> ~207-209 after L3",
+      "net_vs_39629e7": "+10-11%"
+    },
+    "contents": [
+      "L1 batched MoE phases (3*TOPK+4 -> 4 barriers/MoE layer): 1.024-1.027x",
+      "L2 software-pipelined generic gemv (K=1024/4096; K=512 keeps VCgen) + shared 2 KiB/warp LDS pool (LDS 32.9 -> 24.7 KiB): 1.086x short4",
+      "L3 segmented K=2048 gemv (QKV + all gate/up as one quad stream, one x preload): 1.035x short4, 1.032x chat"
+    ],
+    "gate_evidence": "every build G0 7x40 + G1 6/6 byte-identical to 2fd83cb (spec (a) numerics unchanged)"
+  },
+  "candidates": [
+    {
+      "id": "b7-chain",
+      "commit": "24f167d",
+      "status": "incumbent",
+      "see": "incumbent"
+    },
+    {
+      "id": "b4",
+      "origin": "6ob s4 lab (docs/benchmarks/6ob-dusk-2026-11-20/, q4_lab.py)",
+      "status": "superseded",
+      "note": "6ob lab best; metrics folded into the 24f167d chain (L2 short4 187.57 -> 203.62 intermediate); re-bench only if the chain is unwound"
+    },
+    {
+      "id": "b5",
+      "origin": "6ob s4 lab",
+      "status": "parked",
+      "mutation_family": "barrier cuts",
+      "metrics": {"vs_incumbent": "0.943x (lab)"},
+      "note": "superseded by the 24f167d chain on dusk"
+    },
+    {
+      "id": "b6",
+      "origin": "rec-9t8 close",
+      "status": "parked",
+      "mutation_family": "barrier cuts",
+      "contents": "per-WG top-K + residual fused into the gemv store (-16 barriers/token)",
+      "metrics": {"vs_incumbent": "0.98-0.99x on dusk"},
+      "note": "may pay on full Flint (deeper loop body, different barrier amortization) — revive as a full-config mutation, not a mid one"
+    },
+    {
+      "id": "2fd83cb-generic-gemv",
+      "commit": "2fd83cb",
+      "status": "reference",
+      "note": "byte-identity anchor; sweep mutations diff against the 24f167d incumbent, not this"
+    },
+    {
+      "id": "39629e7",
+      "commit": "39629e7",
+      "status": "historical-baseline",
+      "note": "pre-9t8 baseline (+10-11% attribution point)"
+    }
+  ],
+  "mutation_axes": [
+    {
+      "axis": "unroll_factors",
+      "knobs": {"generic_gemv_row_loop": [1, 2, 4, 8], "value_preload_depth": ["v0..v3 (K=2048 path)", "extend to K=1024/4096"]},
+      "prior_evidence": "#pragma unroll 2 + batched row loads won at K=512/1024/4096 (2fd83cb)"
+    },
+    {
+      "axis": "segmented_k_splits",
+      "knobs": {"segment_sizes": [512, 1024, 2048, 4096], "phases": ["QKV", "gate/up", "o_proj", "down_proj", "lm_head"]},
+      "prior_evidence": "K=2048 segmentation of QKV+gate/up = +3.5% (24f167d L3); lm_head segmentation untried"
+    },
+    {
+      "axis": "lds_staging",
+      "knobs": {"per_warp_pool_kib": [0, 2, 4], "staging_order": ["row-major", "quad-stream"], "budget_watch": "32.9 -> 24.7 KiB observed; occupancy couples to LDS size"},
+      "prior_evidence": "L2 LDS pool = 1.086x"
+    },
+    {
+      "axis": "tile_shapes",
+      "knobs": {"workers": [8, 16, 32, 64], "rows_per_pass": "tune", "note": "workers <= max_co_resident (16 on dusk gfx1150; 64 compiled cap; ws_f_maxval[64])"},
+      "prior_evidence": "workers=16 optimal on mid (92.99 vs 111.67 at 8); full-config untested per workers"
+    },
+    {
+      "axis": "mixed_precision_boundaries",
+      "knobs": {"accum_dtypes": ["fp32 accum", "bf16 intermediate stores"], "kv_tiers": ["fp32-KV", "bf16-KV"], "boundaries": ["post-dequant", "post-accumulate", "store boundaries"]},
+      "constraint": "must stay inside rec-pp2 tiers + ppl <1%"
+    },
+    {
+      "axis": "barrier_structure",
+      "knobs": {"barriers_per_moe_layer": "4 (L1) -> fewer", "variants": ["per-WG top-K", "residual fused into gemv store"]},
+      "prior_evidence": "b5/b6 barrier cuts: 0.943x / 0.98-0.99x on mid — parked, revive on full config"
+    },
+    {
+      "axis": "code_size_runtime_flags",
+      "knobs": {"approach": "runtime flags preferred over template variants", "watch": "hot-code size tracked at 11.8k/13.1k/13.7k instructions"},
+      "prior_evidence": "megakernel speed tracks hot-code size (rec-9t8 close observation; I-cache suspected) — record instruction count per candidate"
+    }
+  ],
+  "pareto_front": {
+    "definition": "decode32 tok/s (short-ctx AND after-512, both axes) subject to hard gates; instruction count recorded as a secondary observation axis",
+    "current_front": [
+      {"candidate": "b7-chain/24f167d", "decode32_short4": "~207-209"}
+    ],
+    "promotion_rule": "front-best that passes gates becomes run-of-record; ties broken by lower code size"
+  },
+  "rejected": [],
+  "gate_review_owner": "Claude arm (w11:p1F) — gate definitions and any gate changes are reviewed by that lane before enforcement changes"
+}
