@@ -395,7 +395,7 @@ class CapExceeded(Exception):
 
 
 def window_bench(lib, cfg, bank, off, out_json: Path, workers: int, mode: int, pairs_n: int, override: bool,
-                 rows: list[str], budget_s: float, label: str) -> int:
+                 rows: list[str], budget_s: float, label: str, prefill_deadline_s: float = 420.0) -> int:
     """Bedivere M3.4 decode rows via KV CONTINUATION (M3.1): no launch exceeds CAP_S unless --override-approved.
 
     Per row: build the context (short: prompt4; ctx512: the rec-u9q seeded 512-token prompt) in continued
@@ -404,11 +404,19 @@ def window_bench(lib, cfg, bank, off, out_json: Path, workers: int, mode: int, p
     Each launch continues from the previous one (start_pos protocol), so depth drifts by ~pairs_n*(k+1); recorded."""
     t_begin = time.time()
     rng_prompt512 = np.random.default_rng(0).integers(3, VOCAB, size=512, dtype=np.int32)
+    rng_prompt8192 = np.random.default_rng(8192).integers(3, VOCAB, size=8192, dtype=np.int32)
+    prompts = {"short": [1, 5, 6, 7], "ctx512": rng_prompt512.tolist(), "ctx8192": rng_prompt8192.tolist()}
+    unknown = [r for r in rows if r not in prompts]
+    if unknown:
+        raise SystemExit(f"unknown rows {unknown}; choose from {list(prompts)}")
+    max_total = max(len(prompts[r]) for r in rows) + pairs_n * 34 + 64
     res = {"protocol": "M3 continuation-chunked decode differential (A={last}+1, B={last}+k), ABBA", "label": label,
            "config": cfg, "mode": mode, "workers": workers, "occupancy": occupancy(lib, mode), "cap_s": CAP_S,
            "override_approved": override, "bank_bytes": len(bank), "host": os.uname().nodename,
-           "prompt512_int32_sha256": hashlib.sha256(rng_prompt512.tobytes()).hexdigest(), "rows": {}}
-    sess = create_session(lib, cfg, bank, off, max_total=1024)
+           "prompt512_int32_sha256": hashlib.sha256(rng_prompt512.tobytes()).hexdigest(),
+           "prompt8192_int32_sha256": hashlib.sha256(rng_prompt8192.tobytes()).hexdigest(), "max_total": max_total,
+           "prefill_deadline_s": prefill_deadline_s, "rows": {}}
+    sess = create_session(lib, cfg, bank, off, max_total=max_total)
     launches = []
 
     def launch(prompt, n_out, start, tag):
@@ -429,7 +437,8 @@ def window_bench(lib, cfg, bank, off, out_json: Path, workers: int, mode: int, p
         dt5, _ = launch([1, 5, 6, 7], 1, 0, "probe5")
         t_pos = max(dt5 / 5.0, dt / 2.0)
         k = int(max(2, min(31, TARGET_S / t_pos - 1)))
-        proj = 516 * t_pos + 2 * pairs_n * (k + 3) * t_pos * len(rows) + 10.0
+        # prefill projected with 30 % growth allowance for depth (attention), + the pairs
+        proj = sum(1.3 * len(prompts[r]) * t_pos + 2 * pairs_n * (k + 3) * t_pos + 3 * pairs_n for r in rows) + 10.0
         res.update(t_pos_probe_s=round(t_pos, 5), k=k, projected_bench_s=round(proj, 1))
         log(f"probe: {t_pos * 1e3:.1f} ms/position -> k={k} (B launch ~{(k + 1) * t_pos:.3f} s); projected bench span "
             f"{proj:.0f} s (budget {budget_s:.0f} s) | {cotenants()}")
@@ -439,7 +448,8 @@ def window_bench(lib, cfg, bank, off, out_json: Path, workers: int, mode: int, p
             if time.time() - t_begin > budget_s:
                 log(f"budget reached, skipping row {row}")
                 break
-            prompt = [1, 5, 6, 7] if row == "short" else rng_prompt512.tolist()
+            prompt = prompts[row]
+            t_row0 = time.time()
             # prefill in continued launches, each re-sized from the previous one's measured per-position time
             # (per-position cost grows with depth: attention is serial over positions)
             start, t_pre, i, tp = 0, 0.0, 0, t_pos
@@ -448,7 +458,13 @@ def window_bench(lib, cfg, bank, off, out_json: Path, workers: int, mode: int, p
                 chunk = prompt[i:i + c]
                 last_chunk = i + len(chunk) >= len(prompt)
                 n = 1 if last_chunk else 0
+                if time.time() - t_row0 > prefill_deadline_s:
+                    raise CapExceeded(f"{row}: prefill deadline {prefill_deadline_s:.0f} s reached at position {start} "
+                                      f"of {len(prompt)} ({tp * 1e3:.1f} ms/position)")
                 dt, tok = launch(chunk, n, start, f"{row}/prefill")
+                if start and start % 1024 < len(chunk):
+                    log(f"{row}: prefill {start}/{len(prompt)} at {tp * 1e3:.2f} ms/position, "
+                        f"{time.time() - t_row0:.0f} s | {cotenants()}")
                 tp = max(tp, dt / (len(chunk) + n))
                 t_pre += dt
                 start += len(chunk)
@@ -547,6 +563,7 @@ def main(argv=None) -> int:
     ap.add_argument("--rows", default="ctx512,short")
     ap.add_argument("--pairs", type=int, default=8)
     ap.add_argument("--budget-s", type=float, default=480.0, help="bench span budget (ops_flint restart SLA)")
+    ap.add_argument("--prefill-deadline-s", type=float, default=420.0, help="abort a row whose prefill runs past this")
     ap.add_argument("--emit-spot", type=Path, help="fp32kv short4 spot npz for an offline CPU reference")
     ap.add_argument("--override-approved", action="store_true",
                     help="Alex's banned-launch override: allow launches > 0.25 s (window-bench only)")
@@ -581,7 +598,8 @@ def main(argv=None) -> int:
             return rc
     if a.window_bench:
         return window_bench(lib, cfg, bank, off, a.window_bench, a.workers, a.mode, a.pairs, a.override_approved,
-                            a.rows.split(","), a.budget_s, "REHEARSAL mid-8L" if a.rehearsal else "M3 window full Flint")
+                            a.rows.split(","), a.budget_s, "REHEARSAL mid-8L" if a.rehearsal else "M3 window full Flint",
+                            a.prefill_deadline_s)
     if a.emit_suite:
         return 1 if emit_suite(lib, cfg, bank, off, a.ckpt, a.emit_suite, a.workers,
                                a.builds.split(","), a.cases.split(",")) else 0

@@ -1,0 +1,3 @@
+13:39:38Z preflight 8k slot | 8080:000 8090:200 busy=3 MemAvailable=8.5GiB vram_free=37.7GiB
+6297889706cc4d549fcc0aeffae836b9ee31a1dee320747f8d97c861011d735e  /home/dusk/rec-ve/gepa/h/engine/native/megakernel_hip/flint_full.so
+13:45:45Z done rc=0 -> signal ops_flint to restart :8080 | 8080:000 8090:200 busy=41 MemAvailable=8.4GiB vram_free=37.7GiB

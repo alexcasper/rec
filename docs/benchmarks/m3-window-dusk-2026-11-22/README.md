@@ -9,7 +9,7 @@ on :8080, xh7-r5 procedure (random ids, cache off, 64 greedy, gpu_busy<5 x3 + id
 |---|---|---|---|
 | depth 512 | **34.40** (12/12 stable ABBA pairs, depth 512..572, pair range 33.0-36.2) | 29.09 / 29.05 / 29.12 ; 28.95 / 28.85 / 28.87 (mean 28.99) | **1.19x** |
 | short (depth 4..64) | 39.08 (12/12) | not measured (the shallowest incumbent row is depth 512) | n/a |
-| depth 8192 | not run (no ctx8k row staged) | 26.28 / 26.25 ; 26.16 / 26.35 | n/a |
+| depth 8192 (8k slot 13:39-13:46Z) | **21.35** (12/12 stable pairs, depth 8192..8228, k=2) | 26.17 / 26.28 ; 26.38 / 26.37 (mean 26.30; 12:22 window 26.28 / 26.25 ; 26.16 / 26.35) | **0.81x** |
 | prefill | 37 pos/s (serial decode-path prefill) | 448-456 (512), 441-443 (8192) | 0.08x |
 | weight footprint | 21.02 GiB (22.57 GB) INT4-affine g64 | 18.49 GB UD-Q3_K_XL | 1.22x bytes |
 
@@ -50,3 +50,18 @@ records the driver rc.
 Still missing on the megakernel side: depth 8192 (never staged). The serial decode-path prefill of 8192 positions at
 ~30-40 ms/position is ~4-6 min, so an 8k row needs a dedicated window slot (or a batched prefill path) to fit the
 ~8 min / 10 min SLA.
+
+## Depth-8192 slot (coordinator call, 2026-11-22 13:39-13:47Z)
+
+`scripts/m3_window8k_dusk.sh` with the fixed driver (4073d7d + ctx8192 row). No override; 1 process; preflight passed first
+read (need 21.86 GiB, 37.53 free). Bank streamed 9.0 s; serial prefill 8192 positions in 305.5 s (deadline 420 s): 28.7 ms/position
+at depth 0, 47.8 ms at depth 8192. 12/12 stable pairs, `flint:down,e4b:idle,qwen:down` on every pair, MemAvailable 8.3-8.4 GiB.
+Max launch 0.170 s; span 367 s. Pairs (tok/s): [23.54, 20.68, 21.93, 20.48, 22.53, 20.21, 21.85, 19.99, 23.36, 19.83, 22.4, 20.26]. AB ~22-23 vs BA ~20 is the order effect that ABBA averages out;
+k=2 (1-token difference) because B must stay <= 0.2 s at 47.8 ms/position.
+Timeline: pre-stop rows 13:38; :8080 DOWN 13:39:35Z (ops_flint); launch 13:39:38Z; DONE 13:45:45Z; health 200 13:46:28Z (dawn watcher);
+ops_flint in-band 26.32 decode / 442.95 prefill at depth 8192; post-restart rows 13:46-13:47. :8080 downtime 6m53s.
+
+Reading: decode at 8192 costs 46.8 ms/token vs 29.1 at 512 (+17.7 ms). The 14 full-attention layers read
+14 x 8192 x 4 kv-heads x 128 x 2 x 2 B ~ 235 MB/token of bf16 KV, ~3.4 ms at 70 GB/s. So the depth attention runs ~5x off the
+bandwidth roof: the split-K path is latency-bound (one position per warp-iteration with a 32-lane reduction, splits capped at
+min(16, groups/heads)). This is the lever for the 8k row, not the weights.

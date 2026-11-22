@@ -1,0 +1,39 @@
+2026-11-22T13:39:38Z offset table /home/dusk/xh7/flint-int4.off.npy
+2026-11-22T13:39:38Z lib flint_full.so cfg {'nl': 49, 'nexp': 256, 'topk': 6, 'n_dense': 2, 'dense_i': 6144, 'n_offsets': 837, 'n_full': 14, 'full': 1} | occupancy {'cus': 8, 'max_blocks_per_cu': 2, 'max_co_resident_workers': 16, 'wave_size': 32} | workers 16 | card /sys/class/drm/card1/device | flint:down,e4b:idle,qwen:down,gpu_busy=3,MemAvailable=8.4GiB
+2026-11-22T13:39:38Z VRAM preflight: need 21.86 GiB + 1.5 slack, sysfs free 37.53 GiB (waited 0.0 s) | flint:down,e4b:idle,qwen:down,gpu_busy=3,MemAvailable=8.4GiB
+2026-11-22T13:39:38Z bank stream   0.25/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=4,MemAvailable=8.1GiB
+2026-11-22T13:39:39Z bank stream   2.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=7,MemAvailable=8.1GiB
+2026-11-22T13:39:40Z bank stream   4.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=9,MemAvailable=8.1GiB
+2026-11-22T13:39:41Z bank stream   6.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=9,MemAvailable=8.0GiB
+2026-11-22T13:39:42Z bank stream   8.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=8.0GiB
+2026-11-22T13:39:42Z bank stream  10.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=8.0GiB
+2026-11-22T13:39:43Z bank stream  12.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=8.0GiB
+2026-11-22T13:39:44Z bank stream  14.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=8.0GiB
+2026-11-22T13:39:45Z bank stream  16.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=8.0GiB
+2026-11-22T13:39:46Z bank stream  18.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=8.0GiB
+2026-11-22T13:39:47Z bank stream  20.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=8.0GiB
+2026-11-22T13:39:47Z bank stream  21.02/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=8.0GiB
+2026-11-22T13:39:47Z session created in 9.0 s (bank 21.019 GiB streamed H2D, 2.33 GiB/s) | flint:down,e4b:idle,qwen:down,gpu_busy=10,MemAvailable=8.3GiB
+2026-11-22T13:39:50Z probe: 28.7 ms/position -> k=5 (B launch ~0.172 s); projected bench span 357 s (budget 480 s) | flint:down,e4b:idle,qwen:down,gpu_busy=19,MemAvailable=8.3GiB
+2026-11-22T13:40:19Z ctx8192: prefill 1025/8192 at 30.52 ms/position, 29 s | flint:down,e4b:idle,qwen:down,gpu_busy=95,MemAvailable=8.4GiB
+2026-11-22T13:40:52Z ctx8192: prefill 2051/8192 at 37.23 ms/position, 62 s | flint:down,e4b:idle,qwen:down,gpu_busy=94,MemAvailable=8.3GiB
+2026-11-22T13:41:26Z ctx8192: prefill 3075/8192 at 37.23 ms/position, 96 s | flint:down,e4b:idle,qwen:down,gpu_busy=94,MemAvailable=8.3GiB
+2026-11-22T13:42:03Z ctx8192: prefill 4099/8192 at 37.81 ms/position, 134 s | flint:down,e4b:idle,qwen:down,gpu_busy=94,MemAvailable=8.3GiB
+2026-11-22T13:42:43Z ctx8192: prefill 5121/8192 at 40.92 ms/position, 173 s | flint:down,e4b:idle,qwen:down,gpu_busy=94,MemAvailable=8.3GiB
+2026-11-22T13:43:25Z ctx8192: prefill 6144/8192 at 43.14 ms/position, 215 s | flint:down,e4b:idle,qwen:down,gpu_busy=94,MemAvailable=8.4GiB
+2026-11-22T13:44:09Z ctx8192: prefill 7170/8192 at 46.11 ms/position, 260 s | flint:down,e4b:idle,qwen:down,gpu_busy=94,MemAvailable=8.4GiB
+2026-11-22T13:44:56Z ctx8192: prefill 8192 pos in 305.52 s; 47.78 ms/position at depth 8192 -> k=2 | flint:down,e4b:idle,qwen:down,gpu_busy=95,MemAvailable=8.3GiB
+2026-11-22T13:45:02Z ctx8192 pair 0 AB: tA=0.0980 tB=0.1405 -> 23.54 tok/s depth 8195 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.3GiB
+2026-11-22T13:45:06Z ctx8192 pair 1 BA: tA=0.0945 tB=0.1428 -> 20.68 tok/s depth 8198 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.3GiB
+2026-11-22T13:45:10Z ctx8192 pair 2 AB: tA=0.0960 tB=0.1416 -> 21.93 tok/s depth 8201 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.3GiB
+2026-11-22T13:45:14Z ctx8192 pair 3 BA: tA=0.0942 tB=0.1430 -> 20.48 tok/s depth 8204 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.3GiB
+2026-11-22T13:45:17Z ctx8192 pair 4 AB: tA=0.0961 tB=0.1404 -> 22.53 tok/s depth 8207 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.4GiB
+2026-11-22T13:45:21Z ctx8192 pair 5 BA: tA=0.0937 tB=0.1431 -> 20.21 tok/s depth 8210 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.4GiB
+2026-11-22T13:45:25Z ctx8192 pair 6 AB: tA=0.0944 tB=0.1401 -> 21.85 tok/s depth 8213 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.4GiB
+2026-11-22T13:45:29Z ctx8192 pair 7 BA: tA=0.0939 tB=0.1439 -> 19.99 tok/s depth 8216 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.4GiB
+2026-11-22T13:45:33Z ctx8192 pair 8 AB: tA=0.0965 tB=0.1393 -> 23.36 tok/s depth 8219 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.4GiB
+2026-11-22T13:45:37Z ctx8192 pair 9 BA: tA=0.0938 tB=0.1442 -> 19.83 tok/s depth 8222 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.4GiB
+2026-11-22T13:45:41Z ctx8192 pair 10 AB: tA=0.0967 tB=0.1414 -> 22.4 tok/s depth 8225 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.3GiB
+2026-11-22T13:45:45Z ctx8192 pair 11 BA: tA=0.0942 tB=0.1436 -> 20.26 tok/s depth 8228 | flint:down,e4b:idle,qwen:down,gpu_busy=23,MemAvailable=8.3GiB
+2026-11-22T13:45:45Z ROW ctx8192: decode 21.35 tok/s (12/12 stable pairs, depth 8192..8228); prefill 8192 pos in 305.52 s | flint:down,e4b:idle,qwen:down,gpu_busy=22,MemAvailable=8.3GiB
+2026-11-22T13:45:45Z window bench ok | max launch 0.17041 s | span 367.0 s
