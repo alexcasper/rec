@@ -105,6 +105,24 @@
 #ifndef GEPA_ATTN_SPLIT
 #define GEPA_ATTN_SPLIT 0
 #endif
+// rec-e5d iter 2, candidate (2): GQA-shared split-K. Above GEPA_ATTN_SPLIT_MIN, one warp per (kv-head, position chunk)
+// computes ALL MID_HEADS/MID_NKV q-heads of that kv-head, so each K/V row is read once per kv-head instead of once per
+// q-head (8x less K/V traffic; at depth the per-q-head re-read is DRAM-bound). Partials + sink-aware merge as split-K.
+// GEPA_ATTN_LOP (candidate 1, lanes-over-positions, applies to the GEPA_ATTN_SPLIT path): 0 = one position per
+// warp-iteration (32-lane dot); 4 = 4 positions per iteration, 8 lanes x 16 dims each (3-step reduction), groups merged
+// at chunk end. (Not offered on the GQA path: 8 q-heads x 16 dims x {q, acc} per lane would spill.)
+#ifndef GEPA_ATTN_GQA
+#define GEPA_ATTN_GQA 0
+#endif
+#ifndef GEPA_ATTN_GQA_MAXCH
+#define GEPA_ATTN_GQA_MAXCH 32
+#endif
+#ifndef GEPA_ATTN_LOP
+#define GEPA_ATTN_LOP 0
+#endif
+#if GEPA_ATTN_GQA && GEPA_ATTN_SPLIT
+#error "GEPA_ATTN_GQA and GEPA_ATTN_SPLIT are alternative depth-attention paths"
+#endif
 #ifndef GEPA_ATTN_SPLIT_MIN
 #define GEPA_ATTN_SPLIT_MIN 64
 #endif
@@ -1290,7 +1308,92 @@ __device__ inline void mid_generate_impl(
 
             // ---- 6. Attention with Sinks (32 warps across workgroups, 1 q-head per warp) ----
             int t_start = is_sliding ? ((pos - (MID_WIN - 1) > 0) ? (pos - (MID_WIN - 1)) : 0) : 0;
-#if GEPA_ATTN_SPLIT
+#if GEPA_ATTN_GQA
+            const int n_ctx = pos - t_start + 1;
+            constexpr int GQ = MID_HEADS / MID_NKV;              // q-heads per kv-head (8)
+            const int n_ch = groups / MID_NKV < GEPA_ATTN_GQA_MAXCH ? groups / MID_NKV : GEPA_ATTN_GQA_MAXCH;
+            if (n_ctx > GEPA_ATTN_SPLIT_MIN && n_ch > 1) {       // uniform across workgroups -> extra barrier is safe
+                constexpr int PSTR = MID_HDIM + 2;                // per partial: acc[128], max, denom
+                static_assert(MID_HEADS * GEPA_ATTN_GQA_MAXCH * PSTR <= MID_VOCAB, "GQA partials overflow ws_f_logits");
+                float* const part = ws_f_logits;                  // [heads][n_ch][PSTR], free until lm_head
+                const int clen = (n_ctx + n_ch - 1) / n_ch;
+                for (int u = sg; u < MID_NKV * n_ch; u += groups) {
+                    const int kvh = u / n_ch, c = u % n_ch;
+                    const KVT* kc = l_kv + (0 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
+                    const KVT* vc = l_kv + (1 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
+                    const int ta = t_start + c * clen;
+                    const int tb = (ta + clen - 1 < pos) ? ta + clen - 1 : pos;
+                    float qreg[GQ][4], acc[GQ][4], hi[GQ], z[GQ];
+                    #pragma unroll
+                    for (int g = 0; g < GQ; ++g) {
+                        #pragma unroll
+                        for (int j = 0; j < 4; ++j) {
+                            float qv = ws_q[(size_t)(kvh * GQ + g) * MID_HDIM + lane * 4 + j];
+                            if constexpr (!PURE_FP32) qv = tofloat(tobf(qv));
+                            qreg[g][j] = qv * MID_ATTN_SCALE;
+                            acc[g][j] = 0.0f;
+                        }
+                        hi[g] = -INFINITY; z[g] = 0.0f;
+                    }
+                    for (int t = ta; t <= tb; ++t) {
+                        const size_t t_slot = is_sliding ? (size_t)(t % MID_WIN) : (size_t)t;
+                        const KVT* kt = kc + t_slot * MID_HDIM + lane * 4;
+                        const KVT* vt = vc + t_slot * MID_HDIM + lane * 4;
+                        float kf[4], vf[4];
+                        #pragma unroll
+                        for (int j = 0; j < 4; ++j) { kf[j] = kv_load<KVT, PURE_FP32>(kt[j]); vf[j] = kv_load<KVT, PURE_FP32>(vt[j]); }
+                        float sc[GQ];
+                        #pragma unroll
+                        for (int g = 0; g < GQ; ++g) {
+                            float partial = 0.0f;
+                            #pragma unroll
+                            for (int j = 0; j < 4; ++j) partial += qreg[g][j] * kf[j];
+                            sc[g] = simd_sum(partial);
+                        }
+                        #pragma unroll
+                        for (int g = 0; g < GQ; ++g) {
+                            if (sc[g] > hi[g]) {                   // same online update as split-K (no sink)
+                                const float f = expf(hi[g] - sc[g]);
+                                #pragma unroll
+                                for (int j = 0; j < 4; ++j) acc[g][j] = acc[g][j] * f + vf[j];
+                                z[g] = z[g] * f + 1.0f; hi[g] = sc[g];
+                            } else {
+                                const float f = expf(sc[g] - hi[g]);
+                                #pragma unroll
+                                for (int j = 0; j < 4; ++j) acc[g][j] += f * vf[j];
+                                z[g] += f;
+                            }
+                        }
+                    }
+                    #pragma unroll
+                    for (int g = 0; g < GQ; ++g) {
+                        float* pp = part + ((size_t)(kvh * GQ + g) * n_ch + c) * PSTR;
+                        #pragma unroll
+                        for (int j = 0; j < 4; ++j) pp[lane * 4 + j] = acc[g][j];
+                        if (lane == 0) { pp[MID_HDIM] = hi[g]; pp[MID_HDIM + 1] = z[g]; }
+                    }
+                }
+                SYNC_ALL();
+                for (int h = sg; h < MID_HEADS; h += groups) {  // merge: fold in the sink, normalise
+                    const float* ph = part + (size_t)h * n_ch * PSTR;
+                    float H = tofloat(sinks[h]);
+                    for (int c = 0; c < n_ch; ++c)
+                        if (ph[c * PSTR + MID_HDIM + 1] > 0.0f) H = fmaxf(H, ph[c * PSTR + MID_HDIM]);
+                    float Z = expf(tofloat(sinks[h]) - H), acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                    for (int c = 0; c < n_ch; ++c) {
+                        const float zc = ph[c * PSTR + MID_HDIM + 1];
+                        if (!(zc > 0.0f)) continue;
+                        const float w = expf(ph[c * PSTR + MID_HDIM] - H);
+                        Z += zc * w;
+                        #pragma unroll
+                        for (int j = 0; j < 4; ++j) acc[j] += ph[c * PSTR + lane * 4 + j] * w;
+                    }
+                    #pragma unroll
+                    for (int j = 0; j < 4; ++j)
+                        ws_attn[(size_t)h * MID_HDIM + lane * 4 + j] = acc[j] / Z;
+                }
+            } else
+#elif GEPA_ATTN_SPLIT
             const int n_ctx = pos - t_start + 1;
             const int n_split = groups / MID_HEADS < 16 ? groups / MID_HEADS : 16;
             if (n_ctx > GEPA_ATTN_SPLIT_MIN && n_split > 1) {   // uniform across workgroups -> the extra barrier is safe
@@ -1309,6 +1412,69 @@ __device__ inline void mid_generate_impl(
                         if constexpr (!PURE_FP32) qv = tofloat(tobf(qv));
                         qreg[j] = qv * MID_ATTN_SCALE;
                     }
+#if GEPA_ATTN_LOP == 4
+                    // candidate (1) lanes-over-positions: 4 positions per iteration, lane group pg = lane/8 takes t+pg,
+                    // sub-lane sl = lane%8 holds dims [sl*16, sl*16+16): 3-step reduction instead of 5; groups merged at
+                    // the end into the same per-(head, chunk) partial. qreg/acc of the 1-lane-4-dim form are unused.
+                    const int pg = lane >> 3, sl = lane & 7;
+                    float q16[16], a16[16];
+                    #pragma unroll
+                    for (int j = 0; j < 16; ++j) {
+                        float qv = ws_q[(size_t)h * MID_HDIM + sl * 16 + j];
+                        if constexpr (!PURE_FP32) qv = tofloat(tobf(qv));
+                        q16[j] = qv * MID_ATTN_SCALE;
+                        a16[j] = 0.0f;
+                    }
+                    float hi = -INFINITY, z = 0.0f;
+                    const int ta = t_start + c * clen;
+                    const int tb = (ta + clen - 1 < pos) ? ta + clen - 1 : pos;
+                    for (int t0 = ta; t0 <= tb; t0 += 4) {
+                        const int t = t0 + pg;
+                        const bool live = t <= tb;
+                        const int tt = live ? t : tb;
+                        const size_t t_slot = is_sliding ? (size_t)(tt % MID_WIN) : (size_t)tt;
+                        const KVT* kt = kc + t_slot * MID_HDIM + sl * 16;
+                        const KVT* vt = vc + t_slot * MID_HDIM + sl * 16;
+                        float partial = 0.0f;
+                        #pragma unroll
+                        for (int j = 0; j < 16; ++j) partial += q16[j] * kv_load<KVT, PURE_FP32>(kt[j]);
+                        partial += __shfl_xor_sync(0xffffffffffffffffull, partial, 4);
+                        partial += __shfl_xor_sync(0xffffffffffffffffull, partial, 2);
+                        partial += __shfl_xor_sync(0xffffffffffffffffull, partial, 1);
+                        if (live) {
+                            if (partial > hi) {
+                                const float f = expf(hi - partial);
+                                #pragma unroll
+                                for (int j = 0; j < 16; ++j) a16[j] = a16[j] * f + kv_load<KVT, PURE_FP32>(vt[j]);
+                                z = z * f + 1.0f; hi = partial;
+                            } else {
+                                const float f = expf(partial - hi);
+                                #pragma unroll
+                                for (int j = 0; j < 16; ++j) a16[j] += f * kv_load<KVT, PURE_FP32>(vt[j]);
+                                z += f;
+                            }
+                        }
+                    }
+                    {   // merge the 4 position groups into lanes of group 0, in the 1-lane-4-dim partial layout
+                        float H = hi;
+                        H = fmaxf(H, __shfl_xor_sync(0xffffffffffffffffull, H, 8));
+                        H = fmaxf(H, __shfl_xor_sync(0xffffffffffffffffull, H, 16));
+                        const float w = (z > 0.0f) ? expf(hi - H) : 0.0f;
+                        float zz = z * w;
+                        zz += __shfl_xor_sync(0xffffffffffffffffull, zz, 8);
+                        zz += __shfl_xor_sync(0xffffffffffffffffull, zz, 16);
+                        float* pp = part + (size_t)u * PSTR;
+                        #pragma unroll
+                        for (int j = 0; j < 16; ++j) {
+                            float a_ = a16[j] * w;
+                            a_ += __shfl_xor_sync(0xffffffffffffffffull, a_, 8);
+                            a_ += __shfl_xor_sync(0xffffffffffffffffull, a_, 16);
+                            if (pg == 0) pp[sl * 16 + j] = a_;
+                        }
+                        if (lane == 0) { pp[MID_HDIM] = H; pp[MID_HDIM + 1] = zz; }
+                    }
+                    (void)qreg; (void)acc;
+#else
                     float hi = -INFINITY, z = 0.0f;
                     const int ta = t_start + c * clen;
                     const int tb = (ta + clen - 1 < pos) ? ta + clen - 1 : pos;
@@ -1337,6 +1503,7 @@ __device__ inline void mid_generate_impl(
                     #pragma unroll
                     for (int j = 0; j < 4; ++j) pp[lane * 4 + j] = acc[j];
                     if (lane == 0) { pp[MID_HDIM] = hi; pp[MID_HDIM + 1] = z; }
+#endif
                 }
                 SYNC_ALL();
                 for (int h = sg; h < MID_HEADS; h += groups) {  // merge: fold in the sink, normalise
