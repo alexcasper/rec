@@ -1,0 +1,54 @@
+{
+ "schema": "rec-qgate-spec/1",
+ "version": 1,
+ "bead": "rec-1f4 Step 0",
+ "evalset": "eval_set_v1.json",
+ "evalset_sha256": "72209796906e20dbbb7e69619f98f8b9fae0817b050d35d0f4f82e256915f464",
+ "anchors": {
+  "reference_arithmetic": "2fd83cb (byte-identity / attribution anchor)",
+  "timing_baseline": "24f167d (byte-identical to 2fd83cb)",
+  "correctness_reference": "rec_mlx.torch_rocm fp32 compute, cpu, teacher-forced (spec (a) pin f0698a5)"
+ },
+ "T1_fp32kv": {
+  "rule": "ABSOLUTE: spec (a) PASS on every gen item",
+  "logit_rtol": 0.0001,
+  "tie_tol": 0.005,
+  "routing": "no deviation allowed (fp32-KV tier)"
+ },
+ "T2_fp32_bf16kv": {
+  "rule": "NO PER-ITEM REGRESSION vs the re-baseline: every item the baseline passes must pass; an item the baseline fails must keep step_rel <= factor x baseline and gain no new problem",
+  "logit_rtol": 0.001,
+  "tie_tol": 0.005,
+  "router_tie_tol": 0.00025,
+  "router_policy": "all-declared",
+  "baseline_fail_rel_factor": 1.5,
+  "why": "2fd83cb (signed-off arithmetic) fails the absolute bf16-KV tier on 1/32 eval items (plain/00 1.053e-3 > 1e-3, no token or routing problem); the tier recalibration is Alex's call, so v1 gates non-regression"
+ },
+ "T3_bf16kv_production": {
+  "reference": "fp32 compute, bf16 KV, FORCED to the kernel's own routing (step_experts) at every MoE (layer, position)",
+  "routing_dev_factor": 1.25,
+  "routing_dev_slack": 2,
+  "routing_gap_factor": 2.0,
+  "routing_gap_floor": 0.00025,
+  "step_rel_max_factor": 1.5,
+  "hard_disagreement_margin": 0.005,
+  "hard_disagreements_slack": 0,
+  "agreement_drop_max": 0.005,
+  "margin_bins": [
+   0,
+   0.001,
+   0.005,
+   0.02,
+   0.1,
+   1,
+   "inf"
+  ],
+  "why": "bf16 activations flip MoE routing on every item (unforced error 0.1-0.23 after a flip); routing flips and arithmetic error are gated separately so a regression is attributable"
+ },
+ "T4_ppl": {
+  "fp32kv_rel_vs_ref_max": 0.0001,
+  "bf16kv_rel_factor": 1.5,
+  "bf16kv_rel_floor": 0.0001
+ },
+ "verdict": "PASS iff every gate in `qgate.py compare` passes; free-running divergence vs the baseline is informational"
+}

@@ -1,0 +1,15 @@
+[23:22:25Z] emit base_2fd83cb (/home/dusk/rec-ve/6ob/s4/base/flint_mid.so) | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[23:22:33] gen fp32kv: 32 items, longest launch 0.215 s
+[23:22:39] gen fp32_bf16kv: 32 items, longest launch 0.225 s
+[23:22:45] gen bf16kv: 32 items, longest launch 0.225 s
+[23:23:07] ppl fp32kv: 8 items, longest launch 0.225 s
+[23:23:30] ppl bf16kv: 8 items, longest launch 0.225 s
+[23:23:30Z] emit base_2fd83cb exit 0 | busy=96 | flint:idle,e4b:idle,qwen:inactive
+[23:23:35Z] emit b7_24f167d (/home/dusk/rec-ve/6ob/s5/b7/flint_mid.so) | busy=4 | flint:idle,e4b:idle,qwen:inactive
+[23:23:42] gen fp32kv: 32 items, longest launch 0.197 s
+[23:23:48] gen fp32_bf16kv: 32 items, longest launch 0.197 s
+[23:23:53] gen bf16kv: 32 items, longest launch 0.197 s
+[23:24:13] ppl fp32kv: 8 items, longest launch 0.197 s
+[23:24:34] ppl bf16kv: 8 items, longest launch 0.197 s
+[23:24:34Z] emit b7_24f167d exit 0 | busy=96 | flint:idle,e4b:idle,qwen:inactive
+[23:24:34Z] DONE | busy=93 | flint:idle,e4b:idle,qwen:inactive

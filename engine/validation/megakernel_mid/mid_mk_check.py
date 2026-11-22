@@ -385,12 +385,20 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
     if kv_dtype not in ("fp32", "bf16"):
         return _report(path, {"case": case, "pass": False, "problems": [f"kv_dtype {kv_dtype!r}"]}, verbose)
     reference = Reference(ckpt, device, kv_dtype)
+    result = check_arrays(reference, d, prompt, tokens, kv_dtype, vocab, case)
+    return _report(path, result, verbose)
+
+
+def check_arrays(reference: Reference, d, prompt: list[int], tokens: list[int], kv_dtype: str, vocab: int,
+                 case: str) -> dict:
+    """The spec (a) verdict for one kernel output against an already-loaded reference (body of `check`,
+    shared with the rec-1f4 quality gate so one Reference serves many items)."""
     ref, gaps = reference.run(prompt, tokens)
     ev = _evaluate(d, ref, kv_dtype, vocab)
     stock_problems = list(ev["problems"])
     se, se_problems = step_experts_of(d, reference, len(prompt) + len(tokens))
     if se_problems:
-        return _report(path, {"case": case, "pass": False, "problems": se_problems}, verbose)
+        return {"case": case, "pass": False, "problems": se_problems}
     deviations, note, tried = None, None, 0
     if se is not None:  # preferred: the kernel names its routing; no search
         router, ref_s, ev_s, deviations, note = router_substitution_from_experts(
@@ -426,10 +434,12 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
         result["stock_problems"] = stock_problems
     if len(set(ref_tokens)) <= 2:
         result["warning"] = "reference trajectory nearly constant: degenerate case"
-    return _report(path, result, verbose)
+    result["_ref"] = ref  # final reference rows used for the verdict (popped by callers that serialise)
+    return result
 
 
 def _report(path, result, verbose):
+    result.pop("_ref", None)
     if verbose:
         print(json.dumps({"file": str(path), **result}, indent=1))
     return result

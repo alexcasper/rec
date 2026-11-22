@@ -1,0 +1,5 @@
+{
+ "evalset_sha256": "72209796906e20dbbb7e69619f98f8b9fae0817b050d35d0f4f82e256915f464",
+ "impl": "flint_mid.so sha256=2a7ec3a4a405a25ca55bc30b23040fadc34beda122fec9152fa1cc5ec5359424 workers=16",
+ "longest_launch_s": 0.22533566699712537
+}

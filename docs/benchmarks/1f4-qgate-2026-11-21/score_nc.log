@@ -1,0 +1,6 @@
+[   192s] fp32kv: spec(a) 31/32, step_rel_max 2.998e-04, forced-routing step_rel_max 2.998e-04, routing deviations 0 (non-k/k+1 0, max gap 0.00e+00), tf disagreements 0/768 (hard 0)
+[   386s] fp32_bf16kv: spec(a) 31/32, step_rel_max 1.053e-03, forced-routing step_rel_max 1.053e-03, routing deviations 4 (non-k/k+1 0, max gap 1.13e-04), tf disagreements 1/768 (hard 0)
+[   589s] bf16kv: spec(a) 0/32, step_rel_max 2.306e-01, forced-routing step_rel_max 2.170e-02, routing deviations 92 (non-k/k+1 0, max gap 1.74e-03), tf disagreements 1/768 (hard 0)
+ppl fp32kv: kernel 114092 ref 114115 rel -2.000e-04 max|dlogp| 2.015e-04
+ppl bf16kv: kernel 114217 ref 114296 rel -6.881e-04 max|dlogp| 2.733e-01
+wrote /home/dawn/rec-data/qgate/report_nc_base.json (628 s)
