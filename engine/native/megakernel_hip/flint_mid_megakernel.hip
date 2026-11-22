@@ -91,6 +91,16 @@
 #ifndef GEPA_GEN_DIST2
 #define GEPA_GEN_DIST2 0
 #endif
+// rec-fut run 4 (byte-identical):
+//   GEPA_ACTX:   MoE act fused into the down gemvs' x-load (x = act(gate, up) computed at load with the act phase's
+//                exact formula); the act phase and its grid barrier disappear, no LDS buffer.
+//   GEPA_SHRINK: partial-quad tail paths (never taken on mid/full shapes) moved out of line -> smaller hot stream.
+#ifndef GEPA_ACTX
+#define GEPA_ACTX 0
+#endif
+#ifndef GEPA_SHRINK
+#define GEPA_SHRINK 0
+#endif
 #define GEPA_STR(x) #x
 #define GEPA_UNROLL(n) _Pragma(GEPA_STR(unroll n))
 #if GEPA_RESID_FUSE
@@ -184,6 +194,41 @@ __device__ inline float load16_bf(const bf16* x, float* v) {
         v[i + 3] = x3 * (1.0f / 4096.0f);
     }
     return sum;
+}
+
+// x element for a gemv: XU == 0 -> x[i]; XU > 0 -> MoE act of (gate = x[i], up = x[i + XU]) with the act phase's
+// exact formula (XPURE: fp32 path; else the bf16-rounded path).
+template <int XU, bool XPURE>
+__device__ inline float xval(const float* x, int i) {
+    #pragma clang fp contract(off)   // the act phase stores act before any add: never fuse it into the caller's sums
+    if constexpr (XU == 0) {
+        return x[i];
+    } else if constexpr (XPURE) {
+        return silu_f(x[i]) * x[i + XU];
+    } else {
+        bf16 act = tobf(silu_f(tofloat(tobf(x[i]))) * tofloat(tobf(x[i + XU])));
+        return tofloat(act);
+    }
+}
+template <int XU, bool XPURE>
+__device__ inline float load16_x(const float* x, float* v) {
+    #pragma clang fp contract(off)
+    if constexpr (XU == 0) {
+        return load16_f(x, v);
+    } else {
+        float sum = 0.0f;
+        #pragma unroll
+        for (int i = 0; i < 16; i += 4) {
+            float x0 = xval<XU, XPURE>(x, i), x1 = xval<XU, XPURE>(x, i + 1);
+            float x2 = xval<XU, XPURE>(x, i + 2), x3 = xval<XU, XPURE>(x, i + 3);
+            sum += x0 + x1 + x2 + x3;
+            v[i]     = x0;
+            v[i + 1] = x1 * (1.0f / 16.0f);
+            v[i + 2] = x2 * (1.0f / 256.0f);
+            v[i + 3] = x3 * (1.0f / 4096.0f);
+        }
+        return sum;
+    }
 }
 
 // rec-6ob (option A, explicit contraction): the q4 dot product's floating-point graph is spelled out
@@ -363,7 +408,33 @@ __device__ inline void q4_gemv_cat2048(const Q4Cat& c, const float* __restrict__
     }
 }
 
-template <int K, bool ROUND_BF16 = false, int GM = 0, int LDT = 1>
+// Partial-quad rows (n % 4 != 0), unstaged, blocks in order: the exact arithmetic of the in-line tails.
+// GEPA_SHRINK calls this out of line so the never-taken tails leave the hot instruction stream.
+template <int K, bool ROUND_BF16, int XU, bool XPURE>
+__device__ __attribute__((noinline)) void q4_rows_tail(const uint8_t* __restrict__ w, const bf16* __restrict__ s,
+                                                       const bf16* __restrict__ b, const float* __restrict__ x,
+                                                       bf16* __restrict__ out_bf, float* __restrict__ out_f,
+                                                       int row0, int row1, int lane GEPA_ACC_DECL) {
+    #pragma unroll 1
+    for (int row = row0; row < row1; ++row) {
+        float acc = 0.0f;
+        #pragma unroll 1
+        for (int block = 0; block < K; block += 512) {
+            int scalar = block + lane * 16;
+            float v[16];
+            float sum = load16_x<XU, XPURE>(x + scalar, v);
+            int gi = row * (K / 64) + scalar / 64;
+            acc += dot16(w + (size_t)row * (K / 2) + scalar / 2, v, tofloat(s[gi]), tofloat(b[gi]), sum);
+        }
+        float val = simd_sum(acc);
+        if (lane == 0) {
+            if (out_bf) out_bf[row] = tobf(val);
+            if (out_f)  GEPA_OUT(out_f, row, ROUND_BF16 ? tofloat(tobf(val)) : val);
+        }
+    }
+}
+
+template <int K, bool ROUND_BF16 = false, int GM = 0, int LDT = 1, int XU = 0, bool XPURE = false>
 __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         const bf16* __restrict__ s,
                                         const bf16* __restrict__ b,
@@ -512,7 +583,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
         {
             const int scalar = lane * 16;
             float v[16];
-            const float sum = load16_f(x + scalar, v);
+            const float sum = load16_x<XU, XPURE>(x + scalar, v);
             int first = sg * 8;
             for (; first + 8 <= n; first += groups * 8) {
                 __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
@@ -560,11 +631,26 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
         }
         if (false)
 #endif
+        float hv[16], hsum = 0.0f;               // GEPA_ACTX: the lane's x slice is quad-invariant -> act once
+        if constexpr (XU != 0) hsum = load16_x<XU, XPURE>(x + lane * 16, hv);
         for (int first = sg * 4; first < n; first += groups * 4) {
             float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
             int scalar = lane * 16;
             float v[16];
-            float sum = load16_f(x + scalar, v);
+            float sum;
+            if constexpr (XU != 0) {
+                sum = hsum;
+                #pragma unroll
+                for (int i = 0; i < 16; ++i) v[i] = hv[i];
+            } else {
+                sum = load16_f(x + scalar, v);
+            }
+#if GEPA_SHRINK
+            if (first + 4 > n) {
+                q4_rows_tail<K, ROUND_BF16, XU, XPURE>(w, s, b, x, out_bf, out_f, first, n, lane GEPA_ACC_ARG);
+                continue;
+            }
+#endif
             if (first + 4 <= n) {
                 q4_stage_block(w, (size_t)(K / 2), first, 0, lane, lds);
                 float sc[4], bi[4];
@@ -626,7 +712,10 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 ss[r] = ((const uint16_t*)s)[(f + r) * G + gl];
                 bb[r] = ((const uint16_t*)b)[(f + r) * G + gl];
             }
-            if constexpr (GEPA_GEN_PREFETCH_X) {
+            if constexpr (GEPA_GEN_PREFETCH_X && XU != 0) {
+                #pragma unroll
+                for (int i = 0; i < 16; ++i) xx[i] = xval<XU, XPURE>(x + j * 512 + lane * 16, i);
+            } else if constexpr (GEPA_GEN_PREFETCH_X) {
                 const float4* xp = (const float4*)(x + j * 512 + lane * 16);
                 #pragma unroll
                 for (int i = 0; i < 4; ++i) {
@@ -678,7 +767,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 if (v2) ld_wsb(f2, j2, r2w0, r2w1, r2s, r2b);
                 // compute stage t (x at use; pre-scale exactly as load16_f)
                 float v[16];
-                const float sum = load16_f(x + tj * 512 + lane * 16, v);
+                const float sum = load16_x<XU, XPURE>(x + tj * 512 + lane * 16, v);
                 const uint8_t* cur = pool + par * 1024;
                 #pragma unroll
                 for (int r = 0; r < 4; ++r) {
@@ -729,7 +818,10 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 uint16_t ns[4], nb[4];
                 float nx[16];
                 if (pf) load_stage(last ? nfirst : first, last ? 0 : j + 1, cw0, cw1, ns, nb, nx);
-                if constexpr (!GEPA_GEN_PREFETCH_X) {   // x at use (same values as the prefetched copy)
+                if constexpr (!GEPA_GEN_PREFETCH_X && XU != 0) {
+                    #pragma unroll
+                    for (int i = 0; i < 16; ++i) cx[i] = xval<XU, XPURE>(x + j * 512 + lane * 16, i);
+                } else if constexpr (!GEPA_GEN_PREFETCH_X) {   // x at use (same values as the prefetched copy)
                     const float4* xp = (const float4*)(x + j * 512 + lane * 16);
                     #pragma unroll
                     for (int i = 0; i < 4; ++i) {
@@ -779,6 +871,11 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
         }
         // partial trailing quad (n % 4 != 0): unstaged, one row at a time, blocks in order (as before)
         for (; first < n; first += step) {
+#if GEPA_SHRINK
+            q4_rows_tail<K, ROUND_BF16, XU, XPURE>(w, s, b, x, out_bf, out_f, first, first + 4 < n ? first + 4 : n, lane
+                                                  GEPA_ACC_ARG);
+            continue;
+#endif
             #pragma unroll 1
             for (int row = first; row < first + 4 && row < n; ++row) {
                 float acc = 0.0f;
@@ -786,7 +883,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 for (int block = 0; block < K; block += 512) {
                     int scalar = block + lane * 16;
                     float v[16];
-                    float sum = load16_f(x + scalar, v);
+                    float sum = load16_x<XU, XPURE>(x + scalar, v);
                     int gi = row * (K / 64) + scalar / 64;
                     acc += dot16(w + (size_t)row * (K / 2) + scalar / 2, v, tofloat(s[gi]), tofloat(b[gi]), sum);
                 }
@@ -1367,6 +1464,9 @@ __device__ inline void mid_generate_impl(
                 }
                 __syncthreads();
                 const float* act_src = sh_xn;
+#elif GEPA_ACTX
+                static_assert(!GEPA_DOWNCAT, "ACTX and DOWNCAT are exclusive");
+                const float* act_src = nullptr;   // down gemvs compute act(gate, up) in their x-load
 #else
                 for (int i = gtid; i < MOE_ACT_N; i += gthreads) {
                     if constexpr (PURE_FP32) {
@@ -1417,11 +1517,23 @@ __device__ inline void mid_generate_impl(
                     int e = GEPA_SEL(t);
                     size_t dw_off = (size_t)e * MID_HID * (MID_MOE_I / 2);
                     size_t ds_off = (size_t)e * MID_HID * (MID_MOE_I / 64);
+#if GEPA_ACTX
+                    flint_q4_gemv_op<MID_MOE_I, false, 0, 1, MID_FFN_MAX, PURE_FP32>(
+                        sw_dw + dw_off, sw_ds + ds_off, sw_db + ds_off, ws_gate + t * MID_MOE_I, nullptr, ws_down + t * MID_HID,
+                        MID_HID, lane, sg, groups);
+#else
                     q4_block512<MID_MOE_I>(sw_dw + dw_off, sw_ds + ds_off, sw_db + ds_off,
                                            act_src + t * MID_MOE_I, nullptr, ws_down + t * MID_HID, MID_HID, lane, sg, groups);
+#endif
                 }
+#if GEPA_ACTX
+                flint_q4_gemv_op<MID_SH_I, false, 0, 1, MID_FFN_MAX, PURE_FP32>(
+                    Q_W(qbase + 9), Q_S(qbase + 9, MID_HID, MID_SH_I), Q_B(qbase + 9, MID_HID, MID_SH_I), ws_gate + MOE_SH0,
+                    nullptr, ws_down + MID_TOPK * MID_HID, MID_HID, lane, sg, groups);
+#else
                 q4_block512<MID_SH_I>(Q_W(qbase + 9), Q_S(qbase + 9, MID_HID, MID_SH_I), Q_B(qbase + 9, MID_HID, MID_SH_I),
                                       act_src + MOE_SH0, nullptr, ws_down + MID_TOPK * MID_HID, MID_HID, lane, sg, groups);
+#endif
                 SYNC_ALL();
 
                 if constexpr (MID_TOPK == 2) {
