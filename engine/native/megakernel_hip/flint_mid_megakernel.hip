@@ -21,6 +21,36 @@
 #include <cstdio>
 #include <cmath>
 
+// ---- rec-ohs GEPA search knobs: compile-time -D flags, ONE instantiation per build (no template variants,
+// per the rec-9t8 I-cache observation). Defaults reproduce 24f167d exactly (verified: default build npz
+// byte-identical to 24f167d). Driver: scripts/gepa_kernel_search.py; knob space: KNOBS there.
+#ifndef GEPA_GEN_UNROLL        // generic-K pipelined stage loop unroll (1 = 24f167d)
+#define GEPA_GEN_UNROLL 1
+#endif
+#ifndef GEPA_K512_PIPE         // 1: K=512 uses the pipelined stream instead of VCgen single-stage staging
+#define GEPA_K512_PIPE 0
+#endif
+#ifndef GEPA_GEN_PREFETCH_X    // 0: generic path loads x at use instead of one stage ahead (-16 VGPR in flight)
+#define GEPA_GEN_PREFETCH_X 1
+#endif
+#ifndef GEPA_TOPK_PER_WG       // 1: every WG computes the MoE top-K itself (grid barrier -> __syncthreads)
+#define GEPA_TOPK_PER_WG 0
+#endif
+#ifndef GEPA_RESID_FUSE        // 1: O-proj / dense-down residual add fused into the gemv store (-1 barrier/layer)
+#define GEPA_RESID_FUSE 0
+#endif
+#define GEPA_STR(x) #x
+#define GEPA_UNROLL(n) _Pragma(GEPA_STR(unroll n))
+#if GEPA_RESID_FUSE
+#define GEPA_ACC_DECL , bool gepa_acc = false
+#define GEPA_ACC_ARG , gepa_acc
+#define GEPA_OUT(p, i, v) ((p)[i] = gepa_acc ? (p)[i] + (v) : (v))
+#else
+#define GEPA_ACC_DECL
+#define GEPA_ACC_ARG
+#define GEPA_OUT(p, i, v) ((p)[i] = (v))
+#endif
+
 typedef __hip_bfloat16 bf16;
 
 __device__ inline float tofloat(bf16 v) { return __bfloat162float(v); }
@@ -196,7 +226,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         bf16* __restrict__ out_bf,
                                         float* __restrict__ out_f,
                                         int n, int lane, int sg, int groups,
-                                        const Q4Seg* segs = nullptr, int nseg = 0) {
+                                        const Q4Seg* segs = nullptr, int nseg = 0 GEPA_ACC_DECL) {
     static_assert(K % 512 == 0, "flint_q4_gemv_op requires K % 512 == 0");
     if constexpr (K == 2048) {
         float v0[16], v1[16], v2[16], v3[16];
@@ -245,13 +275,13 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                     float val = simd_sum(a[r]);
                     if (lane == 0 && first + r < N) {
                         if (OB) OB[first + r] = tobf(val);
-                        if (OF) OF[first + r] = ROUND_BF16 ? tofloat(tobf(val)) : val;
+                        if (OF) GEPA_OUT(OF, first + r, ROUND_BF16 ? tofloat(tobf(val)) : val);
                     }
                 }
             }
             base += nq;
         }
-    } else if constexpr (K == 512) {
+    } else if constexpr (K == 512 && !GEPA_K512_PIPE) {
         // One 512-element block per row: a stage is a whole quad, so pipelining buys only a prologue
         // (measured 0.91x standalone, rec-9t8 b3). Keep the VCgen single-stage staging (39629e7).
         uint8_t* const lds = q4_gen_pool(sg % 8);
@@ -290,7 +320,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 float val = simd_sum(a[r]);
                 if (lane == 0 && first + r < n) {
                     if (out_bf) out_bf[first + r] = tobf(val);
-                    if (out_f)  out_f[first + r]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
+                    if (out_f)  GEPA_OUT(out_f, first + r, ROUND_BF16 ? tofloat(tobf(val)) : val);
                 }
             }
         }
@@ -321,11 +351,13 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 ss[r] = ((const uint16_t*)s)[(f + r) * G + gl];
                 bb[r] = ((const uint16_t*)b)[(f + r) * G + gl];
             }
-            const float4* xp = (const float4*)(x + j * 512 + lane * 16);
-            #pragma unroll
-            for (int i = 0; i < 4; ++i) {
-                float4 t4 = xp[i];
-                xx[4 * i] = t4.x; xx[4 * i + 1] = t4.y; xx[4 * i + 2] = t4.z; xx[4 * i + 3] = t4.w;
+            if constexpr (GEPA_GEN_PREFETCH_X) {
+                const float4* xp = (const float4*)(x + j * 512 + lane * 16);
+                #pragma unroll
+                for (int i = 0; i < 4; ++i) {
+                    float4 t4 = xp[i];
+                    xx[4 * i] = t4.x; xx[4 * i + 1] = t4.y; xx[4 * i + 2] = t4.z; xx[4 * i + 3] = t4.w;
+                }
             }
         };
         auto put_stage = [&](uint8_t* buf, const uint4& w0, const uint4& w1) {
@@ -346,13 +378,21 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
             const int nfirst = first + step;
             const bool nfull = nfirst + 4 <= n;
             float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-            #pragma unroll 1
+            GEPA_UNROLL(GEPA_GEN_UNROLL)
             for (int j = 0; j < NB; ++j) {
                 const bool last = j + 1 == NB;
                 const bool pf = !last || nfull;
                 uint16_t ns[4], nb[4];
                 float nx[16];
                 if (pf) load_stage(last ? nfirst : first, last ? 0 : j + 1, cw0, cw1, ns, nb, nx);
+                if constexpr (!GEPA_GEN_PREFETCH_X) {   // x at use (same values as the prefetched copy)
+                    const float4* xp = (const float4*)(x + j * 512 + lane * 16);
+                    #pragma unroll
+                    for (int i = 0; i < 4; ++i) {
+                        float4 t4 = xp[i];
+                        cx[4 * i] = t4.x; cx[4 * i + 1] = t4.y; cx[4 * i + 2] = t4.z; cx[4 * i + 3] = t4.w;
+                    }
+                }
                 // compute stage t: pre-scale exactly as load16_f
                 float v[16];
                 float sum = 0.0f;
@@ -377,8 +417,10 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                     put_stage(pool + (par ^ 1) * 1024, cw0, cw1);
                     #pragma unroll
                     for (int r = 0; r < 4; ++r) { cs[r] = ns[r]; cb[r] = nb[r]; }
-                    #pragma unroll
-                    for (int i = 0; i < 16; ++i) cx[i] = nx[i];
+                    if constexpr (GEPA_GEN_PREFETCH_X) {
+                        #pragma unroll
+                        for (int i = 0; i < 16; ++i) cx[i] = nx[i];
+                    }
                 }
                 par ^= 1;
             }
@@ -387,7 +429,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 float val = simd_sum(a[r]);
                 if (lane == 0) {
                     if (out_bf) out_bf[first + r] = tobf(val);
-                    if (out_f)  out_f[first + r]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
+                    if (out_f)  GEPA_OUT(out_f, first + r, ROUND_BF16 ? tofloat(tobf(val)) : val);
                 }
             }
         }
@@ -407,7 +449,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 float val = simd_sum(acc);
                 if (lane == 0) {
                     if (out_bf) out_bf[row] = tobf(val);
-                    if (out_f)  out_f[row]  = ROUND_BF16 ? tofloat(tobf(val)) : val;
+                    if (out_f)  GEPA_OUT(out_f, row, ROUND_BF16 ? tofloat(tobf(val)) : val);
                 }
             }
         }
@@ -417,8 +459,8 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
 template <int K, bool ROUND_BF16 = false>
 __device__ inline void q4_block512(const uint8_t* w, const bf16* s, const bf16* b,
                                    const float* x, bf16* out_bf, float* out_f,
-                                   int n, int lane, int sg, int groups) {
-    flint_q4_gemv_op<K, ROUND_BF16>(w, s, b, x, out_bf, out_f, n, lane, sg, groups);
+                                   int n, int lane, int sg, int groups GEPA_ACC_DECL) {
+    flint_q4_gemv_op<K, ROUND_BF16>(w, s, b, x, out_bf, out_f, n, lane, sg, groups, nullptr, 0 GEPA_ACC_ARG);
 }
 
 // ---- Model config (rec-u9q): FLINT_CFG_FULL=0 -> mid-8L (default, run-of-record d1f6208),
@@ -790,12 +832,18 @@ __device__ inline void mid_generate_impl(
             SYNC_ALL();
 
             // ---- 7. O projection (K=4096 -> N=2048) + residual ----
+#if GEPA_RESID_FUSE
+            q4_block512<MID_QDIM>(Q_W(qbase + 3), Q_S(qbase + 3, MID_HID, MID_QDIM), Q_B(qbase + 3, MID_HID, MID_QDIM),
+                                  ws_attn, nullptr, ws_x, MID_HID, lane, sg, groups, true);
+            SYNC_ALL();
+#else
             q4_block512<MID_QDIM>(Q_W(qbase + 3), Q_S(qbase + 3, MID_HID, MID_QDIM), Q_B(qbase + 3, MID_HID, MID_QDIM),
                                   ws_attn, nullptr, ws_o, MID_HID, lane, sg, groups);
             SYNC_ALL();
             for (int i = gtid; i < MID_HID; i += gthreads)
                 ws_x[i] += ws_o[i];
             SYNC_ALL();
+#endif
 
             // ---- 8. Post-attention RMSNorm -> sh_xn ----
             mid_rmsnorm_2048(ws_x, post_w, sh_xn, sh_red);
@@ -820,12 +868,18 @@ __device__ inline void mid_generate_impl(
                     }
                 }
                 SYNC_ALL();
+#if GEPA_RESID_FUSE
+                q4_block512<MID_DENSE_I>(Q_W(qbase + 6), Q_S(qbase + 6, MID_HID, MID_DENSE_I), Q_B(qbase + 6, MID_HID, MID_DENSE_I),
+                                         ws_f_act, nullptr, ws_x, MID_HID, lane, sg, groups, true);
+                SYNC_ALL();
+#else
                 q4_block512<MID_DENSE_I>(Q_W(qbase + 6), Q_S(qbase + 6, MID_HID, MID_DENSE_I), Q_B(qbase + 6, MID_HID, MID_DENSE_I),
                                          ws_f_act, nullptr, ws_down, MID_HID, lane, sg, groups);
                 SYNC_ALL();
                 for (int i = gtid; i < MID_HID; i += gthreads)
                     ws_x[i] += ws_down[i];
                 SYNC_ALL();
+#endif
             } else {
                 // MoE router: 32 experts, 1 warp per expert (sg < 32)
                 for (int e = sg; e < MID_NEXP; e += groups) {
@@ -843,7 +897,16 @@ __device__ inline void mid_generate_impl(
                     }
                 }
                 SYNC_ALL();
-                if (group == 0 && tid == 0) {
+#if GEPA_TOPK_PER_WG
+                __shared__ int   sh_sel[MID_TOPK];
+                __shared__ float sh_wsel[MID_TOPK];
+#define GEPA_SEL(t) sh_sel[t]
+#define GEPA_WSEL(t) sh_wsel[t]
+#else
+#define GEPA_SEL(t) ws_i_sel[t]
+#define GEPA_WSEL(t) ws_f_wsel[t]
+#endif
+                if (GEPA_TOPK_PER_WG ? tid == 0 : (group == 0 && tid == 0)) {
                     // top-K by insertion, strict '>' (an equal later expert never displaces an
                     // earlier one): for TOPK == 2 this is exactly the original two-slot update.
                     int   ti[MID_TOPK];
@@ -856,24 +919,30 @@ __device__ inline void mid_generate_impl(
                         while (p > 0 && choice > tv[p - 1]) { tv[p] = tv[p - 1]; ti[p] = ti[p - 1]; --p; }
                         tv[p] = choice; ti[p] = e;
                     }
-                    for (int t = 0; t < MID_TOPK; ++t) ws_i_sel[t] = ti[t];
-                    if (out_chosen_experts != nullptr) {
+                    for (int t = 0; t < MID_TOPK; ++t) GEPA_SEL(t) = ti[t];
+                    if (GEPA_TOPK_PER_WG && group == 0) for (int t = 0; t < MID_TOPK; ++t) ws_i_sel[t] = ti[t];
+                    if (group == 0 && out_chosen_experts != nullptr) {
                         int* exp_dst = out_chosen_experts + ((size_t)pos * MID_NL + layer) * MID_TOPK;
                         for (int t = 0; t < MID_TOPK; ++t) exp_dst[t] = ti[t];
                     }
                     if constexpr (MID_TOPK == 2) {
                         float s0 = ws_f_scores[ti[0]], s1 = ws_f_scores[ti[1]];
                         float wsum = s0 + s1 + 1e-20f;
-                        ws_f_wsel[0] = s0 / wsum;
-                        ws_f_wsel[1] = s1 / wsum;
+                        GEPA_WSEL(0) = s0 / wsum;
+                        GEPA_WSEL(1) = s1 / wsum;
                     } else {
                         float wsum = 0.0f;
                         for (int t = 0; t < MID_TOPK; ++t) wsum += ws_f_scores[ti[t]];
                         wsum += 1e-20f;
-                        for (int t = 0; t < MID_TOPK; ++t) ws_f_wsel[t] = ws_f_scores[ti[t]] / wsum;
+                        for (int t = 0; t < MID_TOPK; ++t) GEPA_WSEL(t) = ws_f_scores[ti[t]] / wsum;
                     }
+                    if (GEPA_TOPK_PER_WG && group == 0) for (int t = 0; t < MID_TOPK; ++t) ws_f_wsel[t] = GEPA_WSEL(t);
                 }
+#if GEPA_TOPK_PER_WG
+                __syncthreads();
+#else
                 SYNC_ALL();
+#endif
 
                 // Routed top-2 experts (MOE_I = 512, HID = 2048)
                 const uint8_t* sw_gw = Q_W(qbase + 4);
@@ -895,7 +964,7 @@ __device__ inline void mid_generate_impl(
                 constexpr int MOE_ACT_N = MOE_SH0 + MID_SH_I;
                 // rec-9t8 3b: all routed gate/up + shared gate/up as one segmented K=2048 gemv
                 if (tid < MID_TOPK) {
-                    int t = tid, e = ws_i_sel[t];
+                    int t = tid, e = GEPA_SEL(t);
                     // Expert strides: bytes for packed uint8*, ELEMENTS for bf16* scales/biases
                     size_t gw_off = (size_t)e * MID_MOE_I * (MID_HID / 2);
                     size_t gs_off = (size_t)e * MID_MOE_I * (MID_HID / 64);
@@ -922,7 +991,7 @@ __device__ inline void mid_generate_impl(
                 }
                 SYNC_ALL();
                 for (int t = 0; t < MID_TOPK; ++t) {
-                    int e = ws_i_sel[t];
+                    int e = GEPA_SEL(t);
                     size_t dw_off = (size_t)e * MID_HID * (MID_MOE_I / 2);
                     size_t ds_off = (size_t)e * MID_HID * (MID_MOE_I / 64);
                     q4_block512<MID_MOE_I>(sw_dw + dw_off, sw_ds + ds_off, sw_db + ds_off,
@@ -933,13 +1002,13 @@ __device__ inline void mid_generate_impl(
                 SYNC_ALL();
 
                 if constexpr (MID_TOPK == 2) {
-                    float w0 = ws_f_wsel[0], w1 = ws_f_wsel[1];
+                    float w0 = GEPA_WSEL(0), w1 = GEPA_WSEL(1);
                     for (int i = gtid; i < MID_HID; i += gthreads) {
                         ws_x[i] += w0 * ws_down[i] + w1 * ws_down[MID_HID + i] + ws_down[2 * MID_HID + i];
                     }
                 } else {
                     float wt[MID_TOPK];
-                    for (int t = 0; t < MID_TOPK; ++t) wt[t] = ws_f_wsel[t];
+                    for (int t = 0; t < MID_TOPK; ++t) wt[t] = GEPA_WSEL(t);
                     for (int i = gtid; i < MID_HID; i += gthreads) {
                         float acc = 0.0f;
                         #pragma unroll

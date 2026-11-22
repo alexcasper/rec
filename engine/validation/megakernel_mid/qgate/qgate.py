@@ -103,7 +103,10 @@ def cmd_emit(a) -> int:
         return toks, sl, ll, ex
 
     impl = f"{a.so.name} sha256={file_sha(a.so)} workers={a.workers}"
+    parts = set(a.parts.split(","))
     for b, (mode, kv) in GEN_BUILDS.items():
+        if "gen" not in parts:
+            break
         for it in ev["gen_items"]:
             toks, sl, ll, ex = launch(it["prompt"], it["n_out"], mode, True)
             np.savez(a.out / f"gen__{it['id'].replace('/', '__')}__{b}.npz", schema=np.array("rec-mk-out/1"),
@@ -113,6 +116,8 @@ def cmd_emit(a) -> int:
         print(f"[{time.strftime('%H:%M:%S')}] gen {b}: {len(ev['gen_items'])} items, longest launch "
               f"{longest[0]:.3f} s", flush=True)
     for b in PPL_BUILDS:
+        if "ppl" not in parts:
+            break
         mode = GEN_BUILDS[b][0]
         logp, top1, rowmax = [], [], []
         for it in ev["ppl_items"]:
@@ -132,7 +137,7 @@ def cmd_emit(a) -> int:
         print(f"[{time.strftime('%H:%M:%S')}] ppl {b}: {len(ev['ppl_items'])} items, longest launch "
               f"{longest[0]:.3f} s", flush=True)
     lib.mid_session_free(sess)
-    (a.out / "emit.json").write_text(json.dumps({"evalset_sha256": ev["sha256"], "impl": impl,
+    (a.out / "emit.json").write_text(json.dumps({"evalset_sha256": ev["sha256"], "impl": impl, "parts": sorted(parts),
                                                  "longest_launch_s": longest[0]}, indent=1))
     return 0
 
@@ -334,6 +339,7 @@ def main(argv=None) -> int:
     e.add_argument("--ckpt", type=Path, required=True)
     e.add_argument("--out", type=Path, required=True)
     e.add_argument("--workers", type=int, default=16)
+    e.add_argument("--parts", default="gen,ppl", help="gen,ppl (default) | ppl | gen")
     s = sub.add_parser("score")
     s.add_argument("--ckpt", type=Path, required=True)
     s.add_argument("--dir", type=Path, required=True)
