@@ -357,7 +357,7 @@ def evaluate(pool: dict, pool_path: Path, cid: str, knobs: dict, axis: str, pare
              src: tuple[str, str], patch: str | None, rounds: int, best: dict | None,
              opt_rec: dict | None = None) -> dict:
     rec = {"id": cid, "time": now(), "axis": axis, "parent": parent, "knobs": knobs, "patch": patch,
-           "optimizer": (opt_rec or {}).get("optimizer", "grid"), "kimi_429_total": (opt_rec or {}).get("kimi_429_total"),
+           "name": (opt_rec or {}).get("name"), "optimizer": (opt_rec or {}).get("optimizer", "grid"), "kimi_429_total": (opt_rec or {}).get("kimi_429_total"),
            "optimizer_detail": opt_rec,
            "source": src[1], "after512": None, "after512_note": "albion-gated (dusk launches <= 0.25 s)"}
     log(f"{cid}: build {knob_key(knobs)}" + (f" + patch {patch}" if patch else ""))
@@ -474,12 +474,19 @@ def main() -> int:
     done.add(knob_key(DEFAULTS))
     n_eval, stale = 0, 0
     ext = json.loads(a.candidate.read_text()) if a.candidate else None
+    if isinstance(ext, dict):
+        ext = [ext]
     while n_eval < a.max_evals and stale < a.patience:
-        if ext is not None:
-            if n_eval:  # an external candidate is evaluated exactly once
+        if ext is not None:  # external list: each entry evaluated once, relative to the CURRENT best
+            todo = [c for c in ext if knob_key(dict(best["knobs"], **c.get("knobs", {}))) + (c.get("patch") or "")
+                    not in done]
+            if not todo:
+                log("external candidate list exhausted")
                 break
-            knobs = dict(best["knobs"], **ext.get("knobs", {}))
-            axis, patch = ext.get("axis", "external"), ext.get("patch")
+            c = todo[0]
+            knobs = dict(best["knobs"], **c.get("knobs", {}))
+            axis, patch = c.get("axis", "external"), c.get("patch")
+            ext_name = c.get("name", "external")
         else:
             cands, opt_rec = [], None
             axis_order = [x["axis"] for x in pool["mutation_axes"]]
@@ -513,7 +520,8 @@ def main() -> int:
                 log(f"optimizer={r['optimizer']} kimi_429_total={r['kimi_429_total']} -> {knob_key(knobs)}")
         cid = f"c{len([r for r in pool['evaluations'] if r['id'].startswith('c')]) + 1:03d}"
         rec = evaluate(pool, a.pool, cid, knobs, axis, best["id"], src, patch, a.rounds, best,
-                       opt_rec if ext is None else {"optimizer": "external"})
+                       opt_rec if ext is None else {"optimizer": "external", "name": ext_name,
+                                                    "kimi_429_total": opt.st["kimi_429_total"]})
         done.add(knob_key(knobs) + (patch or ""))
         n_eval += 1
         if update_front(pool, rec, min_gain):

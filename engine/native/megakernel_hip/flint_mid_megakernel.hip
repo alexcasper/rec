@@ -39,6 +39,21 @@
 #ifndef GEPA_RESID_FUSE        // 1: O-proj / dense-down residual add fused into the gemv store (-1 barrier/layer)
 #define GEPA_RESID_FUSE 0
 #endif
+// rec-1f4 Step 2 (Track B, RELAXED summation order): K=2048 g64 group-to-lane mapping, per call site.
+//   0 = 24f167d strided 4x16 slices (byte-identical reference)
+//   1 = one whole g64 group per lane (32 groups/row = 32 lanes), 2x16 B loads + 1 s/b pair per row
+//   2 = half-groups: lane loads contiguous 16 B at row+16*lane and row+512+16*lane (fully coalesced), 2 s/b pairs
+//   3 = packed row-pair staged through q4_gen_pool (2 KiB/warp, 16 B coalesced loads), lane consumes one
+//       whole group from LDS (the "packed-group LDS staging" design)
+#ifndef GEPA_S2_MOE            // segmented MoE routed + shared gate/up
+#define GEPA_S2_MOE 0
+#endif
+#ifndef GEPA_S2_QKV            // segmented Q/K/V
+#define GEPA_S2_QKV 0
+#endif
+#ifndef GEPA_S2_LMH            // lm_head (150144 x 2048)
+#define GEPA_S2_LMH 0
+#endif
 #define GEPA_STR(x) #x
 #define GEPA_UNROLL(n) _Pragma(GEPA_STR(unroll n))
 #if GEPA_RESID_FUSE
@@ -165,6 +180,30 @@ __device__ inline float dot16(const uint8_t* w, const float* x, float s, float b
     return dot16v(p32[0], p32[1], x, s, b, sum);
 }
 
+// rec-1f4 Step 2: unscaled nibble dot over 32 contiguous elements (one uint4 BY VALUE, see note above),
+// x pre-scaled with the period-4 rule. Left-to-right over the eight 4-nibble groups.
+__device__ inline float dot32_raw(uint4 p, const float* x) {
+    #pragma clang fp contract(off)
+    float a = dot16_group(p.x, x);
+    a = a + dot16_group(p.x >> 16, x + 4);
+    a = a + dot16_group(p.y, x + 8);
+    a = a + dot16_group(p.y >> 16, x + 12);
+    a = a + dot16_group(p.z, x + 16);
+    a = a + dot16_group(p.z >> 16, x + 20);
+    a = a + dot16_group(p.w, x + 24);
+    a = a + dot16_group(p.w >> 16, x + 28);
+    return a;
+}
+
+// x[0..n) -> pre-scaled v[0..n) (load16_f rule), returns the unscaled sum (left-to-right per 16)
+template <int NX>
+__device__ inline float load_n_f(const float* x, float* v) {
+    float sum = 0.0f;
+    #pragma unroll
+    for (int i = 0; i < NX; i += 16) sum += load16_f(x + i, v + i);
+    return sum;
+}
+
 // Unified device function for fused INT4-affine dequant-matmul (rec-aip / rec-tan)
 // consuming the zero-copy layout from docs/rocm-model-layer.md s2:
 //   w: uint8_t [N, K/2] (2 nibbles/byte, low nibble = even element),
@@ -218,7 +257,7 @@ struct Q4Seg {
     int n;
 };
 
-template <int K, bool ROUND_BF16 = false>
+template <int K, bool ROUND_BF16 = false, int GM = 0>
 __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         const bf16* __restrict__ s,
                                         const bf16* __restrict__ b,
@@ -228,7 +267,84 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         int n, int lane, int sg, int groups,
                                         const Q4Seg* segs = nullptr, int nseg = 0 GEPA_ACC_DECL) {
     static_assert(K % 512 == 0, "flint_q4_gemv_op requires K % 512 == 0");
-    if constexpr (K == 2048) {
+    if constexpr (K == 2048 && GM != 0) {
+        // rec-1f4 Step 2: g64 groups mapped to lanes (relaxed summation order vs GM=0, same quad stream).
+        float xa[32], xb[32];
+        int oa, ob, ga, gb;                              // byte offsets in the row, group indices
+        if constexpr (GM == 2) { oa = lane * 16; ob = 512 + lane * 16; ga = lane >> 1; gb = 16 + (lane >> 1); }
+        else                   { oa = lane * 32; ob = lane * 32 + 16;  ga = lane;      gb = lane; }
+        const float suma = load_n_f<32>(x + oa * 2, xa);
+        const float sumb = load_n_f<32>(x + ob * 2, xb);
+        const int nsegs = segs ? nseg : 1;
+        int base = 0, gq = sg;
+        uint8_t* const lds = (GM == 3) ? q4_gen_pool(sg % 8) : nullptr;
+        for (int i = 0; i < nsegs; ++i) {
+            const uint8_t* const W  = segs ? segs[i].w : w;
+            const bf16* const    S  = segs ? segs[i].s : s;
+            const bf16* const    Bq = segs ? segs[i].b : b;
+            float* const         OF = segs ? segs[i].out : out_f;
+            bf16* const          OB = segs ? nullptr : out_bf;
+            const int            N  = segs ? segs[i].n : n;
+            const int nq = (N + 3) >> 2;
+            for (; gq < base + nq; gq += groups) {
+                const int first = (gq - base) * 4;
+                float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                if (GM == 3 && first + 4 <= N) {
+                    // two packed row-pairs (2 KiB each, contiguous: rows are 1024 B) through the warp pool
+                    #pragma unroll
+                    for (int pr = 0; pr < 2; ++pr) {
+                        const uint8_t* src = W + (size_t)(first + 2 * pr) * 1024;
+                        __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
+                        __builtin_amdgcn_wave_barrier();
+                        uint4 st[4];
+                        #pragma unroll
+                        for (int t = 0; t < 4; ++t) st[t] = *(const uint4*)(src + (t * 32 + lane) * 16);
+                        #pragma unroll
+                        for (int t = 0; t < 4; ++t) *(uint4*)(lds + (t * 32 + lane) * 16) = st[t];
+                        __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
+                        __builtin_amdgcn_wave_barrier();
+                        __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
+                        #pragma unroll
+                        for (int rr = 0; rr < 2; ++rr) {
+                            const int row = first + 2 * pr + rr;
+                            uint4 pa = *(const uint4*)(lds + rr * 1024 + oa);
+                            uint4 pb = *(const uint4*)(lds + rr * 1024 + ob);
+                            float sv = tofloat(S[(size_t)row * 32 + ga]), bv = tofloat(Bq[(size_t)row * 32 + ga]);
+                            a[2 * pr + rr] = __builtin_fmaf(sv, dot32_raw(pa, xa) + dot32_raw(pb, xb), (suma + sumb) * bv);
+                        }
+                    }
+                } else {
+                    #pragma unroll
+                    for (int r = 0; r < 4; ++r) {
+                        const int row = first + r;
+                        if (row < N) {
+                            const uint8_t* wr = W + (size_t)row * 1024;
+                            uint4 pa = *(const uint4*)(wr + oa);
+                            uint4 pb = *(const uint4*)(wr + ob);
+                            if constexpr (GM == 2) {
+                                float sa = tofloat(S[(size_t)row * 32 + ga]), ba = tofloat(Bq[(size_t)row * 32 + ga]);
+                                float sb = tofloat(S[(size_t)row * 32 + gb]), bb = tofloat(Bq[(size_t)row * 32 + gb]);
+                                a[r] = __builtin_fmaf(sa, dot32_raw(pa, xa), suma * ba) +
+                                       __builtin_fmaf(sb, dot32_raw(pb, xb), sumb * bb);
+                            } else {
+                                float sv = tofloat(S[(size_t)row * 32 + ga]), bv = tofloat(Bq[(size_t)row * 32 + ga]);
+                                a[r] = __builtin_fmaf(sv, dot32_raw(pa, xa) + dot32_raw(pb, xb), (suma + sumb) * bv);
+                            }
+                        }
+                    }
+                }
+                #pragma unroll
+                for (int r = 0; r < 4; ++r) {
+                    float val = simd_sum(a[r]);
+                    if (lane == 0 && first + r < N) {
+                        if (OB) OB[first + r] = tobf(val);
+                        if (OF) GEPA_OUT(OF, first + r, ROUND_BF16 ? tofloat(tobf(val)) : val);
+                    }
+                }
+            }
+            base += nq;
+        }
+    } else if constexpr (K == 2048) {
         float v0[16], v1[16], v2[16], v3[16];
         int sc0 = lane * 16;
         int sc1 = 512 + sc0;
@@ -765,7 +881,7 @@ __device__ inline void mid_generate_impl(
                 sh_seg[2] = {Q_W(qbase + 2), Q_S(qbase + 2, MID_KVDIM, MID_HID), Q_B(qbase + 2, MID_KVDIM, MID_HID), ws_v, MID_KVDIM};
             }
             __syncthreads();
-            flint_q4_gemv_op<MID_HID>(nullptr, nullptr, nullptr, sh_xn, nullptr, nullptr, 0, lane, sg, groups, sh_seg, 3);
+            flint_q4_gemv_op<MID_HID, false, GEPA_S2_QKV>(nullptr, nullptr, nullptr, sh_xn, nullptr, nullptr, 0, lane, sg, groups, sh_seg, 3);
             SYNC_ALL();
 
             // ---- 4. Per-head RMSNorm + NeoX RoPE on ws_q (32 heads) and ws_k (4 heads) ----
@@ -978,8 +1094,8 @@ __device__ inline void mid_generate_impl(
                                                 ws_up + MOE_SH0, MID_SH_I};
                 }
                 __syncthreads();
-                flint_q4_gemv_op<MID_HID>(nullptr, nullptr, nullptr, sh_xn, nullptr, nullptr, 0, lane, sg, groups,
-                                          sh_seg, 2 * MID_TOPK + 2);
+                flint_q4_gemv_op<MID_HID, false, GEPA_S2_MOE>(nullptr, nullptr, nullptr, sh_xn, nullptr, nullptr, 0, lane, sg,
+                                          groups, sh_seg, 2 * MID_TOPK + 2);
                 SYNC_ALL();
                 for (int i = gtid; i < MOE_ACT_N; i += gthreads) {
                     if constexpr (PURE_FP32) {
@@ -1028,7 +1144,7 @@ __device__ inline void mid_generate_impl(
         // differential cancellation holds identically across prefill and decode steps.
         // Uses the integrated `flint_q4_gemv_op<MID_HID>` fast path (preloaded register
         // input slices + 32-bit packed weight loads over zero-copy layout s2).
-        flint_q4_gemv_op<MID_HID>(Q_W(MID_OFF_LM_HEAD),
+        flint_q4_gemv_op<MID_HID, false, GEPA_S2_LMH>(Q_W(MID_OFF_LM_HEAD),
                                   Q_S(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID),
                                   Q_B(MID_OFF_LM_HEAD, MID_VOCAB, MID_HID),
                                   sh_xn, nullptr, ws_f_logits, MID_VOCAB, lane, sg, groups);
