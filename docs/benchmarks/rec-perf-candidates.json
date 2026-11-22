@@ -8911,6 +8911,34 @@
    "outcome": "REJECTED (binding fp32-KV tier at depth 8192). Even ungated, 0.80x vs incumbent: split-K (n_split<=16) does not close the depth gap; rec-e5d needs a different design",
    "baseline_note": "default full build @wrap512 fails bf16-KV the same way (4.41e-2) -> bf16-KV divergence is baseline (rec-kcb ruling basis)",
    "cotenants": "8080 down, E4B 200, qwen3vl 200 loopback, llama-qwen inactive, display ACTIVE, MemAvailable 17.1-17.4 GiB"
+  },
+  {
+   "id": "m3-gate8k-default-full",
+   "time": "2026-11-22T20:34:35Z",
+   "knobs": {
+    "FLINT_CFG_FULL": 1,
+    "GEPA_ATTN_SPLIT": 0,
+    "GEPA_SHRINK": 0
+   },
+   "source_commit": "288f4fa",
+   "record_commit": "1977ab6",
+   "purpose": "discriminator for split-K depth-8192 fp32kv failure",
+   "gates": {
+    "fp32kv_depth8192": "FAIL last 7.410e-2 step 0.2969, 1 routing dev (split: 7.412e-2)",
+    "determinism_fp32kv_depth8192": "PASS 2 fresh sessions"
+   },
+   "kernel_vs_kernel": "default vs split @8192: last 6.0e-5, step max 1.7e-4, tokens identical",
+   "tok_s": {
+    "depth8192": null,
+    "lower_bound": 4.08,
+    "prefill_implied": 7.9
+   },
+   "speed_note": "not measurable under 0.25 s cap (single-position launch 245 ms)",
+   "incumbent_same_box": {
+    "llama.cpp UD-Q3_K_XL @8192": 26.8
+   },
+   "outcome": "REJECTED as a row (fp32kv@8192). Conclusion: the depth failure is a baseline full-config property shared by both builds, not split-K merge error",
+   "cotenants": "8080 down, E4B 200, qwen3vl 200 loopback, llama-qwen inactive, display ACTIVE, MemAvailable 16.8-17.2 GiB"
   }
  ],
  "incumbent_history": [
