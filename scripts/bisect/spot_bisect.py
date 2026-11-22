@@ -12,6 +12,7 @@ ap.add_argument("--vocab", type=int, default=150144); ap.add_argument("--nl", ty
 ap.add_argument("--topk", type=int, default=6); ap.add_argument("--n-out", type=int, default=3)
 ap.add_argument("--workers", type=int, default=16); ap.add_argument("--rehearsal", action="store_true")
 ap.add_argument("--repeat", type=int, default=1, help="re-run the same spot N times in one session (determinism)")
+ap.add_argument("--dump", action="store_true", help="GEPA_DUMP build: capture per-layer tensors per repeat (rec-3cr)")
 a = ap.parse_args()
 C = "/sys/class/drm/card1/device/"
 def vfree(): return (int(open(C + "mem_info_vram_total").read()) - int(open(C + "mem_info_vram_used").read())) / 2**30
@@ -40,6 +41,12 @@ if not sess: sys.exit("create failed")
 prompt = np.array([1, 43, 1006, 52006], np.int32)
 h = hashlib.sha256(open(Path(a.ckpt) / "model-00001.safetensors", "rb").read()).hexdigest()
 n = a.n_out; p = len(prompt); prev = None; dts = []
+stride = 0
+if a.dump:
+    lib.mid_dump_setup.restype = ctypes.c_int; lib.mid_dump_setup.argtypes = [ctypes.c_int]
+    lib.mid_dump_fetch.restype = ctypes.c_int; lib.mid_dump_fetch.argtypes = [vp, ctypes.c_size_t]
+    stride = lib.mid_dump_setup(p + n)
+    if stride <= 0: sys.exit(f"mid_dump_setup -> {stride} (not a GEPA_DUMP build?)")
 for rr in range(a.repeat):
     tok = np.zeros(n, np.int32); step = np.zeros((n, a.vocab), np.float32); last = np.zeros(a.vocab, np.float32)
     exp = np.full((len(prompt) + n, a.nl, a.topk), -1, np.int32); ctrl = np.zeros(4, np.uint32)
@@ -48,7 +55,12 @@ for rr in range(a.repeat):
     dt = time.perf_counter() - t0; dts.append(round(dt, 4))
     ok = rc == 0 and ctrl[2] == 0 and ctrl[1] != 0
     outp = a.out if rr == 0 else a.out.replace(".npz", f"_r{rr}.npz")
-    np.savez(outp, schema=np.array("rec-mk-out/1"), case=np.array("short4"), ckpt_sha256=np.array(h),
+    extra = {}
+    if a.dump:
+        dmp = np.empty((p + n) * a.nl * stride, np.float32)
+        if lib.mid_dump_fetch(dmp.ctypes.data, dmp.size) != 0: sys.exit("mid_dump_fetch failed")
+        extra["dump"] = dmp.reshape(p + n, a.nl, stride)
+    np.savez(outp, **extra, schema=np.array("rec-mk-out/1"), case=np.array("short4"), ckpt_sha256=np.array(h),
              impl=np.array(f"{Path(a.so).name} workers={a.workers} [rec-6ek bisect spot r{rr}]"), kv_dtype=np.array("fp32"),
              prompt=prompt, tokens=tok, step_logits=step, last_logits=last, chosen_experts=exp[p - 1:p - 1 + n], step_experts=exp)
     same = None if prev is None else bool(np.array_equal(prev[0], step) and np.array_equal(prev[1], last) and np.array_equal(prev[2], exp))

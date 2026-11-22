@@ -108,6 +108,29 @@
 #ifndef GEPA_ATTN_SPLIT_MIN
 #define GEPA_ATTN_SPLIT_MIN 64
 #endif
+// rec-3cr race hunt: GEPA_DUMP=1 makes workgroup 0 copy per-(local step, layer) tensors right after the barrier
+// that completes them (q after QKV+RoPE, attention out, x after attn residual, router scores, x after MLP) into a
+// device buffer set by mid_dump_setup(); repeats are diffed on the host to find the first divergent phase.
+// rec-3cr fix candidate: the per-warp LDS staging relies on wavefront-scope fence + wave_barrier pairs, which order
+// only atomics (none here) and are not compiler memory barriers for plain LDS ops; GEPA_LDS_SYNC=1 replaces them
+// with s_waitcnt lgkmcnt(0) as an asm memory clobber (hardware wait + compiler barrier).
+#ifndef GEPA_LDS_SYNC
+#define GEPA_LDS_SYNC 0
+#endif
+#if GEPA_LDS_SYNC
+#define WAVE_LDS_PRE()  asm volatile("s_waitcnt lgkmcnt(0)" ::: "memory")
+#define WAVE_LDS_POST() asm volatile("s_waitcnt lgkmcnt(0)" ::: "memory")
+#else
+#define WAVE_LDS_PRE()  do { __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront"); __builtin_amdgcn_wave_barrier(); } while (0)
+#define WAVE_LDS_POST() do { __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront"); __builtin_amdgcn_wave_barrier(); \
+                             __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront"); } while (0)
+#endif
+#ifndef GEPA_RACE_EXP
+#define GEPA_RACE_EXP 0   // rec-3cr diagnostics only (3: double barrier before O residual, 4: atomic ws_o read)
+#endif
+#ifndef GEPA_DUMP
+#define GEPA_DUMP 0
+#endif
 #ifndef GEPA_SHRINK
 #define GEPA_SHRINK 1   // PROMOTED (rec-fut run 4, c033): +3.05/+3.59 % ABBA, replicate +2.65/+2.27 %, byte-identical to 24f167d
 #endif
@@ -313,8 +336,7 @@ __device__ inline float load_n_f(const float* x, float* v) {
 // hardware wave on wave32 and wave64, so wave-level fences order the LDS write -> read -> rewrite.
 __device__ inline void q4_stage_block(const uint8_t* __restrict__ w, size_t row_bytes, int first, int byte_off,
                                       int lane, uint8_t* lds /* 1024 B per logical warp */) {
-    __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
-    __builtin_amdgcn_wave_barrier();  // previous block's reads are done before overwrite
+    WAVE_LDS_PRE();  // previous block's reads are done before overwrite
     #pragma unroll
     for (int t = 0; t < 2; ++t) {
         int idx = t * 32 + lane;           // 0..63 : (row 0..3) x (16-byte chunk 0..15)
@@ -322,9 +344,7 @@ __device__ inline void q4_stage_block(const uint8_t* __restrict__ w, size_t row_
         uint4 q = *(const uint4*)(w + (size_t)(first + r) * row_bytes + byte_off + c * 16);
         *(uint4*)(lds + r * 256 + c * 16) = q;
     }
-    __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
-    __builtin_amdgcn_wave_barrier();
-    __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
+    WAVE_LDS_POST();
 }
 
 // rec-9t8: ONE 2 KiB LDS double buffer per logical warp, shared by every generic-K gemv instantiation.
@@ -444,8 +464,16 @@ __device__ __attribute__((noinline)) void q4_rows_tail(const uint8_t* __restrict
     }
 }
 
+#ifndef GEPA_FORCE_INLINE
+#define GEPA_FORCE_INLINE 0   // rec-3cr: 1 = always_inline the gemv (no call / no callee LDS access)
+#endif
+#if GEPA_FORCE_INLINE
+#define GEPA_GEMV_ATTR __attribute__((always_inline))
+#else
+#define GEPA_GEMV_ATTR
+#endif
 template <int K, bool ROUND_BF16 = false, int GM = 0, int LDT = 1, int XU = 0, bool XPURE = false>
-__device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
+__device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         const bf16* __restrict__ s,
                                         const bf16* __restrict__ b,
                                         const float* __restrict__ x,
@@ -481,16 +509,13 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                     #pragma unroll
                     for (int pr = 0; pr < 2; ++pr) {
                         const uint8_t* src = W + (size_t)(first + 2 * pr) * 1024;
-                        __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
-                        __builtin_amdgcn_wave_barrier();
+                        WAVE_LDS_PRE();
                         uint4 st[4];
                         #pragma unroll
                         for (int t = 0; t < 4; ++t) st[t] = *(const uint4*)(src + (t * 32 + lane) * 16);
                         #pragma unroll
                         for (int t = 0; t < 4; ++t) *(uint4*)(lds + (t * 32 + lane) * 16) = st[t];
-                        __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
-                        __builtin_amdgcn_wave_barrier();
-                        __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
+                        WAVE_LDS_POST();
                         #pragma unroll
                         for (int rr = 0; rr < 2; ++rr) {
                             const int row = first + 2 * pr + rr;
@@ -596,8 +621,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
             const float sum = load16_x<XU, XPURE>(x + scalar, v);
             int first = sg * 8;
             for (; first + 8 <= n; first += groups * 8) {
-                __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
-                __builtin_amdgcn_wave_barrier();            // previous round's LDS reads are done
+                WAVE_LDS_PRE();            // previous round's LDS reads are done
                 uint4 q[4];
                 #pragma unroll
                 for (int t = 0; t < 4; ++t) {               // 128 x 16 B chunks: (row 0..7) x (chunk 0..15)
@@ -616,9 +640,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                     int idx = t * 32 + lane, r = idx >> 4, c = idx & 15;
                     *(uint4*)(lds + r * 256 + c * 16) = q[t];
                 }
-                __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
-                __builtin_amdgcn_wave_barrier();
-                __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
+                WAVE_LDS_POST();
                 #pragma unroll
                 for (int r = 0; r < 8; ++r) {
                     const uint32_t* p = (const uint32_t*)(lds + r * 256 + lane * 8);
@@ -735,13 +757,10 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
             }
         };
         auto put_stage = [&](uint8_t* buf, const uint4& w0, const uint4& w1) {
-            __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
-            __builtin_amdgcn_wave_barrier();   // last reader of this half (stage t-1) is done
+            WAVE_LDS_PRE();   // last reader of this half (stage t-1) is done
             *(uint4*)(buf + r_lo * 256 + c16) = w0;
             *(uint4*)(buf + (r_lo + 2) * 256 + c16) = w1;
-            __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
-            __builtin_amdgcn_wave_barrier();
-            __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
+            WAVE_LDS_POST();
         };
         int par = 0;
 #if GEPA_GEN_DIST2
@@ -1118,6 +1137,21 @@ constexpr int MID_WS_LOGITS_OFF = 2 * MID_HID + 2 * MID_QDIM + 2 * MID_KVDIM + 3
                                   (MID_TOPK + 1) * MID_HID + MID_WS_SCORES + 32 + 64;
 static_assert(FLINT_CFG_FULL || MID_WS_LOGITS_OFF == 25728, "mid workspace layout drifted");
 
+constexpr int MID_DUMP_Q = 0, MID_DUMP_ATTN = MID_QDIM, MID_DUMP_XA = 2 * MID_QDIM, MID_DUMP_SC = 2 * MID_QDIM + MID_HID,
+              MID_DUMP_XM = 2 * MID_QDIM + MID_HID + MID_WS_SCORES, MID_DUMP_O = 2 * MID_QDIM + 2 * MID_HID + MID_WS_SCORES,
+              MID_DUMP_STRIDE = 2 * MID_QDIM + 3 * MID_HID + MID_WS_SCORES;
+__device__ float* g_mid_dump = nullptr;
+__device__ int g_mid_dump_steps = 0;
+#if GEPA_DUMP
+#define MID_DUMP(slot, src, n)                                                                                  \
+    if (group == 0 && g_mid_dump != nullptr && lp < g_mid_dump_steps) {                                         \
+        float* d_ = g_mid_dump + ((size_t)lp * MID_NL + layer) * MID_DUMP_STRIDE + (slot);                      \
+        for (int i_ = tid; i_ < (n); i_ += blockDim.x) d_[i_] = (src)[i_];                                       \
+    }
+#else
+#define MID_DUMP(slot, src, n)
+#endif
+
 template <typename KVT, bool PURE_FP32>
 __device__ inline void mid_generate_impl(
     const uint8_t* bank, const int64_t* off,
@@ -1228,6 +1262,7 @@ __device__ inline void mid_generate_impl(
             mid_head_norm_rope(ws_k, kn_w, MID_NKV, rotary, pos, lane, sg, groups);
             SYNC_ALL();
 
+            MID_DUMP(MID_DUMP_Q, ws_q, MID_QDIM);
             // ---- 5. Write K, V to head-major KV cache (KVT = bf16 or float) ----
             int l_idx = is_sliding ? mid_sliding_idx(layer) : mid_full_idx(layer); // mid-8L: layer / 2
             size_t l_cap = is_sliding ? (size_t)MID_WIN : (size_t)full_cap;
@@ -1356,6 +1391,7 @@ __device__ inline void mid_generate_impl(
             if (GEPA_PF > 0 && sg >= MID_HEADS)   // idle in attention: warm the O-projection prefix
                 pf_warm(Q_W(qbase + 3), (size_t)MID_HID * (MID_QDIM / 2), nullptr, 0, nullptr, 0, 0, sg - MID_HEADS, lane, pf_sink);
             SYNC_ALL();
+            MID_DUMP(MID_DUMP_ATTN, ws_attn, MID_QDIM);
 
             // ---- 7. O projection (K=4096 -> N=2048) + residual ----
 #if GEPA_RESID_FUSE
@@ -1384,11 +1420,22 @@ __device__ inline void mid_generate_impl(
             q4_block512<MID_QDIM>(Q_W(qbase + 3), Q_S(qbase + 3, MID_HID, MID_QDIM), Q_B(qbase + 3, MID_HID, MID_QDIM),
                                   ws_attn, nullptr, ws_o, MID_HID, lane, sg, groups);
             SYNC_ALL();
+#if GEPA_DUMP >= 2
+            MID_DUMP(MID_DUMP_O, ws_o, MID_HID);
+#endif
+#if GEPA_RACE_EXP == 3
+            SYNC_ALL();                                   // rec-3cr E3: double barrier before the residual
+#endif
             for (int i = gtid; i < MID_HID; i += gthreads)
+#if GEPA_RACE_EXP == 4
+                ws_x[i] += __hip_atomic_load(ws_o + i, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);   // E4: bypass L0/GL1
+#else
                 ws_x[i] += ws_o[i];
+#endif
             SYNC_ALL();
 #endif
 
+            MID_DUMP(MID_DUMP_XA, ws_x, MID_HID);
             // ---- 8. Post-attention RMSNorm -> sh_xn ----
             mid_rmsnorm_2048(ws_x, post_w, sh_xn, sh_red);
 
@@ -1424,6 +1471,7 @@ __device__ inline void mid_generate_impl(
                     ws_x[i] += ws_down[i];
                 SYNC_ALL();
 #endif
+                MID_DUMP(MID_DUMP_XM, ws_x, MID_HID);
             } else {
                 // MoE router: 32 experts, 1 warp per expert (sg < 32)
                 for (int e = sg; e < MID_NEXP; e += groups) {
@@ -1444,6 +1492,7 @@ __device__ inline void mid_generate_impl(
                     pf_warm(Q_W(qbase + 7), (size_t)MID_SH_I * (MID_HID / 2), Q_W(qbase + 8), (size_t)MID_SH_I * (MID_HID / 2),
                             nullptr, 0, 0, sg - MID_NEXP, lane, pf_sink);
                 SYNC_ALL();
+                MID_DUMP(MID_DUMP_SC, ws_f_scores, MID_NEXP);
 #if GEPA_TOPK_PER_WG
                 __shared__ int   sh_sel[MID_TOPK];
                 __shared__ float sh_wsel[MID_TOPK];
@@ -1646,6 +1695,7 @@ __device__ inline void mid_generate_impl(
                     }
                 }
                 SYNC_ALL();
+                MID_DUMP(MID_DUMP_XM, ws_x, MID_HID);
             }
         }
 
@@ -2195,6 +2245,25 @@ extern "C" int mid_session_run(void* handle, const int* h_prompt, int prompt_len
                                int* h_out_tokens, int n_out, float* h_out_last_logits,
                                int workers) {
     return mid_session_run_ex2(handle, h_prompt, prompt_len, h_out_tokens, n_out, nullptr, h_out_last_logits, workers, 0, nullptr, nullptr);
+}
+
+// rec-3cr: dump buffer for GEPA_DUMP builds (no-op storage otherwise). steps = local steps to capture.
+static float* g_dump_dev = nullptr;
+static size_t g_dump_n = 0;
+extern "C" int mid_dump_setup(int steps) {
+    size_t n = (size_t)steps * MID_NL * MID_DUMP_STRIDE;
+    if (g_dump_dev) { hipFree(g_dump_dev); g_dump_dev = nullptr; }
+    if (hipMalloc(&g_dump_dev, n * sizeof(float)) != hipSuccess) return -1;
+    hipMemset(g_dump_dev, 0xff, n * sizeof(float));
+    g_dump_n = n;
+    if (hipMemcpyToSymbol(HIP_SYMBOL(g_mid_dump), &g_dump_dev, sizeof(float*)) != hipSuccess) return -2;
+    if (hipMemcpyToSymbol(HIP_SYMBOL(g_mid_dump_steps), &steps, sizeof(int)) != hipSuccess) return -3;
+    return GEPA_DUMP ? MID_DUMP_STRIDE : 0;
+}
+extern "C" int mid_dump_fetch(float* h, size_t n) {
+    if (!g_dump_dev || n > g_dump_n) return -1;
+    hipDeviceSynchronize();
+    return hipMemcpy(h, g_dump_dev, n * sizeof(float), hipMemcpyDeviceToHost) == hipSuccess ? 0 : -2;
 }
 
 extern "C" void mid_session_free(void* handle) {
