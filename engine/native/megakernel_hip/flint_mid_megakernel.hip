@@ -70,6 +70,16 @@
 #ifndef GEPA_ACT_FOLD
 #define GEPA_ACT_FOLD 0
 #endif
+// rec-ohs candidate 1 (relaxed order): O-proj (K=4096) as two K=2048 halves on the K=2048 fast path (row stride
+// 2048 B via Q4Seg::ld = 2), partials in ws_o and ws_down, summed in the residual phase.
+#ifndef GEPA_OSPLIT
+#define GEPA_OSPLIT 0
+#endif
+// rec-ohs candidate 2 (relaxed order): MoE down (2 x K=512 routed + K=1024 shared, N=2048) as ONE virtual K=2048 gemv
+// over [w0*act0 | w1*act1 | act_sh]; routing weights folded into act, combine becomes ws_x += d.
+#ifndef GEPA_DOWNCAT
+#define GEPA_DOWNCAT 0
+#endif
 #define GEPA_STR(x) #x
 #define GEPA_UNROLL(n) _Pragma(GEPA_STR(unroll n))
 #if GEPA_RESID_FUSE
@@ -298,7 +308,49 @@ struct Q4Seg {
     const bf16* b;
     float* out;
     int n;
+    int ld;       // row stride in K=2048 rows (1024 B packed, 32 s/b); 0 (5-field init) means 1; GEPA_OSPLIT uses 2
 };
+
+// rec-ohs candidate 2: virtual K=2048 gemv whose four 512-element lane chunks come from different matrices.
+struct Q4Cat {
+    const uint8_t* w[4];
+    const bf16* s[4];
+    const bf16* b[4];
+    int rb[4];     // row bytes
+    int gpr[4];    // s/b groups per row
+    int k0[4];     // element offset of the chunk inside its matrix row
+};
+__device__ inline void q4_gemv_cat2048(const Q4Cat& c, const float* __restrict__ x, float* __restrict__ out, int n,
+                                       int lane, int sg, int groups) {
+    float v[4][16], sum[4];
+    int bo[4], go[4];
+    #pragma unroll
+    for (int j = 0; j < 4; ++j) {
+        sum[j] = load16_f(x + 512 * j + lane * 16, v[j]);
+        bo[j] = (c.k0[j] + lane * 16) >> 1;
+        go[j] = (c.k0[j] + lane * 16) >> 6;
+    }
+    for (int first = sg * 4; first < n; first += groups * 4) {
+        float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        #pragma unroll
+        for (int r = 0; r < 4; ++r) {
+            const int row = first + r;
+            if (row < n) {
+                #pragma unroll
+                for (int j = 0; j < 4; ++j) {
+                    const size_t gi = (size_t)row * c.gpr[j] + go[j];
+                    a[r] += dot16(c.w[j] + (size_t)row * c.rb[j] + bo[j], v[j], tofloat(c.s[j][gi]), tofloat(c.b[j][gi]),
+                                  sum[j]);
+                }
+            }
+        }
+        #pragma unroll
+        for (int r = 0; r < 4; ++r) {
+            float val = simd_sum(a[r]);
+            if (lane == 0 && first + r < n) out[first + r] = val;
+        }
+    }
+}
 
 template <int K, bool ROUND_BF16 = false, int GM = 0>
 __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
@@ -412,6 +464,11 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
             float* const         OF = segs ? segs[i].out : out_f;
             bf16* const          OB = segs ? nullptr : out_bf;
             const int            N  = segs ? segs[i].n : n;
+#if GEPA_OSPLIT
+            const size_t         LD = (segs && segs[i].ld > 1) ? (size_t)segs[i].ld : 1;
+#else
+            constexpr size_t     LD = 1;
+#endif
             const int nq = (N + 3) >> 2;
             for (; gq < base + nq; gq += groups) {
                 const int first = (gq - base) * 4;
@@ -420,9 +477,9 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                 for (int r = 0; r < 4; ++r) {
                     int row = first + r;
                     if (row < N) {
-                        const uint8_t* wr = W + (size_t)row * 1024;
-                        const bf16*    sr = S + (size_t)row * 32;
-                        const bf16*    br = Bq + (size_t)row * 32;
+                        const uint8_t* wr = W + (size_t)row * 1024 * LD;
+                        const bf16*    sr = S + (size_t)row * 32 * LD;
+                        const bf16*    br = Bq + (size_t)row * 32 * LD;
                         a[r] += dot16(wr + (sc0 >> 1), v0, tofloat(sr[g0]), tofloat(br[g0]), sum0);
                         a[r] += dot16(wr + (sc1 >> 1), v1, tofloat(sr[g1]), tofloat(br[g1]), sum1);
                         a[r] += dot16(wr + (sc2 >> 1), v2, tofloat(sr[g2]), tofloat(br[g2]), sum2);
@@ -999,6 +1056,23 @@ __device__ inline void mid_generate_impl(
             q4_block512<MID_QDIM>(Q_W(qbase + 3), Q_S(qbase + 3, MID_HID, MID_QDIM), Q_B(qbase + 3, MID_HID, MID_QDIM),
                                   ws_attn, nullptr, ws_x, MID_HID, lane, sg, groups, true);
             SYNC_ALL();
+#elif GEPA_OSPLIT
+            static_assert(MID_QDIM == 2 * MID_HID, "O-proj split-K assumes K = 2 x 2048");
+            if (tid == 0) {
+                const uint8_t* ow = Q_W(qbase + 3);
+                const bf16* os = Q_S(qbase + 3, MID_HID, MID_QDIM);
+                const bf16* ob = Q_B(qbase + 3, MID_HID, MID_QDIM);
+                sh_seg[0] = {ow, os, ob, ws_o, MID_HID, 2};
+                sh_seg[1] = {ow + 1024, os + 32, ob + 32, ws_down, MID_HID, 2};
+            }
+            __syncthreads();
+            flint_q4_gemv_op<MID_HID>(nullptr, nullptr, nullptr, ws_attn, nullptr, nullptr, 0, lane, sg, groups, sh_seg, 1);
+            flint_q4_gemv_op<MID_HID>(nullptr, nullptr, nullptr, ws_attn + MID_HID, nullptr, nullptr, 0, lane, sg, groups,
+                                      sh_seg + 1, 1);
+            SYNC_ALL();
+            for (int i = gtid; i < MID_HID; i += gthreads)
+                ws_x[i] += ws_o[i] + ws_down[i];
+            SYNC_ALL();
 #else
             q4_block512<MID_QDIM>(Q_W(qbase + 3), Q_S(qbase + 3, MID_HID, MID_QDIM), Q_B(qbase + 3, MID_HID, MID_QDIM),
                                   ws_attn, nullptr, ws_o, MID_HID, lane, sg, groups);
@@ -1172,6 +1246,7 @@ __device__ inline void mid_generate_impl(
                         bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
                         ws_f_act[i] = tofloat(act);
                     }
+                    if (GEPA_DOWNCAT && i < MOE_SH0) ws_f_act[i] *= GEPA_WSEL(i / MID_MOE_I);   // fold routing weight
                 }
                 if (GEPA_PF > 0 && sg * 32 >= MOE_ACT_N) {   // idle in act: warm down weights in consumption order
                     constexpr size_t DB = (size_t)MID_HID * (MID_MOE_I / 2);
@@ -1182,6 +1257,32 @@ __device__ inline void mid_generate_impl(
                 }
                 SYNC_ALL();
                 const float* act_src = ws_f_act;
+#endif
+#if GEPA_DOWNCAT
+                static_assert(!GEPA_ACT_FOLD, "DOWNCAT uses the ws_f_act path");
+                static_assert(MID_TOPK == 2 && MID_MOE_I == 512 && MID_SH_I == 1024, "DOWNCAT: virtual K = 2x512 + 1024");
+                {
+                    Q4Cat c;
+                    #pragma unroll
+                    for (int t = 0; t < 2; ++t) {
+                        const int e = GEPA_SEL(t);
+                        c.w[t] = sw_dw + (size_t)e * MID_HID * (MID_MOE_I / 2);
+                        c.s[t] = sw_ds + (size_t)e * MID_HID * (MID_MOE_I / 64);
+                        c.b[t] = sw_db + (size_t)e * MID_HID * (MID_MOE_I / 64);
+                        c.rb[t] = MID_MOE_I / 2; c.gpr[t] = MID_MOE_I / 64; c.k0[t] = 0;
+                    }
+                    #pragma unroll
+                    for (int j = 2; j < 4; ++j) {
+                        c.w[j] = Q_W(qbase + 9);
+                        c.s[j] = Q_S(qbase + 9, MID_HID, MID_SH_I);
+                        c.b[j] = Q_B(qbase + 9, MID_HID, MID_SH_I);
+                        c.rb[j] = MID_SH_I / 2; c.gpr[j] = MID_SH_I / 64; c.k0[j] = (j - 2) * 512;
+                    }
+                    q4_gemv_cat2048(c, act_src, ws_down, MID_HID, lane, sg, groups);
+                }
+                SYNC_ALL();
+                for (int i = gtid; i < MID_HID; i += gthreads) ws_x[i] += ws_down[i];   // weights already folded
+                if (false) {   // original down + weighted combine (dead under DOWNCAT)
 #endif
                 for (int t = 0; t < MID_TOPK; ++t) {
                     int e = GEPA_SEL(t);
@@ -1209,6 +1310,9 @@ __device__ inline void mid_generate_impl(
                         ws_x[i] += acc + ws_down[(size_t)MID_TOPK * MID_HID + i];
                     }
                 }
+#if GEPA_DOWNCAT
+                }
+#endif
                 if (GEPA_PF > 0 && sg * 32 >= MID_HID) {     // idle in combine: warm the next weight phase
                     if (layer + 1 < MID_NL) {
                         int nb = MID_OFF_LAYER_Q4_BASE + (layer + 1) * 10;

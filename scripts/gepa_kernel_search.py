@@ -344,6 +344,15 @@ def parse_proposal(text: str, best: dict, done: set) -> tuple[dict | None, str, 
     return k, str(d.get("axis") or "llm"), str(d.get("rationale", ""))[:400]
 
 
+def headroom(g: dict, inc: dict | None) -> dict:
+    def mx(gg):
+        it = (gg or {}).get("rec_pp2", {}).get("items", {})
+        v = [x["step_rel"] for k, x in it.items() if k.endswith("/fp32_bf16kv") and x.get("step_rel") is not None]
+        return max(v) if v else float("nan")
+    c, i = mx(g), mx(inc)
+    return {"cand": c, "inc": i, "margin": 1e-3 - c, "flag": bool(c > i * 1.001)}
+
+
 def search_state(pool: dict) -> dict:
     s = pool.setdefault("search", {})
     s.setdefault("driver", "scripts/gepa_kernel_search.py (rec/gemini-kernels)")
@@ -370,6 +379,20 @@ def evaluate(pool: dict, pool_path: Path, cid: str, knobs: dict, axis: str, pare
     log(f"{cid}: built in {rec['build']['build_s']} s; mid_generate vgpr {k.get('vgpr')} scratch {k.get('scratch')} "
         f"lds {k.get('lds')}; hot instr {rec['build'].get('hot_instr')}")
     a_id, a_w = (best["id"], best["knobs"]["workers"]) if best else (cid, knobs["workers"])
+    if best is not None:
+        # gates FIRST (rec-ohs): a candidate outside the hard gates is rejected without spending a bench window;
+        # fp32_bf16kv headroom vs the incumbent is flagged before any timing.
+        rec["emit"] = emit(cid, knobs["workers"])
+        rec["gates"] = run_gates(cid, rec["emit"], best)
+        hr = headroom(rec["gates"], best.get("gates"))
+        rec["headroom"] = hr
+        log(f"{cid}: gates {'PASS' if rec['gates']['pass'] else 'FAIL'} BEFORE bench; fp32_bf16kv max {hr['cand']:.4e} "
+            f"(incumbent {hr['inc']:.4e}, margin to 1e-3 {hr['margin']:.2e})" + ("  ** HEADROOM FLAG: error up **"
+            if hr["flag"] else "") + (f" ({rec['gates'].get('reason')})" if not rec["gates"]["pass"] else ""))
+        if not rec["gates"]["pass"]:
+            rec["outcome"] = "rejected"
+            rec["reason"] = "gates: " + rec["gates"].get("reason", "?")
+            return finish(pool, pool_path, rec)
     if best is None:  # iter0: incumbent vs a copy of itself
         subprocess.run(SSH + [DUSK, f"rm -rf {REMOTE}/c/{cid}_copy && cp -r {REMOTE}/c/{cid} {REMOTE}/c/{cid}_copy"],
                        check=True)
@@ -385,8 +408,9 @@ def evaluate(pool: dict, pool_path: Path, cid: str, knobs: dict, axis: str, pare
     rec["speedup_vs_best"] = {c: rec["bench"][c]["speedup_B_over_A"] for c in CASES}
     log(f"{cid}: tok/s {rec['tok_s']} speedup vs {a_id} {rec['speedup_vs_best']} (max launch "
         f"{max(rec['bench'][c]['max_launch_s'] for c in CASES)} s)")
-    rec["emit"] = emit(cid, knobs["workers"])
-    rec["gates"] = run_gates(cid, rec["emit"], best)
+    if best is None:
+        rec["emit"] = emit(cid, knobs["workers"])
+        rec["gates"] = run_gates(cid, rec["emit"], best)
     log(f"{cid}: gates {'PASS' if rec['gates']['pass'] else 'FAIL'}" +
         (f" ({rec['gates'].get('reason')})" if not rec["gates"]["pass"] else "") +
         f"; ppl bf16kv {rec['gates']['ppl']['bf16kv']:.6g} ({rec['gates']['ppl_rel_vs_incumbent_bf16kv']:+.2e} vs best)")
