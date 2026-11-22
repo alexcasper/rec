@@ -70,3 +70,31 @@ attention across all warps is a prerequisite**, not an option, for an 8k-depth h
 - ops_flint window for :8080 (memory), and whether E4B/qwen3vl must also be down (VRAM headroom after :8080 stops:
   ~33 GiB free, enough for 21 GiB bank + KV + workspace).
 - Correctness host for full config while albion is offline.
+
+## Window prep (2026-11-22, for the ops_flint window 09:00Z-22:00Z) - PREPPED, NOT EXECUTED
+
+Staged: `scripts/m3_window_dusk.sh` (8c87772). On dusk: `~/rec-ve/gepa/h/engine/native/megakernel_hip/flint_full.so`
+(sha256 f462c8ae..., FLINT_CFG_FULL=1, promoted defaults + M3.1), bank `~/xh7/flint-int4.bank` (21.02 GiB),
+offsets `~/xh7/flint-int4.off.npy` (99de3cbc..., found by the naming fix).
+
+Sequence (on the coordinator's go, after ops_flint stops :8080):
+1. preflight line: 8080 down, llama-qwen inactive (refuses otherwise), VRAM free (needs >= ~22.7 GiB incl. 1.5 GiB slack),
+   MemAvailable; sha256 of .so + offsets.
+2. bank streamed H2D through one 256 MiB buffer (host staging well under 5 GB; rehearsal peak RSS 406 MiB), ~10-20 s.
+3. spot: fp32kv short4, 2 continued launches -> npz for the offline CPU spot reference (correctness subset).
+4. rows: ctx512 (rec-u9q seeded prompt, continuation prefill, then 12 ABBA pairs) and short (prompt4, 12 pairs);
+   busy<5 x3 before every pair; cotenants + MemAvailable on every line; pairs dropped if the cotenant state changes.
+5. `done` line -> signal ops_flint to restart :8080.
+Budget: projected ~2.5-3 min of GPU work (load 10-20 s, prefill 512 at ~34 ms/pos ~18 s, 24 pairs ~3.5 s each incl.
+the idle gate); driver budget 420 s hard (refuses to start rows if the probe projects past it), well inside 8 min.
+
+Override analysis (for Alex): the rec-u9q `--bench` uses single 516/548-position launches. On dusk (~82 GB/s, ~25-35 ms
+per full-config position) that is ~15 s per launch, not ~0.7-1 s, and is past the ~3 s compositor-wedge point. With M3.1
+KV continuation NO launch needs to exceed the cap: the default run is cap-compliant (every launch <= 0.2 s target,
+hard abort at 0.25 s). OVERRIDE=1 only lifts the abort as a safety margin for an unexpectedly slow position. So the
+override is not required for this window's rows.
+Projection (mid-8L depth curve scaled to 49 layers): ~34 ms/position at depth 512 -> ~29 tok/s, about parity with the
+incumbent's 29.12 @512. At 8k depth the serial attention would add ~0.2 s/token: split-K attention (M3.2) is needed
+before any 8k row.
+Incumbent rows: llama.cpp :8080 at 512 (and 8k) measured by the xh7-r5 procedure immediately before the stop and after
+the restart, in the same cotenant state as recorded; never compared across states.
