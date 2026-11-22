@@ -38,6 +38,7 @@ from mid_mk_driver import case_matrix, shard_sha256  # noqa: E402
 
 VOCAB, HID, NKV, HDIM, WIN = 150144, 2048, 4, 128, 513
 VRAM_SLACK = int(1.5 * 2**30)
+PREFLIGHT_WAIT_S = 15.0      # sysfs VRAM accounting lags hipFree by ~1-2 s
 STREAM_CHUNK = 256 * 2**20      # host staging for the bank stream (the full bank is 21 GiB; dusk has ~6 GiB available)
 CAP_S = 0.25                    # dusk display-iGPU launch cap (rec-u9q wedge rule)
 TARGET_S = 0.20                 # continuation chunks are sized to this
@@ -212,12 +213,19 @@ def session_bytes(bank_size: int, cfg: dict, max_total: int) -> int:
 
 def create_session(lib, cfg, bank, off, max_total: int):
     need = session_bytes(len(bank), cfg, max_total)
+    # sysfs mem_info_vram_used releases a just-freed session's buffers asynchronously (measured on dusk: still
+    # counted right after mid_session_free, released within 2 s). M3 window 12:25:49Z refused on exactly that, so
+    # re-read for up to PREFLIGHT_WAIT_S before refusing.
+    t_wait = time.time()
     free = vram_free_bytes()
+    while free is not None and need + VRAM_SLACK > free and time.time() - t_wait < PREFLIGHT_WAIT_S:
+        time.sleep(0.5)
+        free = vram_free_bytes()
     log(f"VRAM preflight: need {need / 2**30:.2f} GiB + {VRAM_SLACK / 2**30:.1f} slack, sysfs free "
-        f"{'?' if free is None else f'{free / 2**30:.2f}'} GiB | {cotenants()}")
+        f"{'?' if free is None else f'{free / 2**30:.2f}'} GiB (waited {time.time() - t_wait:.1f} s) | {cotenants()}")
     if free is not None and need + VRAM_SLACK > free:
-        raise SystemExit("REFUSING: session would spill past the VRAM carve-out into GTT/host RAM "
-                         "(stop llama-qwen :8091 first; see rec-xh7 step 0)")
+        raise SystemExit(f"REFUSING: session would spill past the VRAM carve-out into GTT/host RAM; another "
+                         f"process holds VRAM ({cotenants()}; see rec-xh7 step 0)")
     t0 = time.perf_counter()
     sess = lib.mid_session_create2(off.ctypes.data, ctypes.c_int(max_total))
     if not sess:

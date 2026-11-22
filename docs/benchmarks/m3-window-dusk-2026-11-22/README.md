@@ -35,3 +35,18 @@ Caveats:
 - The spot fp32kv short4 npz (`spot/` on dusk) is NOT yet scored against a CPU reference. That is M3 step 3 (streamed CPU
   reference on dawn), so the megakernel rows are perf-only until it passes.
 - No 8k megakernel row was staged.
+
+## Preflight refusal: root cause (added after the coordinator's flag)
+
+Files: `driver.log` is the staged script's first process: spot + REFUSED at 12:25:49. `driver_bench.log` is the second process
+(12:26:33-12:28:29), which ran BOTH rows: ctx512 34.40 (12/12) and short 39.08 (12/12). Its last line is `window bench ok`.
+`window.log` stops at its `start:` line: the script's `rc=${PIPESTATUS[0]}` never ran under `set -e` (fixed).
+Cause: NOT double-counting and NOT a carve-out shortage. emit_spot frees its session (hipFree of the 21 GiB bank) and the
+bench's preflight ran in the same second (12:25:49). sysfs `mem_info_vram_used` releases freed buffers asynchronously.
+Reproduced on dusk with the mid bank: free 15.69 GiB right after mid_session_free, 16.71 GiB 2 s later. So 16.35 = 37.53 - 21.18
+was the spot bank still counted. The ":8091 stop" advisory was stale text (8091 down throughout).
+Fix: the preflight re-reads sysfs for up to 15 s before refusing; the advisory names the cotenant state instead; the script
+records the driver rc.
+Still missing on the megakernel side: depth 8192 (never staged). The serial decode-path prefill of 8192 positions at
+~30-40 ms/position is ~4-6 min, so an 8k row needs a dedicated window slot (or a batched prefill path) to fit the
+~8 min / 10 min SLA.

@@ -17,7 +17,6 @@ EXTRA=""; [ "${OVERRIDE:-0}" = 1 ] && EXTRA="--override-approved"
 log "start: spot (fp32kv short4, 2 continued launches) + rows ctx512, short (12 ABBA pairs each), budget 420 s"
 $PY $MK/flint_full_driver.py --lib $MK/flint_full.so --bank ~/xh7/flint-int4.bank --ckpt ~/xh7/flint-int4 \
     --workers 16 --mode 0 --emit-spot "$OUT/spot" --window-bench "$OUT/window_bench.json" \
-    --rows ctx512,short --pairs 12 --budget-s 420 $EXTRA 2>&1 | tee -a "$OUT/driver.log"
-rc=${PIPESTATUS[0]}
+    --rows ctx512,short --pairs 12 --budget-s 420 $EXTRA 2>&1 | tee -a "$OUT/driver.log" && rc=0 || rc=${PIPESTATUS[0]}
 log "done rc=$rc -> signal ops_flint to restart :8080"
 exit $rc
