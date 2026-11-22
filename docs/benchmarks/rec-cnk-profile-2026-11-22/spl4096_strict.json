@@ -1,0 +1,46 @@
+[
+ {
+  "files": [
+   "depth4096_fp32kv.npz"
+  ],
+  "kv": "fp32",
+  "tier": 0.0001,
+  "tokens": [
+   10733,
+   275,
+   475,
+   5929,
+   220,
+   197,
+   7,
+   16,
+   8,
+   220,
+   197,
+   7,
+   17,
+   8,
+   220,
+   197,
+   7,
+   18,
+   8,
+   220,
+   197,
+   7,
+   19,
+   8
+  ],
+  "pass": false,
+  "problems": [
+   "last_logits rel err 2.476e-02 > 0.0001 (fp32-KV tier)",
+   "step_logits max rel err 7.951e-02 > 0.0001 (fp32-KV tier)",
+   "2 routing deviation(s) in the fp32-KV tier"
+  ],
+  "last_logits_rel": 0.024759037336398088,
+  "step_logits_max_rel": 0.07950798468857515,
+  "n_routing_deviations": 2,
+  "tokens_exact": true,
+  "wall_s": 370.0
+ }
+]

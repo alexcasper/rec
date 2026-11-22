@@ -1,0 +1,16 @@
+21:27:23Z +0s preflight cnk profile | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=17.2GiB vram_free=38.7GiB
+f217f678ad96b7893045c5bbab4db45dad7dc99d35b6e692866352be80744ddb  /home/dusk/rec-ve/bisect/flint_full_def_288f4fa.so
+d95d101f3ba4b7be32e7603becb1b755beff3a2db1a47756654ff76b8e1e9e30  /home/dusk/rec-ve/bisect/flint_full_split_288f4fa.so
+21:27:23Z +0s START def3072 (budget 220s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=17.2GiB vram_free=38.7GiB
+2026-11-22T21:30:09Z GATE depth3072_fp32kv.npz: tokens[:6]=[81, 9672, 220, 16, 13, 15] md5 4f6f122f5b57 launches 1245 longest 0.194 s, 64.5 ms/pos, 163.1 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,
+21:30:09Z +166s END def3072 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=91 MemAvailable=17.2GiB vram_free=38.7GiB
+21:30:09Z +166s START def4096 (budget 300s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=86 MemAvailable=17.2GiB vram_free=38.7GiB
+2026-11-22T21:34:08Z GATE depth4096_fp32kv.npz: tokens[:6]=[10733, 275, 475, 5929, 220, 197] md5 10606d655d92 launches 2178 longest 0.167 s, 76.4 ms/pos, 235.7 s | flint:down,e4b:idle,qwen:down,gpu_bu
+21:34:08Z +405s END def4096 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.2GiB vram_free=38.7GiB
+21:34:08Z +405s START spl3072 (budget 150s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=86 MemAvailable=17.2GiB vram_free=38.7GiB
+2026-11-22T21:35:57Z GATE depth3072_fp32kv.npz: tokens[:6]=[81, 9672, 220, 16, 13, 15] md5 9e1503a75cc3 launches 663 longest 0.176 s, 35.6 ms/pos, 106.3 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,M
+21:35:57Z +514s END spl3072 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.2GiB vram_free=38.7GiB
+21:35:57Z +514s START spl4096 (budget 200s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=86 MemAvailable=17.2GiB vram_free=38.7GiB
+2026-11-22T21:38:23Z GATE depth4096_fp32kv.npz: tokens[:6]=[10733, 275, 475, 5929, 220, 197] md5 3abc66496fb9 launches 925 longest 0.188 s, 38.4 ms/pos, 143.5 s | flint:down,e4b:idle,qwen:down,gpu_bus
+21:38:23Z +660s END spl4096 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.2GiB vram_free=38.7GiB
+21:38:23Z +660s done -> signal ops_flint to restart :8080 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=87 MemAvailable=17.2GiB vram_free=38.7GiB
