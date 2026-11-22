@@ -60,8 +60,13 @@ KNOBS = {
     "workers": ("tile_shapes", [16, 8], 16),
     "GEPA_TOPK_PER_WG": ("barrier_structure", [0, 1], 0),
     "GEPA_RESID_FUSE": ("barrier_structure", [0, 1], 0),
+    # run 3: per-warp depth on the slow phases (O-proj = generic K=4096, MoE down = K=512 VCgen + K=1024 generic)
+    "GEPA_K512_DUAL": ("tile_shapes", [0, 1], 0),
+    "GEPA_GEN_DIST2": ("lds_staging", [0, 1], 0),
 }
 DEFAULTS = {k: v[2] for k, v in KNOBS.items()}
+ALLOWED: set = set(KNOBS)   # --knobs restriction (proposals only; reflection prompt + parser honour it)
+CONTEXT = ""                # extra reflection context for this run (--context)
 
 
 def now() -> str:
@@ -214,7 +219,7 @@ def run_gates(cid: str, em: dict, inc: dict | None) -> dict:
 
 
 # ------------------------------------------------------------------------------------------- optimizer
-KIMI_WINDOW_S = 30.0          # max 1 kimi call per ~30 s
+KIMI_WINDOW_S = 180.0         # max 1 kimi call per ~180 s (RUN 2: 6/8 first attempts were 429 at ~30 s spacing)
 KIMI_THROTTLE_HOUR_S = 3600.0  # consecutive 429s spanning this long -> kimi disabled for an hour, then re-probe
 RETRYABLE = lambda http: http == 429 or 500 <= http < 600  # noqa: E731
 
@@ -319,9 +324,9 @@ def reflect_prompt(pool: dict, best: dict, done: set, min_gain: float) -> list:
                      "speedup_vs_parent": r.get("speedup_vs_best"), "parent": r.get("parent"),
                      "hot_instr": b.get("hot_instr"), "scratch": b.get("kernels", {}).get("mid_generate", {}).get("scratch"),
                      "reason": r.get("reason")})
-    space = {k: {"axis": ax, "values": vals, "default": d} for k, (ax, vals, d) in KNOBS.items()}
+    space = {k: {"axis": ax, "values": vals, "default": d} for k, (ax, vals, d) in KNOBS.items() if k in ALLOWED}
     axes = [{"axis": x.get("axis"), "prior": x.get("prior_evidence", x.get("notes"))} for x in pool["mutation_axes"]]
-    user = {"knob_space": space, "pool_axes": axes, "current_best": {"id": best["id"], "knobs": best["knobs"]},
+    user = {"run_context": CONTEXT, "knob_space": space, "pool_axes": axes, "current_best": {"id": best["id"], "knobs": best["knobs"]},
             "min_gain": min_gain, "history": hist, "already_tried": sorted(done)}
     return [{"role": "system", "content": REFLECT_SYS}, {"role": "user", "content": json.dumps(user)}]
 
@@ -336,7 +341,7 @@ def parse_proposal(text: str, best: dict, done: set) -> tuple[dict | None, str, 
         return None, "", f"bad JSON: {e}"
     k = dict(best["knobs"])
     for n, v in (d.get("knobs") or {}).items():
-        if n not in KNOBS or v not in KNOBS[n][1]:
+        if n not in KNOBS or n not in ALLOWED or v not in KNOBS[n][1]:
             return None, "", f"outside knob space: {n}={v}"
         k[n] = v
     if knob_key(k) in done:
@@ -458,10 +463,17 @@ def main() -> int:
     ap.add_argument("--min-gain", type=float, default=None, help="default: 2x iter0 |speedup - 1| noise, >= 0.005")
     ap.add_argument("--proposer", choices=["llm", "grid"], default="llm",
                     help="llm: kimi-first reflection w/ glm fallback (grid neighbour if both fail); grid: deterministic")
+    ap.add_argument("--kimi-every", type=int, default=3, help="ask kimi on every Nth reflection, grid otherwise")
+    ap.add_argument("--knobs", default="", help="comma list: restrict proposals to these knobs (others stay at best)")
+    ap.add_argument("--context", default="", help="run context string for the reflection prompt")
     ap.add_argument("--probe-optimizer", action="store_true", help="one tiny reflect call through the fallback chain")
     ap.add_argument("--candidate", type=Path, help='JSON {"knobs": {...}, "patch": "file.patch", "axis": "..."}')
     a = ap.parse_args()
     STATE.mkdir(parents=True, exist_ok=True)
+    global ALLOWED, CONTEXT
+    if a.knobs:
+        ALLOWED = set(a.knobs.split(","))
+    CONTEXT = a.context
     pool = load_pool(a.pool)
     s = search_state(pool)
     sync_harness(a.pool)
@@ -516,7 +528,9 @@ def main() -> int:
         else:
             cands, opt_rec = [], None
             axis_order = [x["axis"] for x in pool["mutation_axes"]]
-            for name, (ax, vals, _) in sorted(KNOBS.items(), key=lambda kv: axis_order.index(kv[1][0])
+            allowed = set(a.knobs.split(",")) if a.knobs else set(KNOBS)
+            for name, (ax, vals, _) in sorted(((k, v) for k, v in KNOBS.items() if k in allowed),
+                                              key=lambda kv: axis_order.index(kv[1][0])
                                               if kv[1][0] in axis_order else 99):
                 for v in vals:
                     k = dict(best["knobs"], **{name: v})
@@ -527,7 +541,13 @@ def main() -> int:
                 break
             axis, knobs = cands[0]
             patch = None
-            if a.proposer == "llm":
+            n_reflect = s.setdefault("reflections", 0)
+            s["reflections"] = n_reflect + 1
+            if a.proposer == "llm" and n_reflect % max(1, a.kimi_every) != 0:
+                opt_rec = {"optimizer": "grid", "kimi_429_total": opt.st["kimi_429_total"],
+                           "note": f"kimi asked every {a.kimi_every}th reflection"}
+                log(f"optimizer=grid (kimi every {a.kimi_every}) -> {knob_key(knobs)}")
+            elif a.proposer == "llm":
                 cid_next = f"c{len([r for r in pool['evaluations'] if r['id'].startswith('c')]) + 1:03d}"
                 r = opt.ask(reflect_prompt(pool, best, done, min_gain), cid_next)
                 opt_rec = {k: r[k] for k in ("optimizer", "attempts", "kimi_429_total", "kimi_429_consecutive", "usage",
