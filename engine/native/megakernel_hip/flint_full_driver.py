@@ -38,6 +38,9 @@ from mid_mk_driver import case_matrix, shard_sha256  # noqa: E402
 
 VOCAB, HID, NKV, HDIM, WIN = 150144, 2048, 4, 128, 513
 VRAM_SLACK = int(1.5 * 2**30)
+STREAM_CHUNK = 256 * 2**20      # host staging for the bank stream (the full bank is 21 GiB; dusk has ~6 GiB available)
+CAP_S = 0.25                    # dusk display-iGPU launch cap (rec-u9q wedge rule)
+TARGET_S = 0.20                 # continuation chunks are sized to this
 BUILDS = {  # name -> (mode, kv_dtype, impl)
     "fp32kv": (2, "fp32", "flint_mid_megakernel.hip[FULL]:mid_generate_fp32kv (fp32-compute, fp32-KV)"),
     "fp32_bf16kv": (1, "bf16", "flint_mid_megakernel.hip[FULL]:mid_generate_fp32_bf16kv (fp32-compute, bf16-KV)"),
@@ -78,7 +81,17 @@ def cotenants() -> str:
                 state = "busy" if '"is_processing":true' in out else "idle"
                 break
         st.append(f"{name}:{state}")
-    return ",".join(st) + f",gpu_busy={_busy()}"
+    return ",".join(st) + f",gpu_busy={_busy()},MemAvailable={mem_available_gib():.1f}GiB"
+
+
+def mem_available_gib() -> float:
+    try:
+        for line in open("/proc/meminfo"):
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 2**20
+    except OSError:
+        pass
+    return float("nan")
 
 
 def _busy() -> str:
@@ -119,7 +132,7 @@ def vram_free_bytes() -> int | None:
 
 
 def load_lib(path: Path) -> tuple[ctypes.CDLL, dict]:
-    lib = ctypes.CDLL(str(path))
+    lib = ctypes.CDLL(str(path.resolve()))   # dlopen needs a path, not a bare name
     cfg = (ctypes.c_int * 8)()
     lib.mid_config(cfg)
     c = dict(zip(("nl", "nexp", "topk", "n_dense", "dense_i", "n_offsets", "n_full", "full"), list(cfg)))
@@ -129,6 +142,14 @@ def load_lib(path: Path) -> tuple[ctypes.CDLL, dict]:
     lib.mid_session_run_ex2.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p,
                                         ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int,
                                         ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p]
+    lib.mid_session_run_ex3.restype = ctypes.c_int
+    lib.mid_session_run_ex3.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p,
+                                        ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int,
+                                        ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
+    lib.mid_session_create2.restype = ctypes.c_void_p
+    lib.mid_session_create2.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    lib.mid_session_load_bank.restype = ctypes.c_int
+    lib.mid_session_load_bank.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t]
     lib.mid_session_free.restype = None
     lib.mid_session_free.argtypes = [ctypes.c_void_p]
     lib.mid_query_occupancy.restype = ctypes.c_int
@@ -152,14 +173,35 @@ def read_offsets(path: Path) -> np.ndarray:
     return np.fromfile(path, dtype="<i8")
 
 
-def open_bank(bank_path: Path, cfg: dict) -> tuple[np.memmap, np.ndarray]:
-    off = read_offsets(Path(str(bank_path) + ".off.npy"))
+def find_offsets(bank_path: Path, explicit: Path | None = None) -> Path:
+    """Offset table next to the bank. pack_flint_bank.py names it <bank>.off.npy; the dusk copy is
+    <bank-stem>.off.npy (~/xh7/flint-int4.off.npy next to flint-int4.bank, rec-are D). Accept both, or --off."""
+    cands = [explicit] if explicit else [Path(str(bank_path) + ".off.npy"), bank_path.with_suffix(".off.npy")]
+    for c in cands:
+        if c and c.exists():
+            return c
+    raise SystemExit(f"offset table not found; tried {[str(c) for c in cands]}")
+
+
+class Bank:
+    """The bank FILE (never mapped or buffered whole): path + size; streamed into the session."""
+    def __init__(self, path: Path):
+        self.path, self.size = path, os.path.getsize(path)
+
+    def __len__(self) -> int:
+        return self.size
+
+
+def open_bank(bank_path: Path, cfg: dict, off_path: Path | None = None) -> tuple[Bank, np.ndarray]:
+    op = find_offsets(bank_path, off_path)
+    log(f"offset table {op}")
+    off = read_offsets(op)
     if len(off) != cfg["n_offsets"]:
         raise SystemExit(f"offset table has {len(off)} entries, {cfg['n_offsets']} expected by the .so (NL={cfg['nl']})")
     size = os.path.getsize(bank_path)
     if int(off[-1]) != size or bool((np.diff(off) < 0).any()):
         raise SystemExit(f"bad offset table: sentinel {int(off[-1])} vs bank {size} bytes, monotonic={not (np.diff(off) < 0).any()}")
-    return np.memmap(bank_path, dtype=np.uint8, mode="r"), off
+    return Bank(bank_path), off
 
 
 def session_bytes(bank_size: int, cfg: dict, max_total: int) -> int:
@@ -177,24 +219,53 @@ def create_session(lib, cfg, bank, off, max_total: int):
         raise SystemExit("REFUSING: session would spill past the VRAM carve-out into GTT/host RAM "
                          "(stop llama-qwen :8091 first; see rec-xh7 step 0)")
     t0 = time.perf_counter()
-    sess = lib.mid_session_create(bank.ctypes.data, off.ctypes.data, ctypes.c_int(max_total))
+    sess = lib.mid_session_create2(off.ctypes.data, ctypes.c_int(max_total))
     if not sess:
-        raise SystemExit("mid_session_create failed (allocation or bank copy)")
-    log(f"session created in {time.perf_counter() - t0:.1f} s (bank {len(bank) / 2**30:.3f} GiB H2D) | {cotenants()}")
+        raise SystemExit("mid_session_create2 failed (allocation)")
+    # stream the bank file through ONE reusable 256 MiB host buffer; drop each chunk from the page cache
+    chunk = STREAM_CHUNK
+    buf = np.empty(chunk, dtype=np.uint8)
+    done, next_log = 0, 0
+    fd = os.open(bank.path, os.O_RDONLY)
+    try:
+        with os.fdopen(fd, "rb", buffering=0) as f:
+            while done < bank.size:
+                n = min(chunk, bank.size - done)
+                got = f.readinto(memoryview(buf)[:n])
+                if got != n:
+                    raise SystemExit(f"short read at {done}: {got} of {n}")
+                if lib.mid_session_load_bank(sess, ctypes.c_size_t(done), buf.ctypes.data, ctypes.c_size_t(n)) != 0:
+                    lib.mid_session_free(sess)
+                    raise SystemExit(f"mid_session_load_bank failed at {done}")
+                try:
+                    os.posix_fadvise(f.fileno(), done, n, os.POSIX_FADV_DONTNEED)
+                except (AttributeError, OSError):
+                    pass
+                done += n
+                if done >= next_log or done == bank.size:
+                    log(f"bank stream {done / 2**30:6.2f}/{bank.size / 2**30:.2f} GiB | host buffer {chunk >> 20} MiB "
+                        f"| {cotenants()}")
+                    next_log += 2 * 2**30
+    finally:
+        del buf
+    dt = time.perf_counter() - t0
+    log(f"session created in {dt:.1f} s (bank {bank.size / 2**30:.3f} GiB streamed H2D, "
+        f"{bank.size / 2**30 / max(dt, 1e-9):.2f} GiB/s) | {cotenants()}")
     return sess
 
 
 def run(lib, sess, cfg, prompt: np.ndarray, n_out: int, workers: int, mode: int,
-        step_logits: bool = False, experts: bool = False):
+        step_logits: bool = False, experts: bool = False, start: int = 0):
     tokens = np.zeros(n_out, dtype=np.int32)
     last = np.zeros(VOCAB, dtype=np.float32)
     step = np.zeros((n_out, VOCAB), dtype=np.float32) if step_logits else None
     exp = np.full((len(prompt) + n_out, cfg["nl"], cfg["topk"]), -1, dtype=np.int32) if experts else None
     ctrl = np.zeros(4, dtype=np.uint32)
     t0 = time.perf_counter()
-    rc = lib.mid_session_run_ex2(sess, prompt.ctypes.data, len(prompt), tokens.ctypes.data, n_out,
+    rc = lib.mid_session_run_ex3(sess, prompt.ctypes.data, len(prompt), tokens.ctypes.data, n_out,
                                  step.ctypes.data if step is not None else None, last.ctypes.data,
-                                 workers, mode, ctrl.ctypes.data, exp.ctypes.data if exp is not None else None)
+                                 workers, mode, ctrl.ctypes.data, exp.ctypes.data if exp is not None else None,
+                                 start)
     dt = time.perf_counter() - t0
     # rec-tan.5 validity: rc, barrier abort, executed, written outputs, routed layers written
     bad = []
@@ -300,6 +371,158 @@ def bench(lib, cfg, bank, off, ckpt: Path, out_json: Path, workers: int, mode: i
     return 0 if a["valid"] and s["valid"] else 1
 
 
+def wait_idle(timeout: float = 300.0) -> bool:
+    t0, ok = time.time(), 0
+    while time.time() - t0 < timeout:
+        b = _busy()
+        ok = ok + 1 if b.split("(")[0].isdigit() and int(b.split("(")[0]) < 5 else 0
+        if ok >= 3:
+            return True
+        time.sleep(0.3)
+    return False
+
+
+class CapExceeded(Exception):
+    pass
+
+
+def window_bench(lib, cfg, bank, off, out_json: Path, workers: int, mode: int, pairs_n: int, override: bool,
+                 rows: list[str], budget_s: float, label: str) -> int:
+    """Bedivere M3.4 decode rows via KV CONTINUATION (M3.1): no launch exceeds CAP_S unless --override-approved.
+
+    Per row: build the context (short: prompt4; ctx512: the rec-u9q seeded 512-token prompt) in continued
+    launches of <= TARGET_S, then `pairs_n` ABBA pairs of A = {last}+1 token and B = {last}+k tokens
+    (k sized from a probe so B <= TARGET_S); decode tok/s = (k-1) / (mean tB - mean tA): launch overhead cancels.
+    Each launch continues from the previous one (start_pos protocol), so depth drifts by ~pairs_n*(k+1); recorded."""
+    t_begin = time.time()
+    rng_prompt512 = np.random.default_rng(0).integers(3, VOCAB, size=512, dtype=np.int32)
+    res = {"protocol": "M3 continuation-chunked decode differential (A={last}+1, B={last}+k), ABBA", "label": label,
+           "config": cfg, "mode": mode, "workers": workers, "occupancy": occupancy(lib, mode), "cap_s": CAP_S,
+           "override_approved": override, "bank_bytes": len(bank), "host": os.uname().nodename,
+           "prompt512_int32_sha256": hashlib.sha256(rng_prompt512.tobytes()).hexdigest(), "rows": {}}
+    sess = create_session(lib, cfg, bank, off, max_total=1024)
+    launches = []
+
+    def launch(prompt, n_out, start, tag):
+        dt, tok, last, _, _, ctrl, bad = run(lib, sess, cfg, np.asarray(prompt, np.int32), n_out, workers, mode,
+                                             start=start)
+        launches.append({"tag": tag, "start": start, "positions": len(prompt) + n_out, "dt_s": round(dt, 5)})
+        if bad:
+            raise SystemExit(f"INVALID launch {tag} start={start}: {bad} | {cotenants()}")
+        if dt > CAP_S and not override:
+            raise CapExceeded(f"{tag}: {dt:.3f} s > cap {CAP_S} s at start={start}")
+        return dt, tok
+
+    try:
+        if not wait_idle():
+            raise SystemExit("gate timeout: busy>=5")
+        # probe: 2 positions from a scratch context -> per-position time (upper bound, includes launch overhead)
+        dt, _ = launch([1, 5], 0, 0, "probe2")
+        dt5, _ = launch([1, 5, 6, 7], 1, 0, "probe5")
+        t_pos = max(dt5 / 5.0, dt / 2.0)
+        k = int(max(2, min(31, TARGET_S / t_pos - 1)))
+        proj = 516 * t_pos + 2 * pairs_n * (k + 3) * t_pos * len(rows) + 10.0
+        res.update(t_pos_probe_s=round(t_pos, 5), k=k, projected_bench_s=round(proj, 1))
+        log(f"probe: {t_pos * 1e3:.1f} ms/position -> k={k} (B launch ~{(k + 1) * t_pos:.3f} s); projected bench span "
+            f"{proj:.0f} s (budget {budget_s:.0f} s) | {cotenants()}")
+        if proj > budget_s:
+            raise SystemExit(f"projected {proj:.0f} s > budget {budget_s:.0f} s: refusing to start the timed rows")
+        for row in rows:
+            if time.time() - t_begin > budget_s:
+                log(f"budget reached, skipping row {row}")
+                break
+            prompt = [1, 5, 6, 7] if row == "short" else rng_prompt512.tolist()
+            # prefill in continued launches, each re-sized from the previous one's measured per-position time
+            # (per-position cost grows with depth: attention is serial over positions)
+            start, t_pre, i, tp = 0, 0.0, 0, t_pos
+            while i < len(prompt):
+                c = int(max(1, min(64, TARGET_S / tp - 1)))
+                chunk = prompt[i:i + c]
+                last_chunk = i + len(chunk) >= len(prompt)
+                n = 1 if last_chunk else 0
+                dt, tok = launch(chunk, n, start, f"{row}/prefill")
+                tp = max(tp, dt / (len(chunk) + n))
+                t_pre += dt
+                start += len(chunk)
+                i += len(chunk)
+            last = int(tok[0])                  # generated at position start-1 ... its KV is written at `start`
+            # k for THIS row from the per-position time at this depth, with 20 % headroom for the pairs' drift
+            k = int(max(2, min(31, 0.8 * TARGET_S / tp - 1)))
+            log(f"{row}: prefill {len(prompt)} pos in {t_pre:.2f} s; {tp * 1e3:.2f} ms/position at depth {start} -> "
+                f"k={k} | {cotenants()}")
+            rows_ab, depth0 = [], start
+            for i in range(pairs_n):
+                if not wait_idle(60):
+                    raise SystemExit("gate timeout: busy>=5")
+                pre = cotenants()
+                order = ("A", "B") if i % 2 == 0 else ("B", "A")
+                r = {}
+                for tag in order:
+                    n = 1 if tag == "A" else k
+                    dt, tok = launch([last], n, start, f"{row}/{tag}")
+                    r[tag] = dt
+                    start += n                  # next launch re-runs the last position (protocol)
+                    last = int(tok[-1])
+                post = cotenants()
+                d = r["B"] - r["A"]
+                rows_ab.append({"pair": i, "order": "".join(order), "tA_s": round(r["A"], 5), "tB_s": round(r["B"], 5),
+                                "tok_s": round((k - 1) / d, 2) if d > 0 else None, "depth": start, "pre": pre,
+                                "post": post, "stable": pre.split(",gpu_busy")[0] == post.split(",gpu_busy")[0]})
+                log(f"{row} pair {i} {''.join(order)}: tA={r['A']:.4f} tB={r['B']:.4f} -> "
+                    f"{rows_ab[-1]['tok_s']} tok/s depth {start} | {post}")
+            v = [x for x in rows_ab if x["stable"] and x["tok_s"]]
+            tA = sum(x["tA_s"] for x in v) / max(1, len(v))
+            tB = sum(x["tB_s"] for x in v) / max(1, len(v))
+            res["rows"][row] = {"valid_pairs": len(v), "pairs": rows_ab, "depth_range": [depth0, start], "k": k,
+                                "t_pos_at_depth_s": round(tp, 5),
+                                "decode_tok_s": round((k - 1) / (tB - tA), 2) if v and tB > tA else None,
+                                "prefill_positions": len(prompt), "prefill_s": round(t_pre, 3),
+                                "prefill_pos_s": round(len(prompt) / t_pre, 2)}
+            log(f"ROW {row}: decode {res['rows'][row]['decode_tok_s']} tok/s ({len(v)}/{pairs_n} stable pairs, depth "
+                f"{depth0}..{start}); prefill {len(prompt)} pos in {t_pre:.2f} s | {cotenants()}")
+        res["status"] = "ok"
+    except CapExceeded as e:
+        res["status"] = f"ABORTED cap: {e}"
+        log(res["status"])
+    finally:
+        lib.mid_session_free(sess)
+        res["launches"] = launches
+        res["max_launch_s"] = max((x["dt_s"] for x in launches), default=0.0)
+        res["bench_span_s"] = round(time.time() - t_begin, 1)
+        out_json.write_text(json.dumps(res, indent=1))
+    log(f"window bench {res['status']} | max launch {res['max_launch_s']} s | span {res['bench_span_s']} s")
+    return 0 if res["status"] == "ok" else 1
+
+
+def emit_spot(lib, cfg, bank, off, ckpt: Path, out: Path, workers: int, n_out: int = 8) -> int:
+    """Correctness spot inside the window (coordinator ruling 3): fp32kv short4 via continuation (2 launches,
+    bit-identical to one launch by M3.1), rec-mk-out/1 npz for an offline streamed/spot CPU reference."""
+    out.mkdir(parents=True, exist_ok=True)
+    mode, kv_dtype, impl = BUILDS["fp32kv"]
+    prompt = np.array(case_matrix(VOCAB)["short4"]["prompt"], dtype=np.int32)
+    sess = create_session(lib, cfg, bank, off, max_total=64)
+    try:
+        h = n_out // 2
+        dt1, t1, _, s1, e1, _, b1 = run(lib, sess, cfg, prompt, h, workers, mode, step_logits=True, experts=True)
+        st2 = len(prompt) + h - 1
+        dt2, t2, l2, s2, e2, _, b2 = run(lib, sess, cfg, np.array([t1[-1]], np.int32), n_out - h, workers, mode,
+                                         step_logits=True, experts=True, start=st2)
+        if b1 or b2 or max(dt1, dt2) > CAP_S:
+            log(f"spot INVALID/over cap: {b1} {b2} {dt1:.3f} {dt2:.3f}")
+            return 1
+        tok, step = np.concatenate([t1, t2]), np.concatenate([s1, s2])
+        exp = np.concatenate([e1[:len(prompt) + h - 1], e2])       # per position (continued launch re-runs st2)
+        p = len(prompt)
+        np.savez(out / f"short4_fp32kv.npz", schema=np.array("rec-mk-out/1"), case=np.array("short4"),
+                 ckpt_sha256=np.array(shard_sha256(ckpt)), impl=np.array(f"{impl} workers={workers} [M3 spot, 2 continued launches]"),
+                 kv_dtype=np.array(kv_dtype), prompt=prompt, tokens=tok, step_logits=step, last_logits=l2,
+                 chosen_experts=exp[p - 1:p - 1 + len(tok)], step_experts=exp)
+        log(f"spot wrote short4_fp32kv.npz tokens {tok.tolist()} | launches {dt1:.3f}/{dt2:.3f} s | {cotenants()}")
+    finally:
+        lib.mid_session_free(sess)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bank", type=Path, required=True)
@@ -311,6 +534,16 @@ def main(argv=None) -> int:
     ap.add_argument("--cases", default="short4,chat,wrap512")
     ap.add_argument("--bench", type=Path)
     ap.add_argument("--mode", type=int, default=0)
+    ap.add_argument("--off", type=Path, help="offset table (default: <bank>.off.npy or <bank-stem>.off.npy)")
+    ap.add_argument("--window-bench", type=Path, help="M3 continuation-chunked decode rows (cap-compliant)")
+    ap.add_argument("--rows", default="ctx512,short")
+    ap.add_argument("--pairs", type=int, default=8)
+    ap.add_argument("--budget-s", type=float, default=480.0, help="bench span budget (ops_flint restart SLA)")
+    ap.add_argument("--emit-spot", type=Path, help="fp32kv short4 spot npz for an offline CPU reference")
+    ap.add_argument("--override-approved", action="store_true",
+                    help="Alex's banned-launch override: allow launches > 0.25 s (window-bench only)")
+    ap.add_argument("--rehearsal", action="store_true",
+                    help="dry rehearsal on a mid-8L bank: skip the full-config + :8080-down preconditions")
     a = ap.parse_args(argv)
     if os.environ.get("HSA_OVERRIDE_GFX_VERSION"):
         raise SystemExit("refusing: HSA_OVERRIDE_GFX_VERSION is set (rec-tan.5: native launch no-ops)")
@@ -319,21 +552,34 @@ def main(argv=None) -> int:
     _CARD = hip_card(0)
     if _CARD is None:
         raise SystemExit("cannot map HIP device 0 to its sysfs card (VRAM preflight impossible)")
-    if not cfg["full"]:
+    if not cfg["full"] and not a.rehearsal:
         raise SystemExit(f"{a.lib} is not a FLINT_CFG_FULL build: {cfg}")
     if not 1 <= a.workers <= 64:
         raise SystemExit("workers must be in [1, 64]")
     occ = occupancy(lib, a.mode)
     if a.workers > occ["max_co_resident_workers"]:
         raise SystemExit(f"workers={a.workers} > max co-resident {occ['max_co_resident_workers']} ({occ})")
-    bank, off = open_bank(a.bank, cfg)
+    bank, off = open_bank(a.bank, cfg, a.off)
     log(f"lib {a.lib.name} cfg {cfg} | occupancy {occ} | workers {a.workers} | card {_CARD} | {cotenants()}")
+    if (a.window_bench or a.emit_spot) and not a.rehearsal:
+        st = cotenants()
+        q = subprocess.run(["systemctl", "--user", "is-active", "llama-qwen"], capture_output=True, text=True).stdout.strip()
+        if "flint:down" not in st or q == "active":
+            raise SystemExit(f"window preconditions not met (need flint :8080 DOWN by ops_flint, llama-qwen inactive): "
+                             f"{st} qwen={q}")
+    if a.emit_spot:
+        rc = emit_spot(lib, cfg, bank, off, a.ckpt, a.emit_spot, a.workers)
+        if rc or not a.window_bench:
+            return rc
+    if a.window_bench:
+        return window_bench(lib, cfg, bank, off, a.window_bench, a.workers, a.mode, a.pairs, a.override_approved,
+                            a.rows.split(","), a.budget_s, "REHEARSAL mid-8L" if a.rehearsal else "M3 window full Flint")
     if a.emit_suite:
         return 1 if emit_suite(lib, cfg, bank, off, a.ckpt, a.emit_suite, a.workers,
                                a.builds.split(","), a.cases.split(",")) else 0
     if a.bench:
         return bench(lib, cfg, bank, off, a.ckpt, a.bench, a.workers, a.mode)
-    ap.error("one of --emit-suite / --bench")
+    ap.error("one of --emit-suite / --bench / --window-bench / --emit-spot")
 
 
 if __name__ == "__main__":

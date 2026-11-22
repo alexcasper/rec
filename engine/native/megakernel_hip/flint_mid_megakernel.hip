@@ -1841,6 +1841,7 @@ extern "C" int flint_q4_gemv_host(const uint8_t* h_w, const uint16_t* h_s, const
 // Persistent session handle so benchmarks & multiple decode calls keep the 0.94 GiB
 // mid-8L bank resident on GPU without host->device copies inside timed regions.
 struct MidSession {
+    size_t   bank_bytes;   // no default member initializer: `new MidSession()` must stay value-initialized (all null)
     uint8_t* d_bank;
     int64_t* d_off;
     bf16*    d_kv_sliding;
@@ -1889,7 +1890,40 @@ extern "C" int mid_config(int* out) {
     return 8;
 }
 
+extern "C" void mid_session_free(void* handle);
+
+// Bedivere M3 window prep: streamed bank load. create2 allocates the session and copies the offset table (bank
+// size = sentinel off[N-1]); the caller then streams the bank file with load_bank in chunks from a small reusable
+// host buffer (the 21 GiB full bank is never resident in host RAM). mid_session_create == create2 + one load_bank.
+extern "C" void* mid_session_create2(const int64_t* h_off, int max_total);
+extern "C" int mid_session_load_bank(void* handle, size_t offset, const void* h_src, size_t nbytes);
+
 extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off, int max_total) {
+    void* s = mid_session_create2(h_off, max_total);
+    if (!s) return nullptr;
+    if (mid_session_load_bank(s, 0, h_bank, (size_t)h_off[MID_NUM_OFFSETS - 1]) != 0) {
+        mid_session_free(s);
+        return nullptr;
+    }
+    return s;
+}
+
+extern "C" int mid_session_load_bank(void* handle, size_t offset, const void* h_src, size_t nbytes) {
+    MidSession* s = (MidSession*)handle;
+    if (!s || !s->d_bank || offset + nbytes > s->bank_bytes) {
+        fprintf(stderr, "flint_mid load_bank: bad range offset=%zu n=%zu bank=%zu\n", offset, nbytes,
+                s ? s->bank_bytes : (size_t)0);
+        return -1;
+    }
+    hipError_t e = hipMemcpy(s->d_bank + offset, h_src, nbytes, hipMemcpyHostToDevice);
+    if (e != hipSuccess) {
+        fprintf(stderr, "flint_mid load_bank: hipMemcpy FAILED at %zu (%s)\n", offset, hipGetErrorString(e));
+        return -2;
+    }
+    return 0;
+}
+
+extern "C" void* mid_session_create2(const int64_t* h_off, int max_total) {
     MidSession* s = new MidSession();
     s->max_total = max_total;
     size_t bank_sz = (size_t)h_off[MID_NUM_OFFSETS - 1];
@@ -1922,12 +1956,12 @@ extern "C" void* mid_session_create(const uint8_t* h_bank, const int64_t* h_off,
     chk_hip(hipMalloc(&s->d_logits, (size_t)MID_VOCAB * sizeof(float)), "hipMalloc logits");
     chk_hip(hipMalloc(&s->d_chosen_experts, (size_t)max_total * MID_NL * MID_TOPK * sizeof(int)), "hipMalloc chosen_experts");
 
-    hipError_t cb = hipMemcpy(s->d_bank, h_bank, bank_sz, hipMemcpyHostToDevice);
+    s->bank_bytes = bank_sz;
     hipError_t co = hipMemcpy(s->d_off, h_off, off_sz, hipMemcpyHostToDevice);
     hipError_t ce = hipGetLastError();
-    if (cb != hipSuccess || co != hipSuccess || ce != hipSuccess || !s->d_chosen_experts || !s->d_logits) {
-        fprintf(stderr, "flint_mid session_create: bank/offset copy or allocation FAILED (%s)\n",
-                hipGetErrorString(cb != hipSuccess ? cb : (co != hipSuccess ? co : ce)));
+    if (co != hipSuccess || ce != hipSuccess || !s->d_chosen_experts || !s->d_logits) {
+        fprintf(stderr, "flint_mid session_create: offset copy or allocation FAILED (%s)\n",
+                hipGetErrorString(co != hipSuccess ? co : ce));
         mid_session_free(s);
         return nullptr;
     }
