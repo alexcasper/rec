@@ -27,3 +27,25 @@ Findings:
    intermittent fault.
 4. Discriminator window staged (`scripts/bisect/m3_bisect2_dusk.sh`, ~90 s): reproduce the window config; the same .so via shim x3;
    HEAD via shim x3 (determinism); 2fd83cb x3 (race vs defect); HEAD via the driver path.
+
+## Discriminator window (2026-11-22 14:59:17-15:00:41Z, :8080 down ~2 min, coordinator-approved)
+
+Raw npz: dusk ~/rec-ve/bisect/win2-*/ (dawn ~/rec-data/bisect/win2/). Scored on dawn, fp32-KV tier 1e-4.
+
+| run | build / load path | verdict | step rel | forced rel | row 0 forced | routing devs | repeats identical? |
+|---|---|---|---|---|---|---|---|
+| reproduce | flint_full.so (HEAD + GEPA_ATTN_SPLIT=1) / driver streamed load | FAIL | 2.61e-2 | 6.53e-3 | 1.05e-3 | 6 | - |
+| shim x3 | flint_full.so / shim | FAIL x3 | 2.29-2.43e-2 | 2.5e-3..1.1e-2 | 3e-4..1e-3 | 2-3 | **NO** (all 3 differ; token 3 -> 3460) |
+| HEAD x3 | full_k_5363ad5 (default) / shim | PASS x3 | 1.55e-6 | 1.29e-6 | 1.10e-6 | 0 | yes, bit-identical |
+| 2fd83cb x3 | full_k_2fd83cb / shim | FAIL x3 | 1.7e-4..1.8e-2 | 1.5e-4..6.9e-4 | 1e-6..2.7e-5 | 0-2 | **NO** |
+| HEAD via driver | full_k_5363ad5 / driver streamed load | PASS | 1.37e-6 | 1.17e-6 | 1.17e-6 | 0 | rows 0-2 bit-identical to shim-loaded HEAD |
+
+Reading (for the coordinator ruling):
+- The streamed-load driver path is CLEARED: HEAD through it passes and matches the shim-loaded HEAD bit for bit.
+- The fault is the -DGEPA_ATTN_SPLIT=1 BUILD at full config: nondeterministic run to run, wrong from row 0. At short4 (context <= 11) the split
+  branch is never taken (threshold 64), so the race is not in the split math. The extra code changes register allocation
+  (scratch 192 vs 144) and timing, which exposes a latent ordering hazard. 2fd83cb shows the same nondeterministic class, and 39629e7
+  may have masked it rather than fixed it. On mid-8L the split build is deterministic and passes, so the hazard is full-shape-only.
+- Consequence: every M3 megakernel row (34.40/34.74 @512, 39.08/39.35 short, 21.35 @8192, workers sweep) ran on flint_full.so, a
+  build that computes nondeterministically wrong logits. Per the fork, those rows need a re-run on a correct build. HEAD's default
+  (split off) is correct for 512/short; an 8192 row needs the race found and fixed (split-K is what makes 8k viable).

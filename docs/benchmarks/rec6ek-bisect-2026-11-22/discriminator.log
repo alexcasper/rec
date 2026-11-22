@@ -1,0 +1,16 @@
+6297889706cc4d549fcc0aeffae836b9ee31a1dee320747f8d97c861011d735e  /home/dusk/rec-ve/gepa/h/engine/native/megakernel_hip/flint_full.so
+2026-11-22T14:59:39Z spot wrote short4_fp32kv.npz tokens [19629, 52387, 332, 38560, 269, 1090, 1886, 299] | launches 0.195/0.121 s | flint:down,e4b:idle,qwen:down,gpu_busy=4,MemAvailable=17.1GiB
+{"so": "/home/dusk/rec-ve/gepa/h/engine/native/megakernel_hip/flint_full.so", "rep": 0, "ok": true, "rc": 0, "launch_s": 0.181, "tokens": [19629, 52387, 3460], "identical_to_prev": null, "cot": "8080:000 8090:200 busy=15 MemAvailable=17.0GiB vram_free=17.4GiB"}
+{"so": "/home/dusk/rec-ve/gepa/h/engine/native/megakernel_hip/flint_full.so", "rep": 1, "ok": true, "rc": 0, "launch_s": 0.1789, "tokens": [19629, 52387, 3460], "identical_to_prev": false, "cot": "8080:000 8090:200 busy=28 MemAvailable=17.0GiB vram_free=17.4GiB"}
+{"so": "/home/dusk/rec-ve/gepa/h/engine/native/megakernel_hip/flint_full.so", "rep": 2, "ok": true, "rc": 0, "launch_s": 0.1824, "tokens": [19629, 52387, 3460], "identical_to_prev": false, "cot": "8080:000 8090:200 busy=38 MemAvailable=17.0GiB vram_free=17.4GiB"}
+{"so": "/home/dusk/rec-ve/gepa/h/engine/native/megakernel_hip/flint_full.so", "load_s": 8.9, "launches": [0.181, 0.1789, 0.1824]}
+{"so": "full_k_5363ad5.so", "rep": 0, "ok": true, "rc": 0, "launch_s": 0.1704, "tokens": [19629, 52387, 332], "identical_to_prev": null, "cot": "8080:000 8090:200 busy=15 MemAvailable=16.9GiB vram_free=17.4GiB"}
+{"so": "full_k_5363ad5.so", "rep": 1, "ok": true, "rc": 0, "launch_s": 0.1798, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=28 MemAvailable=16.9GiB vram_free=17.4GiB"}
+{"so": "full_k_5363ad5.so", "rep": 2, "ok": true, "rc": 0, "launch_s": 0.1821, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=37 MemAvailable=16.9GiB vram_free=17.4GiB"}
+{"so": "full_k_5363ad5.so", "load_s": 8.9, "launches": [0.1704, 0.1798, 0.1821]}
+{"so": "full_k_2fd83cb.so", "rep": 0, "ok": true, "rc": 0, "launch_s": 0.234, "tokens": [19629, 52387, 332], "identical_to_prev": null, "cot": "8080:000 8090:200 busy=20 MemAvailable=17.1GiB vram_free=17.4GiB"}
+{"so": "full_k_2fd83cb.so", "rep": 1, "ok": true, "rc": 0, "launch_s": 0.2408, "tokens": [19629, 52387, 332], "identical_to_prev": false, "cot": "8080:000 8090:200 busy=35 MemAvailable=17.1GiB vram_free=17.4GiB"}
+{"so": "full_k_2fd83cb.so", "rep": 2, "ok": true, "rc": 0, "launch_s": 0.2471, "tokens": [19629, 52387, 332], "identical_to_prev": false, "cot": "8080:000 8090:200 busy=47 MemAvailable=17.1GiB vram_free=17.4GiB"}
+{"so": "full_k_2fd83cb.so", "load_s": 8.9, "launches": [0.234, 0.2408, 0.2471]}
+2026-11-22T15:00:40Z spot wrote short4_fp32kv.npz tokens [19629, 52387, 332, 38560, 269, 1090, 1886, 299] | launches 0.200/0.120 s | flint:down,e4b:idle,qwen:down,gpu_busy=3,MemAvailable=17.0GiB
+done 74s 15:00:41Z -> signal ops_flint restart
