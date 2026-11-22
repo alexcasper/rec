@@ -1,0 +1,126 @@
+{
+ "def/wrap/wrap512_fp32kv.npz": {
+  "pass": true,
+  "step_rel": 1.563823235045038e-06,
+  "last_rel": 1.1596141510917602e-06,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 8
+ },
+ "def/wrap/wrap512_fp32_bf16kv.npz": {
+  "pass": true,
+  "step_rel": 0.00018155958418894928,
+  "last_rel": 0.00015528723901046194,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 7
+ },
+ "def/wrap/wrap512_bf16kv.npz": {
+  "pass": false,
+  "step_rel": 0.13529917340293576,
+  "last_rel": 0.00590881770065303,
+  "tokens_exact": true,
+  "problems": [
+   "last_logits rel err 5.909e-03 > 0.001 (bf16-KV tier)",
+   "step_logits max rel err 1.353e-01 > 0.001 (bf16-KV tier)"
+  ],
+  "s": 7
+ },
+ "splitB/wrap/wrap512_fp32kv.npz": {
+  "pass": true,
+  "step_rel": 1.3951633822917011e-06,
+  "last_rel": 9.497792094656321e-07,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 7
+ },
+ "splitB/wrap/wrap512_fp32_bf16kv.npz": {
+  "pass": true,
+  "step_rel": 0.00019351268815365303,
+  "last_rel": 0.00015022298414254435,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 7
+ },
+ "splitB/wrap/wrap512_bf16kv.npz": {
+  "pass": false,
+  "step_rel": 0.13427664927967192,
+  "last_rel": 0.006681206247967515,
+  "tokens_exact": true,
+  "problems": [
+   "last_logits rel err 6.681e-03 > 0.001 (bf16-KV tier)",
+   "step_logits max rel err 1.343e-01 > 0.001 (bf16-KV tier)"
+  ],
+  "s": 7
+ },
+ "splitA/suite/short4_fp32kv.npz": {
+  "pass": true,
+  "step_rel": 1.0870033717899372e-06,
+  "last_rel": 8.97950123539978e-07,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 5
+ },
+ "splitA/suite/short4_fp32_bf16kv.npz": {
+  "pass": true,
+  "step_rel": 0.0009738740505313148,
+  "last_rel": 0.0006027851226526723,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 5
+ },
+ "splitA/suite/short4_bf16kv.npz": {
+  "pass": false,
+  "step_rel": 0.1327677080529259,
+  "last_rel": 0.009875462796795641,
+  "tokens_exact": false,
+  "problems": [
+   "1 token(s) differ from the fp32 reference beyond the near-tie margin",
+   "last_logits rel err 9.875e-03 > 0.001 (bf16-KV tier)"
+  ],
+  "s": 5
+ },
+ "splitA/suite/chat_fp32kv.npz": {
+  "pass": true,
+  "step_rel": 1.0282878241186592e-06,
+  "last_rel": 8.517663796692152e-07,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 5
+ },
+ "splitA/suite/chat_fp32_bf16kv.npz": {
+  "pass": true,
+  "step_rel": 0.00039716070650068106,
+  "last_rel": 0.00028843583190596596,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 5
+ },
+ "splitA/suite/chat_bf16kv.npz": {
+  "pass": false,
+  "step_rel": 0.10285224938067504,
+  "last_rel": 0.005150175540349297,
+  "tokens_exact": true,
+  "problems": [
+   "last_logits rel err 5.150e-03 > 0.001 (bf16-KV tier)",
+   "step_logits max rel err 1.029e-01 > 0.001 (bf16-KV tier)"
+  ],
+  "s": 5
+ },
+ "splitA/wrap/wrap512_fp32kv.npz": {
+  "pass": true,
+  "step_rel": 1.3830473068565216e-06,
+  "last_rel": 1.027086819538416e-06,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 7
+ },
+ "splitA/wrap/wrap512_fp32_bf16kv.npz": {
+  "pass": true,
+  "step_rel": 0.0001743251275094055,
+  "last_rel": 0.00016043990421977256,
+  "tokens_exact": true,
+  "problems": [],
+  "s": 7
+ }
+}

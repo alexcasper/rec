@@ -98,6 +98,16 @@
 #ifndef GEPA_ACTX
 #define GEPA_ACTX 0
 #endif
+// Bedivere M3.2 (RELAXED: softmax merge order): split-K (flash-decoding) attention. When the context length exceeds
+// GEPA_ATTN_SPLIT_MIN, each (q-head, position-chunk) gets a warp (chunks = groups / heads), partials (acc[128], max,
+// denom) go to the lm_head logits buffer (free during attention), and after one extra grid barrier a merge folds in the
+// sink and normalises. At or below the threshold the original one-warp-per-head path runs unchanged.
+#ifndef GEPA_ATTN_SPLIT
+#define GEPA_ATTN_SPLIT 0
+#endif
+#ifndef GEPA_ATTN_SPLIT_MIN
+#define GEPA_ATTN_SPLIT_MIN 64
+#endif
 #ifndef GEPA_SHRINK
 #define GEPA_SHRINK 1   // PROMOTED (rec-fut run 4, c033): +3.05/+3.59 % ABBA, replicate +2.65/+2.27 %, byte-identical to 24f167d
 #endif
@@ -1238,6 +1248,75 @@ __device__ inline void mid_generate_impl(
 
             // ---- 6. Attention with Sinks (32 warps across workgroups, 1 q-head per warp) ----
             int t_start = is_sliding ? ((pos - (MID_WIN - 1) > 0) ? (pos - (MID_WIN - 1)) : 0) : 0;
+#if GEPA_ATTN_SPLIT
+            const int n_ctx = pos - t_start + 1;
+            const int n_split = groups / MID_HEADS < 16 ? groups / MID_HEADS : 16;
+            if (n_ctx > GEPA_ATTN_SPLIT_MIN && n_split > 1) {   // uniform across workgroups -> the extra barrier is safe
+                constexpr int PSTR = MID_HDIM + 2;              // per partial: acc[128], max, denom
+                float* const part = ws_f_logits;                // [heads][n_split][PSTR], free until lm_head
+                const int clen = (n_ctx + n_split - 1) / n_split;
+                for (int u = sg; u < MID_HEADS * n_split; u += groups) {
+                    const int h = u / n_split, c = u % n_split;
+                    const int kvh = h / (MID_HEADS / MID_NKV);
+                    const KVT* kc = l_kv + (0 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
+                    const KVT* vc = l_kv + (1 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
+                    float qreg[4], acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                    #pragma unroll
+                    for (int j = 0; j < 4; ++j) {
+                        float qv = ws_q[(size_t)h * MID_HDIM + lane * 4 + j];
+                        if constexpr (!PURE_FP32) qv = tofloat(tobf(qv));
+                        qreg[j] = qv * MID_ATTN_SCALE;
+                    }
+                    float hi = -INFINITY, z = 0.0f;
+                    const int ta = t_start + c * clen;
+                    const int tb = (ta + clen - 1 < pos) ? ta + clen - 1 : pos;
+                    for (int t = ta; t <= tb; ++t) {
+                        size_t t_slot = is_sliding ? (size_t)(t % MID_WIN) : (size_t)t;
+                        const KVT* kt = kc + t_slot * MID_HDIM + lane * 4;
+                        const KVT* vt = vc + t_slot * MID_HDIM + lane * 4;
+                        float partial = 0.0f;
+                        #pragma unroll
+                        for (int j = 0; j < 4; ++j) partial += qreg[j] * kv_load<KVT, PURE_FP32>(kt[j]);
+                        float score = simd_sum(partial);
+                        if (score > hi) {                       // same online update as the 1-warp path, no sink
+                            float f = expf(hi - score);         // hi = -inf -> 0
+                            #pragma unroll
+                            for (int j = 0; j < 4; ++j) acc[j] = acc[j] * f + kv_load<KVT, PURE_FP32>(vt[j]);
+                            z = z * f + 1.0f;
+                            hi = score;
+                        } else {
+                            float f = expf(score - hi);
+                            #pragma unroll
+                            for (int j = 0; j < 4; ++j) acc[j] = acc[j] + f * kv_load<KVT, PURE_FP32>(vt[j]);
+                            z = z + f;
+                        }
+                    }
+                    float* pp = part + (size_t)u * PSTR;
+                    #pragma unroll
+                    for (int j = 0; j < 4; ++j) pp[lane * 4 + j] = acc[j];
+                    if (lane == 0) { pp[MID_HDIM] = hi; pp[MID_HDIM + 1] = z; }
+                }
+                SYNC_ALL();
+                for (int h = sg; h < MID_HEADS; h += groups) {  // merge: fold in the sink, normalise
+                    const float* ph = part + (size_t)h * n_split * PSTR;
+                    float H = tofloat(sinks[h]);
+                    for (int c = 0; c < n_split; ++c)
+                        if (ph[c * PSTR + MID_HDIM + 1] > 0.0f) H = fmaxf(H, ph[c * PSTR + MID_HDIM]);
+                    float Z = expf(tofloat(sinks[h]) - H), acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                    for (int c = 0; c < n_split; ++c) {
+                        const float zc = ph[c * PSTR + MID_HDIM + 1];
+                        if (!(zc > 0.0f)) continue;
+                        const float w = expf(ph[c * PSTR + MID_HDIM] - H);
+                        Z += zc * w;
+                        #pragma unroll
+                        for (int j = 0; j < 4; ++j) acc[j] += ph[c * PSTR + lane * 4 + j] * w;
+                    }
+                    #pragma unroll
+                    for (int j = 0; j < 4; ++j)
+                        ws_attn[(size_t)h * MID_HDIM + lane * 4 + j] = acc[j] / Z;
+                }
+            } else
+#endif
             for (int h = sg; h < MID_HEADS; h += groups) {
                 int kvh = h / (MID_HEADS / MID_NKV); // h / 8
                 const KVT* kc = l_kv + (0 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
