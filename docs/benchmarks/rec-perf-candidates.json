@@ -8807,6 +8807,43 @@
     "chat": 0.9806
    },
    "outcome": "gates_pass"
+  },
+  {
+   "id": "r3c-split-shr0",
+   "time": "2026-11-22T16:00:50Z",
+   "knobs": {
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_SPLIT_MIN": 64,
+    "GEPA_SHRINK": 0
+   },
+   "source_commit": "43c002d",
+   "optimizer": "external",
+   "axis": "structural (rec-e5d depth attention) + rec-3cr race remedy",
+   "determinism": "PASS (2 independent emits byte-identical, 8 npz); remedy makes 3 distinct racy mid codegens deterministic (9/9 -> 0/9)",
+   "gates": "inherited: suite+ppl 8/8 byte-identical to 24f167d; wrap512 margins as splitB (fp32kv 1.40e-6, fp32_bf16kv 1.935e-4)",
+   "tok_s": {
+    "short4": 207.19,
+    "chat": 209.01,
+    "ctx512_mid": [
+     182.69,
+     182.29
+    ]
+   },
+   "baseline": {
+    "short4": 217.07,
+    "chat": 214.92,
+    "ctx512_mid_default": [
+     135.29,
+     135.06
+    ]
+   },
+   "speedup": {
+    "short4": 0.9545,
+    "chat": 0.9725,
+    "ctx512": 1.35
+   },
+   "outcome": "gates_pass, NOT promoted as mid default (short-ctx -4.5/-2.8% fails the +1.6% rule); depth candidate for full config pending full-config repeat soak (rec-3cr)",
+   "cotenants": "flint:idle,e4b:idle,qwen:inactive, 0 rounds dropped"
   }
  ],
  "incumbent_history": [
