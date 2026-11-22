@@ -255,6 +255,58 @@ def cmd_emit(a) -> dict:
             "ppl_longest_launch_s": emit_meta["longest_launch_s"]}
 
 
+# ---------------------------------------------------------------------------------------------- reflect
+# Optimizer LLM calls for the driver's reflection/mutation step. Keys are read HERE, at runtime, from
+# mode-600 files on dusk; they are passed to curl on stdin (`-K -`), never in argv, never printed/logged.
+OPTIMIZERS = {
+    "kimi": ("https://api.cerebras.ai/v1/chat/completions", "moonshotai-kimi-k3.1-pro-trial", "~/xh7/.cerebras_key"),
+    "glm": ("https://api.z.ai/api/paas/v4/chat/completions", "glm-5.3-flash", "~/xh7/.zai_key"),
+}
+
+
+def cmd_reflect(a) -> dict:
+    url, model, keyfile = OPTIMIZERS[a.model]
+    kp = Path(os.path.expanduser(keyfile))
+    if not kp.is_file():
+        return {"status": "no_key", "model": model}
+    req = json.loads(Path(a.prompt).read_text())
+    body = {"model": model, "messages": req["messages"], "max_tokens": req.get("max_tokens", 2000),
+            "temperature": req.get("temperature", 0.3)}
+    bf = Path(tempfile.mkstemp(prefix="gepa_r_", suffix=".json")[1])
+    try:
+        bf.write_text(json.dumps(body))
+        key = kp.read_text().strip().splitlines()[-1].strip()
+        if "=" in key and not key.startswith(("csk-", "sk-")):   # tolerate a copied .env line NAME=value
+            key = key.split("=", 1)[1].strip()
+        key = key.strip("'\"")
+        cfg = (f'header = "Authorization: Bearer {key}"\nheader = "Content-Type: application/json"\n'
+               f'url = "{url}"\nrequest = "POST"\ndata-binary = "@{bf}"\nmax-time = {a.timeout}\nsilent\n'
+               f'write-out = "\\n__HTTP__%{{http_code}}"\n')
+        del key
+        t0 = time.time()
+        p = subprocess.run(["curl", "-K", "-"], input=cfg, capture_output=True, text=True, timeout=a.timeout + 15)
+        dt = time.time() - t0
+        del cfg
+    finally:
+        bf.unlink(missing_ok=True)
+    out, _, code = p.stdout.rpartition("\n__HTTP__")
+    http = int(code) if code.strip().isdigit() else 0
+    res = {"model": model, "http": http, "latency_s": round(dt, 2)}
+    if http != 200:
+        msg = ""
+        try:
+            msg = str(json.loads(out).get("error", ""))[:200]
+        except Exception:
+            msg = out[:200]
+        return dict(res, status="http_error" if http else f"curl_rc_{p.returncode}", error=msg)
+    try:
+        d = json.loads(out)
+        res.update(status="ok", content=d["choices"][0]["message"].get("content") or "", usage=d.get("usage"))
+    except Exception as e:
+        res.update(status="bad_response", error=str(e)[:200])
+    return res
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -276,8 +328,12 @@ def main() -> int:
     e.add_argument("--out", required=True)
     e.add_argument("--workers", type=int, default=16)
     e.add_argument("--ckpt", required=True)
+    r = sub.add_parser("reflect")
+    r.add_argument("--model", choices=sorted(OPTIMIZERS), required=True)
+    r.add_argument("--prompt", required=True)
+    r.add_argument("--timeout", type=int, default=120)
     a = ap.parse_args()
-    res = {"build": cmd_build, "bench": cmd_bench, "emit": cmd_emit}[a.cmd](a)
+    res = {"build": cmd_build, "bench": cmd_bench, "emit": cmd_emit, "reflect": cmd_reflect}[a.cmd](a)
     print(json.dumps(res))
     return 0
 

@@ -31,8 +31,10 @@ import datetime as dt
 import hashlib
 import json
 import math
+import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -211,6 +213,136 @@ def run_gates(cid: str, em: dict, inc: dict | None) -> dict:
     return g
 
 
+# ------------------------------------------------------------------------------------------- optimizer
+KIMI_WINDOW_S = 30.0          # max 1 kimi call per ~30 s
+KIMI_THROTTLE_HOUR_S = 3600.0  # consecutive 429s spanning this long -> kimi disabled for an hour, then re-probe
+RETRYABLE = lambda http: http == 429 or 500 <= http < 600  # noqa: E731
+
+
+class Optimizer:
+    """Reflection/mutation LLM: kimi-first (Cerebras), one backoff retry on 429/5xx, then glm-5.3-flash for that
+    iteration. State persists in STATE/optimizer_state.json across runs (rate window, 429 streak, disable-until).
+    Keys never touch this host: calls execute on dusk (gepa_remote.py reflect) reading mode-600 key files."""
+
+    def __init__(self):
+        self.path = STATE / "optimizer_state.json"
+        self.st = {"kimi_last_call": 0.0, "kimi_429_total": 0, "kimi_429_consecutive": 0,
+                   "kimi_429_streak_start": None, "kimi_disabled_until": 0.0, "primary": "kimi",
+                   "calls": {"kimi": 0, "glm": 0}}
+        if self.path.exists():
+            self.st.update(json.loads(self.path.read_text()))
+
+    def save(self):
+        self.path.write_text(json.dumps(self.st, indent=1))
+
+    def _call(self, model: str, prompt_remote: str) -> dict:
+        if model == "kimi":
+            wait = self.st["kimi_last_call"] + KIMI_WINDOW_S - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            self.st["kimi_last_call"] = time.time()
+        self.st["calls"][model] += 1
+        r = remote(f"reflect --model {model} --prompt {prompt_remote}", timeout=200)
+        r.setdefault("http", 0)
+        if model == "kimi":
+            if r["http"] == 429:
+                self.st["kimi_429_total"] += 1
+                self.st["kimi_429_consecutive"] += 1
+                self.st["kimi_429_streak_start"] = self.st["kimi_429_streak_start"] or time.time()
+            elif r.get("status") == "ok":
+                self.st["kimi_429_consecutive"] = 0
+                self.st["kimi_429_streak_start"] = None
+        self.save()
+        return r
+
+    def ask(self, messages: list, tag: str) -> dict:
+        """Returns {"optimizer": "kimi"|"fallback-glm"|"none", "content", "attempts": [...], "kimi_429_total"}."""
+        p = STATE / "prompts" / f"{tag}.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"messages": messages, "max_tokens": 3000, "temperature": 0.4}))
+        subprocess.run(SSH + [DUSK, f"mkdir -p {REMOTE}/prompts"], check=True)
+        subprocess.run(["rsync", "-a", "-e", " ".join(SSH), str(p), f"{DUSK}:{REMOTE}/prompts/"], check=True)
+        pr = f"{REMOTE}/prompts/{tag}.json"
+        attempts = []
+        now_t = time.time()
+        if self.st["kimi_disabled_until"] > now_t:
+            attempts.append({"model": "kimi", "status": "skipped_throttle_hour",
+                             "until": dt.datetime.fromtimestamp(self.st["kimi_disabled_until"], dt.timezone.utc).isoformat()})
+        else:
+            if self.st["kimi_disabled_until"]:
+                log("optimizer: kimi throttle hour elapsed - re-probing")
+                self.st["kimi_disabled_until"] = 0.0
+            for i in range(2):  # first try + ONE exponential-backoff retry on 429/5xx
+                r = self._call("kimi", pr)
+                attempts.append({k: r.get(k) for k in ("model", "status", "http", "latency_s", "error")})
+                if r.get("status") == "ok":
+                    self.st["primary"] = "kimi"
+                    self.save()
+                    return self._out("kimi", r, attempts)
+                if not RETRYABLE(r["http"]) or i == 1:
+                    break
+                time.sleep(max(KIMI_WINDOW_S, 15 * 2 ** i))  # backoff, never inside the 30 s window
+            s0 = self.st["kimi_429_streak_start"]
+            if s0 and time.time() - s0 >= KIMI_THROTTLE_HOUR_S:
+                self.st["kimi_disabled_until"] = time.time() + KIMI_THROTTLE_HOUR_S
+                log(f"optimizer: kimi 429 for a full hour ({self.st['kimi_429_consecutive']} consecutive) - "
+                    "disabled for 1 h")
+        self.st["primary"] = "glm"
+        r = self._call("glm", pr)
+        attempts.append({k: r.get(k) for k in ("model", "status", "http", "latency_s", "error")})
+        self.save()
+        if r.get("status") == "ok":
+            return self._out("fallback-glm", r, attempts)
+        return self._out("none", {}, attempts)
+
+    def _out(self, who: str, r: dict, attempts: list) -> dict:
+        return {"optimizer": who, "content": r.get("content", ""), "usage": r.get("usage"), "attempts": attempts,
+                "kimi_429_total": self.st["kimi_429_total"], "kimi_429_consecutive": self.st["kimi_429_consecutive"]}
+
+
+REFLECT_SYS = """You are the reflection/mutation step of a GEPA hill-climb over a persistent HIP decode megakernel
+(Flint mid-8L MoE, INT4-affine g64 weights, gfx1150 RDNA3.5 iGPU, ~82 GB/s, one launch, device-wide spin barrier
+~1.8 us). Metric: decode32 tok/s on two short-context cases (higher is better); a mutation is accepted only if
+>= min_gain faster on BOTH and it passes hard correctness gates. You may ONLY choose values from the knob space
+given. Reflect on the evaluation history (speedups, VGPR/scratch spill, hot-code instruction count: larger hot code
+has correlated with slower decode via I-cache pressure) and propose ONE untried knob assignment most likely to win.
+Reply with a single JSON object and nothing else:
+{"knobs": {<knob>: <value>, ...}, "axis": "<pool mutation axis>", "rationale": "<= 60 words"}"""
+
+
+def reflect_prompt(pool: dict, best: dict, done: set, min_gain: float) -> list:
+    hist = []
+    for r in pool["evaluations"]:
+        b = r.get("build", {})
+        hist.append({"id": r["id"], "knobs": r["knobs"], "outcome": r["outcome"],
+                     "speedup_vs_parent": r.get("speedup_vs_best"), "parent": r.get("parent"),
+                     "hot_instr": b.get("hot_instr"), "scratch": b.get("kernels", {}).get("mid_generate", {}).get("scratch"),
+                     "reason": r.get("reason")})
+    space = {k: {"axis": ax, "values": vals, "default": d} for k, (ax, vals, d) in KNOBS.items()}
+    axes = [{"axis": x.get("axis"), "prior": x.get("prior_evidence", x.get("notes"))} for x in pool["mutation_axes"]]
+    user = {"knob_space": space, "pool_axes": axes, "current_best": {"id": best["id"], "knobs": best["knobs"]},
+            "min_gain": min_gain, "history": hist, "already_tried": sorted(done)}
+    return [{"role": "system", "content": REFLECT_SYS}, {"role": "user", "content": json.dumps(user)}]
+
+
+def parse_proposal(text: str, best: dict, done: set) -> tuple[dict | None, str, str]:
+    m = re.search(r"\{.*\}", text or "", flags=re.S)
+    if not m:
+        return None, "", "no JSON object in reply"
+    try:
+        d = json.loads(m.group(0))
+    except json.JSONDecodeError as e:
+        return None, "", f"bad JSON: {e}"
+    k = dict(best["knobs"])
+    for n, v in (d.get("knobs") or {}).items():
+        if n not in KNOBS or v not in KNOBS[n][1]:
+            return None, "", f"outside knob space: {n}={v}"
+        k[n] = v
+    if knob_key(k) in done:
+        return None, "", f"already tried: {knob_key(k)}"
+    return k, str(d.get("axis") or "llm"), str(d.get("rationale", ""))[:400]
+
+
 def search_state(pool: dict) -> dict:
     s = pool.setdefault("search", {})
     s.setdefault("driver", "scripts/gepa_kernel_search.py (rec/gemini-kernels)")
@@ -221,8 +353,11 @@ def search_state(pool: dict) -> dict:
 
 
 def evaluate(pool: dict, pool_path: Path, cid: str, knobs: dict, axis: str, parent: str | None,
-             src: tuple[str, str], patch: str | None, rounds: int, best: dict | None) -> dict:
+             src: tuple[str, str], patch: str | None, rounds: int, best: dict | None,
+             opt_rec: dict | None = None) -> dict:
     rec = {"id": cid, "time": now(), "axis": axis, "parent": parent, "knobs": knobs, "patch": patch,
+           "optimizer": (opt_rec or {}).get("optimizer", "grid"), "kimi_429_total": (opt_rec or {}).get("kimi_429_total"),
+           "optimizer_detail": opt_rec,
            "source": src[1], "after512": None, "after512_note": "albion-gated (dusk launches <= 0.25 s)"}
     log(f"{cid}: build {knob_key(knobs)}" + (f" + patch {patch}" if patch else ""))
     rec["build"] = build(cid, src[0], knobs, patch)
@@ -267,7 +402,8 @@ def finish(pool: dict, pool_path: Path, rec: dict) -> dict:
             slim["bench"][c].pop("rows", None)
     pool["evaluations"].append(slim)
     if rec["outcome"] == "rejected":
-        pool["rejected"].append({"id": rec["id"], "knobs": rec["knobs"], "time": rec["time"], "reason": rec["reason"]})
+        pool["rejected"].append({"id": rec["id"], "knobs": rec["knobs"], "time": rec["time"], "reason": rec["reason"],
+                                 "optimizer": rec.get("optimizer"), "kimi_429_total": rec.get("kimi_429_total")})
         log(f"{rec['id']}: REJECTED - {rec['reason']}")
     (STATE / "records").mkdir(parents=True, exist_ok=True)
     (STATE / "records" / f"{rec['id']}.json").write_text(json.dumps(rec, indent=1))
@@ -295,12 +431,21 @@ def main() -> int:
     ap.add_argument("--patience", type=int, default=4)
     ap.add_argument("--rounds", type=int, default=8)
     ap.add_argument("--min-gain", type=float, default=None, help="default: 2x iter0 |speedup - 1| noise, >= 0.005")
+    ap.add_argument("--proposer", choices=["llm", "grid"], default="llm",
+                    help="llm: kimi-first reflection w/ glm fallback (grid neighbour if both fail); grid: deterministic")
+    ap.add_argument("--probe-optimizer", action="store_true", help="one tiny reflect call through the fallback chain")
     ap.add_argument("--candidate", type=Path, help='JSON {"knobs": {...}, "patch": "file.patch", "axis": "..."}')
     a = ap.parse_args()
     STATE.mkdir(parents=True, exist_ok=True)
     pool = load_pool(a.pool)
     s = search_state(pool)
     sync_harness(a.pool)
+    opt = Optimizer()
+    if a.probe_optimizer:
+        r = opt.ask([{"role": "user", "content": 'Reply with exactly {"ok": true}'}], f"probe_{int(time.time())}")
+        print(json.dumps({k: r[k] for k in ("optimizer", "attempts", "kimi_429_total", "kimi_429_consecutive")}))
+        print("reply:", (r["content"] or "")[:80])
+        return 0 if r["optimizer"] != "none" else 1
     inc_commit = pool["incumbent"]["commit"]
 
     if a.iter0:
@@ -335,7 +480,7 @@ def main() -> int:
             knobs = dict(best["knobs"], **ext.get("knobs", {}))
             axis, patch = ext.get("axis", "external"), ext.get("patch")
         else:
-            cands = []
+            cands, opt_rec = [], None
             axis_order = [x["axis"] for x in pool["mutation_axes"]]
             for name, (ax, vals, _) in sorted(KNOBS.items(), key=lambda kv: axis_order.index(kv[1][0])
                                               if kv[1][0] in axis_order else 99):
@@ -348,8 +493,25 @@ def main() -> int:
                 break
             axis, knobs = cands[0]
             patch = None
+            if a.proposer == "llm":
+                cid_next = f"c{len([r for r in pool['evaluations'] if r['id'].startswith('c')]) + 1:03d}"
+                r = opt.ask(reflect_prompt(pool, best, done, min_gain), cid_next)
+                opt_rec = {k: r[k] for k in ("optimizer", "attempts", "kimi_429_total", "kimi_429_consecutive", "usage")}
+                if r["optimizer"] != "none":
+                    k2, ax2, why = parse_proposal(r["content"], best, done)
+                    opt_rec["rationale"] = why if k2 else None
+                    if k2:
+                        knobs, axis = k2, ax2
+                    else:
+                        opt_rec["proposal_rejected"] = why
+                        opt_rec["used"] = "grid neighbour (invalid LLM proposal)"
+                        log(f"optimizer {r['optimizer']}: invalid proposal ({why}) - grid neighbour used")
+                else:
+                    opt_rec["used"] = "grid neighbour (no optimizer answered)"
+                log(f"optimizer={r['optimizer']} kimi_429_total={r['kimi_429_total']} -> {knob_key(knobs)}")
         cid = f"c{len([r for r in pool['evaluations'] if r['id'].startswith('c')]) + 1:03d}"
-        rec = evaluate(pool, a.pool, cid, knobs, axis, best["id"], src, patch, a.rounds, best)
+        rec = evaluate(pool, a.pool, cid, knobs, axis, best["id"], src, patch, a.rounds, best,
+                       opt_rec if ext is None else {"optimizer": "external"})
         done.add(knob_key(knobs) + (patch or ""))
         n_eval += 1
         if update_front(pool, rec, min_gain):
