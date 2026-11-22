@@ -62,9 +62,26 @@ class StTensor:
         return self.data.astype(np.float32)
 
 
-def load_safetensors(path: Path) -> dict[str, StTensor]:
-    """Read a .safetensors file with stdlib + numpy only."""
+def load_safetensors(path: Path, mmap: bool = False) -> dict[str, StTensor]:
+    """Read a .safetensors file with stdlib + numpy only.
+
+    mmap=True maps the file read-only instead of copying it into RAM: pages are read on first touch, so a CPU
+    reference over a few positions of a 22 GB MoE checkpoint only faults in the experts it routes to."""
     out: dict[str, StTensor] = {}
+    if mmap:
+        with open(path, "rb") as f:
+            (n,) = struct.unpack("<Q", f.read(8))
+            header = json.loads(f.read(n))
+        base = 8 + n
+        header.pop("__metadata__", None)
+        whole = np.memmap(path, dtype=np.uint8, mode="r")
+        for name, info in header.items():
+            dt = _ST_DTYPES.get(info["dtype"])
+            if dt is None:
+                raise ValueError(f"{name}: unsupported safetensors dtype {info['dtype']}")
+            start, end = info["data_offsets"]
+            out[name] = StTensor(whole[base + start:base + end].view(dt).reshape(info["shape"]), info["dtype"])
+        return out
     with open(path, "rb") as f:
         (n,) = struct.unpack("<Q", f.read(8))
         header = json.loads(f.read(n))
@@ -353,7 +370,7 @@ class Model:
         return KVCache(self.cfg)
 
 
-def load_model(ckpt: Path, device: str = "cpu", dtype: torch.dtype = torch.bfloat16) -> Model:
+def load_model(ckpt: Path, device: str = "cpu", dtype: torch.dtype = torch.bfloat16, mmap: bool = False) -> Model:
     """Load an MLX affine-quantized checkpoint dir (config.json + model-*.safetensors).
 
     Device layout is the contract in docs/rocm-model-layer.md: packed weights
@@ -364,7 +381,7 @@ def load_model(ckpt: Path, device: str = "cpu", dtype: torch.dtype = torch.bfloa
     cfg = Config.from_json(ckpt / "config.json")
     raw: dict[str, StTensor] = {}
     for p in sorted(ckpt.glob("model-*.safetensors")):
-        shard = load_safetensors(p)
+        shard = load_safetensors(p, mmap=mmap)
         if raw.keys() & shard.keys():
             raise ValueError(f"Duplicate tensor in {p}")
         raw.update(shard)

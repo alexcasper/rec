@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -111,7 +112,9 @@ class Reference:
 
         from rec_mlx.torch_rocm import load_model
 
-        self.model = load_model(ckpt, device=device, dtype=torch.float32)
+        # REC_REF_MMAP=1: map the shards instead of reading them (full Flint on a 46 GB host, rec-6ek)
+        self.model = load_model(ckpt, device=device, dtype=torch.float32,
+                                mmap=os.environ.get("REC_REF_MMAP") == "1")
         self.model.kv_store_dtype = {"fp32": None, "bf16": torch.bfloat16}[kv_dtype]
         self.k = self.model.cfg.topk
         self.scores: dict[int, np.ndarray] = {}  # last run: layer -> selection scores [L, E]
