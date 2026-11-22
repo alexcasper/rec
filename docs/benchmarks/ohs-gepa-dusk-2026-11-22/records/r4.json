@@ -1,0 +1,6 @@
+[
+ {"name": "r4a-b6-barriercuts (ALBION/R9700 material)", "axis": "barrier_structure", "knobs": {"GEPA_TOPK_PER_WG": 1, "GEPA_RESID_FUSE": 1}},
+ {"name": "r4b-act-in-down-xload", "axis": "barrier_structure", "knobs": {"GEPA_ACTX": 1}},
+ {"name": "r4c-hotcode-shrink", "axis": "code_size_runtime_flags", "knobs": {"GEPA_SHRINK": 1}},
+ {"name": "r4abc-combined", "axis": "barrier_structure", "knobs": {"GEPA_TOPK_PER_WG": 1, "GEPA_RESID_FUSE": 1, "GEPA_ACTX": 1, "GEPA_SHRINK": 1}}
+]

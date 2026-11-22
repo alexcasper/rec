@@ -154,3 +154,25 @@
 [2026-11-22T06:38:52Z] c030: tok/s {'short4': 197.5, 'chat': 197.35} speedup vs iter0 {'short4': 0.9508, 'chat': 0.9494} (max launch 0.21 s)
 [2026-11-22T06:38:52Z] c030: gates PASS; ppl bf16kv 114199 (-1.57e-04 vs best)
 [2026-11-22T06:38:53Z] search stopped after 1 evals; best {'id': 'iter0', 'knobs': {'GEPA_GEN_UNROLL': 1, 'GEPA_K512_PIPE': 0, 'GEPA_GEN_PREFETCH_X': 1, 'workers': 16, 'GEPA_TOPK_PER_WG': 0, 'GEPA_RESID_FUSE': 0}, 'commit': '24f167d', 'tok_s': {'short4': 207.73, 'chat': 207.18}}
+[2026-11-22T07:28:26Z] c031: build GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=1,GEPA_TOPK_PER_WG=1,workers=16
+[2026-11-22T07:28:29Z] c031: built in 2.1 s; mid_generate vgpr 248 scratch 16 lds 24968; hot instr 11700
+[2026-11-22T07:29:19Z] c031: gates PASS BEFORE bench; fp32_bf16kv max 9.1150e-04 (incumbent 9.1150e-04, margin to 1e-3 8.85e-05)
+[2026-11-22T07:30:37Z] c031: tok/s {'short4': 204.76, 'chat': 206.97} speedup vs iter0 {'short4': 0.9822, 'chat': 0.9963} (max launch 0.202 s)
+[2026-11-22T07:30:37Z] c031: gates PASS; ppl bf16kv 114217 (+0.00e+00 vs best)
+[2026-11-22T07:30:38Z] c032: build GEPA_ACTX=1,GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=0,GEPA_TOPK_PER_WG=0,workers=16
+[2026-11-22T07:30:41Z] c032: built in 2.6 s; mid_generate vgpr 256 scratch 96 lds 24952; hot instr 19041
+[2026-11-22T07:31:33Z] c032: gates PASS BEFORE bench; fp32_bf16kv max 9.1150e-04 (incumbent 9.1150e-04, margin to 1e-3 8.85e-05)
+[2026-11-22T07:32:52Z] c032: tok/s {'short4': 196.2, 'chat': 196.2} speedup vs iter0 {'short4': 0.9459, 'chat': 0.9501} (max launch 0.2103 s)
+[2026-11-22T07:32:52Z] c032: gates PASS; ppl bf16kv 114217 (+0.00e+00 vs best)
+[2026-11-22T07:32:52Z] c033: build GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=0,GEPA_SHRINK=1,GEPA_TOPK_PER_WG=0,workers=16
+[2026-11-22T07:32:55Z] c033: built in 2.7 s; mid_generate vgpr 256 scratch 144 lds 24952; hot instr 10954
+[2026-11-22T07:33:45Z] c033: gates PASS BEFORE bench; fp32_bf16kv max 9.1150e-04 (incumbent 9.1150e-04, margin to 1e-3 8.85e-05)
+[2026-11-22T07:35:02Z] c033: tok/s {'short4': 214.27, 'chat': 214.32} speedup vs iter0 {'short4': 1.0305, 'chat': 1.0359} (max launch 0.2012 s)
+[2026-11-22T07:35:02Z] c033: gates PASS; ppl bf16kv 114217 (+0.00e+00 vs best)
+[2026-11-22T07:35:03Z] c033: ACCEPTED as new best (gain > 0.016 on both cases)
+[2026-11-22T07:35:03Z] c034: build GEPA_GEN_PREFETCH_X=1,GEPA_GEN_UNROLL=1,GEPA_K512_PIPE=0,GEPA_RESID_FUSE=1,GEPA_SHRINK=1,GEPA_TOPK_PER_WG=1,workers=16
+[2026-11-22T07:35:06Z] c034: built in 2.7 s; mid_generate vgpr 256 scratch 144 lds 24968; hot instr 10740
+[2026-11-22T07:35:56Z] c034: gates PASS BEFORE bench; fp32_bf16kv max 9.1150e-04 (incumbent 9.1150e-04, margin to 1e-3 8.85e-05)
+[2026-11-22T07:37:12Z] c034: tok/s {'short4': 209.93, 'chat': 209.67} speedup vs c033 {'short4': 0.9867, 'chat': 0.9806} (max launch 0.1972 s)
+[2026-11-22T07:37:12Z] c034: gates PASS; ppl bf16kv 114217 (+0.00e+00 vs best)
+[2026-11-22T07:37:13Z] search stopped after 4 evals; best {'id': 'c033', 'knobs': {'GEPA_GEN_UNROLL': 1, 'GEPA_K512_PIPE': 0, 'GEPA_GEN_PREFETCH_X': 1, 'workers': 16, 'GEPA_TOPK_PER_WG': 0, 'GEPA_RESID_FUSE': 0, 'GEPA_SHRINK': 1}, 'tok_s': {'short4': 214.27, 'chat': 214.32}, 'source': '12bf9d6'}

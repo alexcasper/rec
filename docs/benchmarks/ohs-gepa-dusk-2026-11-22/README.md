@@ -153,3 +153,20 @@ Reading:
   error per weight (fails the 1e-4 tier). With the packed-staging forms (c009-c014: 0.95-1.00), every Step 2
   variant has now been measured at or below 24f167d on dusk. The "path toward 260" estimate in the ITER0 note is
   refuted on this rig.
+
+## Run 4 (rec-fut residual Track A sweep, GO 2026-11-22): c033 hot-code shrink PROMOTED
+
+All four forms are byte-identical to 24f167d (8/8), so gates were inherited and fp32_bf16kv is unchanged at 9.115e-4.
+0 ABBA rounds dropped; cotenants idle/idle/qwen inactive.
+
+| id | form | short4 / chat tok/s | speedup | hot instr | verdict |
+|---|---|---|---|---|---|
+| c031 | (a) b6 barrier cuts = TOPK_PER_WG + RESID_FUSE | 204.8 / 207.0 | 0.982 / 0.996 vs 24f167d | 11 700 | reject on dusk; **ALBION/R9700 material** (49 L, top-6) |
+| c032 | (b) MoE act fused into the down x-load (no act phase/barrier) | 196.2 / 196.2 | 0.946 / 0.950 | 19 041 | reject: +7.1k hot instructions (inlined expf per stage) |
+| c033 | (c) hot-code shrink: partial-quad tails out of line | **214.27 / 214.32** | **1.0305 / 1.0359** | **10 954** | **ACCEPT, then PROMOTED (2b98737)** |
+| c034 | a+b+c | 209.9 / 209.7 | 0.987 / 0.981 vs c033 | 18 518 | reject |
+
+c033 confirmation: independent replicate ABBA (sides swapped) +2.65 / +2.27 %; the frozen qgate eval-set emit is
+98/98 npz byte-identical to 24f167d (T1-T4 verdict identical by construction). The promoted default build has
+ISA identical to c033. This is the first lever since rec-9t8 to clear the bar, and it is the I-cache axis: -974 hot
+instructions, with no arithmetic change, = +2.3-3.6 %.
