@@ -31,9 +31,12 @@ def payload_md5(tok, step, last, exp) -> str:
     return h.hexdigest()
 
 
-def emit(lib, cfg, bank, off, prompt, n_out, mode, workers, max_total, deadline):
+def emit(lib, cfg, bank, off, prompt, n_out, mode, workers, max_total, deadline, pairs=0):
+    """(An in-session decode replay is NOT a valid determinism check: the sliding-window layers' 513-slot KV ring is
+    overwritten by the first decode, so a replay attends to different KV. Use fresh-session repeats only.)
+    pairs: after the emit, run ABBA speed pairs from the end state (A = {last}+1, B = {last}+k), window_bench protocol."""
     sess = fd.create_session(lib, cfg, bank, off, max_total=max_total)
-    longest, launches = 0.0, 0
+    longest, launches, extra = 0.0, 0, {}
     try:
         def run(pr, n, start):
             nonlocal longest, launches
@@ -61,9 +64,10 @@ def emit(lib, cfg, bank, off, prompt, n_out, mode, workers, max_total, deadline)
                 steps.append(st)
             start += len(chunk)
             i += len(chunk)
-        got, n = 1, 1
+        got, n, sched, dec0 = 1, 1, [], start
         while got < n_out:
             n = int(max(1, min(n_out - got, TARGET_S / tp - 1, 16)))
+            sched.append((int(tokens[-1][-1]), n, start))
             dt, tok, last, st, ex = run([int(tokens[-1][-1])], n, start)
             tp = max(tp, dt / (1 + n))
             exps.append(ex[:n])
@@ -72,12 +76,37 @@ def emit(lib, cfg, bank, off, prompt, n_out, mode, workers, max_total, deadline)
             start += n
             got += n
         exps.append(ex[n:n + 1])
+        if pairs:
+            k = int(max(2, min(31, 0.8 * TARGET_S / tp - 1)))
+            lt, rows, d0 = int(tokens[-1][-1]), [], start
+            for i in range(pairs):
+                if not fd.wait_idle(60):
+                    raise SystemExit("gate timeout: busy>=5")
+                pre, r = fd.cotenants(), {}
+                for tag in (("A", "B") if i % 2 == 0 else ("B", "A")):
+                    nn = 1 if tag == "A" else k
+                    dt, tk, _, _, _ = run([lt], nn, start)
+                    r[tag] = dt
+                    start += nn
+                    lt = int(tk[-1])
+                post = fd.cotenants()
+                stable = pre.split(",gpu_busy")[0] == post.split(",gpu_busy")[0]
+                rows.append({"pair": i, "tA_s": round(r["A"], 5), "tB_s": round(r["B"], 5), "depth": start,
+                             "stable": stable, "pre": pre, "post": post})
+            v = [x for x in rows if x["stable"] and x["tB_s"] > x["tA_s"]]
+            tA = sum(x["tA_s"] for x in v) / max(1, len(v))
+            tB = sum(x["tB_s"] for x in v) / max(1, len(v))
+            extra["speed"] = {"k": k, "valid_pairs": len(v), "pairs_n": pairs, "depth_range": [d0, start],
+                              "decode_tok_s": round((k - 1) / (tB - tA), 2) if v and tB > tA else None, "pairs": rows}
+            fd.log(f"ROW depth{len(prompt)}: decode {extra['speed']['decode_tok_s']} tok/s ({len(v)}/{pairs} stable pairs, "
+                   f"depth {d0}..{start}, k={k}) | {fd.cotenants()}")
     finally:
         lib.mid_session_free(sess)
     tok = np.concatenate(tokens)[:n_out]
     step = np.concatenate(steps)[:n_out]
     allexp = np.concatenate(exps)[:len(prompt) + n_out]
-    return tok, step, last, allexp, launches, longest, tp
+    extra["t_pos_s"] = tp
+    return tok, step, last, allexp, launches, longest, extra
 
 
 def emit_ppl(lib, cfg, bank, off, items, mode, workers, deadline):
@@ -116,14 +145,19 @@ def main() -> int:
     ap.add_argument("--case", default="wrap512")
     ap.add_argument("--builds", default="fp32kv,fp32_bf16kv,bf16kv")
     ap.add_argument("--repeats", type=int, default=2)
+    ap.add_argument("--rep-offset", type=int, default=0, help="first repeat index (file naming across invocations)")
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--budget-s", type=float, default=300.0)
     ap.add_argument("--off", type=Path, default=None)
     ap.add_argument("--ppl-set", type=Path, default=None, help="eval_set_full_v1.json: emit teacher-forced ppl instead")
     ap.add_argument("--ppl-builds", default="fp32kv,bf16kv")
+    ap.add_argument("--pairs", type=int, default=0, help="ABBA speed pairs after the emit (production mode row)")
     ap.add_argument("--rehearsal", action="store_true", help="mid-8L dry run: skip the FLINT_CFG_FULL check")
     a = ap.parse_args()
     lib, cfg = fd.load_lib(a.lib)
+    fd._CARD = fd.hip_card(0)   # enables the driver's busy gate + VRAM preflight (only set by the driver's own main())
+    if fd._CARD is None:
+        raise SystemExit("cannot resolve the HIP device's sysfs card: refusing (busy gate + VRAM preflight need it)")
     if not cfg["full"] and not a.rehearsal:
         raise SystemExit(f"{a.lib} is not a FLINT_CFG_FULL build: {cfg}")
     bank, off = fd.open_bank(a.bank, cfg, a.off)
@@ -152,11 +186,14 @@ def main() -> int:
     summary = {"case": a.case, "positions": len(prompt) + n_out, "lib": str(a.lib), "builds": {}}
     for b in a.builds.split(","):
         mode, kv_dtype, impl = fd.BUILDS[b]
-        md5s = []
-        for r in range(a.repeats):
+        md5s, extras = [], []
+        for r in range(a.rep_offset, a.rep_offset + a.repeats):
             t0 = time.time()
-            tok, step, last, exp, launches, longest, tp = emit(lib, cfg, bank, off, prompt, n_out, mode, a.workers,
-                                                               len(prompt) + n_out + 64, deadline)
+            tok, step, last, exp, launches, longest, ex = emit(lib, cfg, bank, off, prompt, n_out, mode, a.workers,
+                                                               len(prompt) + n_out + 64 + 34 * a.pairs, deadline,
+                                                               pairs=a.pairs if r == a.rep_offset else 0)
+            tp = ex["t_pos_s"]
+            extras.append(ex)
             p = len(prompt)
             name = f"{a.case}_{b}" + (f"_r{r}" if r else "") + ".npz"
             np.savez(a.out / name, schema=np.array("rec-mk-out/1"), case=np.array(a.case), ckpt_sha256=np.array(sha),
@@ -166,11 +203,15 @@ def main() -> int:
             md5s.append(payload_md5(tok, step, last, exp))
             fd.log(f"GATE {name}: tokens[:6]={tok[:6].tolist()} md5 {md5s[-1][:12]} launches {launches} longest "
                    f"{longest:.3f} s, {tp * 1e3:.1f} ms/pos, {time.time() - t0:.1f} s | {fd.cotenants()}")
-        summary["builds"][b] = {"md5": md5s, "deterministic": len(set(md5s)) == 1}
-        fd.log(f"DETERMINISM {b}: {'PASS' if len(set(md5s)) == 1 else 'FAIL'} ({len(md5s)} fresh-session emits)")
+        det = len(set(md5s)) == 1 if len(md5s) > 1 else None
+        summary["builds"][b] = {"md5": md5s, "fresh_repeats": len(md5s),
+                                "deterministic": det, "speed": next((e["speed"] for e in extras if "speed" in e), None),
+                                "t_pos_s": [e["t_pos_s"] for e in extras]}
+        fd.log(f"DETERMINISM {b}: {'PASS' if det else ('FAIL' if det is False else 'not tested (1 emit)')} "
+               f"({len(md5s)} fresh-session emits)")
     (a.out / "gate_summary.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps(summary))
-    return 0 if all(v["deterministic"] for v in summary["builds"].values()) else 3
+    return 0 if all(v["deterministic"] is not False for v in summary["builds"].values()) else 3
 
 
 if __name__ == "__main__":
