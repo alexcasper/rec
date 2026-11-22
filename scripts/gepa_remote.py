@@ -175,7 +175,8 @@ def cmd_bench(a) -> dict:
             if not wait_idle():
                 status = "gate_timeout"
                 break
-            pre = f"busy={busy()} {cotenants()}"
+            cot_pre = cotenants()
+            pre = f"busy={busy()} {cot_pre}"
             order = "AB" if rnd % 2 == 0 else "BA"
             for tag in order:
                 lib, s, w = sess[tag]
@@ -183,7 +184,7 @@ def cmd_bench(a) -> dict:
                 t36, tok36 = _run(lib, s, prompt, 36, w, a.mode, MID_VOCAB)
                 max_launch = max(max_launch, t36)
                 ok = tok36[:4].tolist() == tok4.tolist() and t36 > t4
-                rows[tag].append({"round": rnd, "t4": round(t4, 5), "t36": round(t36, 5),
+                rows[tag].append({"round": rnd, "cot": cot_pre, "t4": round(t4, 5), "t36": round(t36, 5),
                                   "tok_s": round(32 / (t36 - t4), 2) if ok else None, "valid": ok,
                                   "tokens36": tok36.tolist()})
                 if t36 > MAX_LAUNCH_S:
@@ -192,6 +193,14 @@ def cmd_bench(a) -> dict:
             print(f"[{time.strftime('%H:%M:%SZ', time.gmtime())}] {a.case} round {rnd} {order} | A "
                   f"{rows['A'][-1]['tok_s'] if rows['A'] else None} B {rows['B'][-1]['tok_s'] if rows['B'] else None}"
                   f" | pre {pre} | post busy={busy()} {cotenants()}", file=sys.stderr, flush=True)
+            # never compare across cotenant states: a round counts only if the state is unchanged over the
+            # round and no cotenant is serving; both sides of the round are dropped together
+            cot_post = cotenants()
+            stable = cot_post == cot_pre and "busy" not in cot_pre
+            for tag in order:
+                if rows[tag] and rows[tag][-1]["round"] == rnd:
+                    rows[tag][-1]["cot_stable"] = stable
+                    rows[tag][-1]["valid"] = rows[tag][-1]["valid"] and stable
             if status != "ok":
                 break
     except RuntimeError as e:
@@ -199,7 +208,9 @@ def cmd_bench(a) -> dict:
     for lib, s, _ in sess.values():
         lib.mid_session_free(s)
     res = {"status": status, "case": a.case, "rounds": a.rounds, "workers": {"A": a.wa, "B": a.wb},
-           "max_launch_s": round(max_launch, 4)}
+           "max_launch_s": round(max_launch, 4),
+           "cotenant_states": sorted({r["cot"] for r in rows["A"]}),
+           "rounds_dropped_cotenant": sum(1 for r in rows["A"] if not r.get("cot_stable", True))}
     if status == "ok":
         for tag in "AB":
             v = [r for r in rows[tag] if r["valid"]]
