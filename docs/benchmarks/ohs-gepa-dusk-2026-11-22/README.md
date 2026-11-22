@@ -129,7 +129,7 @@ Contingent items (router over all warps, attention split) were NOT started: neit
 
 ## Run 3 (GO 2026-11-22): per-warp depth on O-proj + MoE down, then the literal Step 2 bulk dequant
 
-Depth knobs (90d0... see git log; summation order identical, so outputs are byte-identical and no headroom is spent):
+Depth knobs (bc1e14e; summation order identical, so outputs are byte-identical and no headroom is spent):
 GEPA_K512_DUAL stages 2 quads (8 rows, 2 KiB) per K=512 load round, with all loads issued before the LDS stores.
 GEPA_GEN_DIST2 makes the generic path (O-proj K=4096, shared down K=1024) prefetch 2 stages ahead.
 Basis: ~128 KiB in flight GPU-wide vs ~120-165 KB needed (Little's law at 82 GB/s x ~1.5-2 us). Proposer: kimi on
