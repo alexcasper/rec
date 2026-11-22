@@ -45,7 +45,7 @@ deltas = depth (2→49), experts (8→256), top-k (2→6).
 - Historical note: the incumbent rows stand on their own; the megakernel-side re-run on HEAD default will re-establish or refute the @512 win, and the @8192 attention-depth gap (rec-e5d) is expected to persist (it was visible in the albion R8 row too, where the build was verified).
 
 **Same-box pairs, dusk 890M, full Flint, R11r (verified HEAD default build, display down) vs incumbent R5-procedure rows (display down, 29.39 @512 / 26.80 @8192):**
-- **@512 depth: megakernel 24.75 vs llama.cpp 29.39 = 0.84x, MEGAKERNEL LOSES.** The superseded 1.18x win came entirely from the racy split-K attention path (active above 64 positions); without it, serial one-warp-per-head attention costs ~10 ms/token at depth 512 on 14 full-attention layers.
+- **@512 depth: megakernel 24.75 vs llama.cpp 29.39 = 0.84x, MEGAKERNEL LOSES.** The superseded 1.18x win came entirely from the racy split-K attention path (active above 64 positions); without it, serial one-warp-per-head attention costs ~15 ms/token at depth 512 (40.4 vs 25.6 ms/token short) on 14 full-attention layers.
 - short context (depth 4–76): megakernel 39.06; no incumbent row at that depth.
 - @8192: no valid megakernel row (the verified build would be slower than the faulty 21.35; split-K needs the rec-3cr race fixed first). The incumbent stands at 26.80.
 - Bytes: 21.02 GiB INT4-affine vs 18.49 GB UD-Q3_K_XL (1.22x bytes).
