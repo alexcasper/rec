@@ -27,3 +27,11 @@ rounding flips routing early and the error compounds. The bf16-KV tier was never
 (R11r) is expected to fail it too. That is unverified and needs a window or a decision.
 
 Gate emitter: `scripts/m3_depth_gate.py`; window script: `scripts/m3_gate512_dusk.sh`; scorer `scripts/bisect/score_soak.py`.
+
+## Reference-vs-reference check (offline, dawn): is the 1e-3 bf16-KV tier attainable at full config?
+`ref_vs_ref.json` (`scripts/bisect/ref_vs_ref.py`): torch fp32-KV vs torch bf16-KV, both fp32 compute, teacher-forced on the same
+wrap512 trajectory, no kernel involved: rel 1.85e-2 at step 0, max 0.146, argmax differs at step 3. The kernel's own fp32-KV vs
+bf16-KV modes differ by 1.87e-2 at step 0 and diverge at step 3, the same picture. At full Flint (256 experts, top-6) bf16-KV
+rounding is ill-conditioned: implementations that agree to ~1e-6 before rounding hit different bf16 values, flip routing, and
+end up about as far apart as the bf16-KV noise itself. So the 1e-3 tier looks unattainable at full config by any
+non-bit-exact-torch kernel. That's a gate-spec question for Alex (rec-kcb), not a kernel fix.
