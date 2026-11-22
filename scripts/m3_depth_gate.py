@@ -199,8 +199,9 @@ def main() -> int:
             fd.log(f"PPL {b}: {logp.shape} nll {-logp.mean():.6f} ppl {np.exp(-logp.mean()):.4f} longest {longest:.3f} s, "
                    f"{time.time() - t0:.1f} s | {fd.cotenants()}")
         return 0
-    if a.case == "depth8192":
-        prompt = np.random.default_rng(8192).integers(3, fd.VOCAB, size=8192, dtype=np.int32).tolist()
+    if a.case.startswith("depth"):   # depthN: N-token prefix of the seeded 8192-token prompt (nested across N)
+        depth = int(a.case[5:])
+        prompt = np.random.default_rng(8192).integers(3, fd.VOCAB, size=max(8192, depth), dtype=np.int32)[:depth].tolist()
         n_out = 24
     else:
         c = fd.case_matrix(fd.VOCAB)[a.case]
