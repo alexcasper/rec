@@ -11,7 +11,7 @@
     ],
     "host_protocol": "gated busy<5 + wait-for-idle, ABBA order, cotenant state per log line",
     "push_policy": "nothing pushed without Alex's ask",
-    "updated": "2026-11-22T05:23:59Z"
+    "updated": "2026-11-22T06:38:52Z"
   },
   "gates": {
     "hard_constraints": {
@@ -332,8 +332,23 @@
         "stopped": "max_evals/exhausted",
         "best": "iter0",
         "min_gain": 0.016199999999999992
+      },
+      {
+        "time": "2026-11-22T06:35:45Z",
+        "evals": 4,
+        "stopped": "patience",
+        "best": "iter0",
+        "min_gain": 0.016199999999999992
+      },
+      {
+        "time": "2026-11-22T06:38:52Z",
+        "evals": 1,
+        "stopped": "max_evals/exhausted",
+        "best": "iter0",
+        "min_gain": 0.016199999999999992
       }
-    ]
+    ],
+    "reflections": 4
   },
   "evaluations": [
     {
@@ -6520,6 +6535,1275 @@
       "speedup_vs_best": {
         "short4": 0.9958,
         "chat": 0.9969
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c026",
+      "time": "2026-11-22T06:26:51Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 1,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_K512_DUAL": 1,
+        "GEPA_GEN_DIST2": 1
+      },
+      "patch": null,
+      "name": null,
+      "optimizer": "kimi",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "kimi",
+        "attempts": [
+          {
+            "model": "moonshotai-kimi-k3.1-pro-trial",
+            "status": "ok",
+            "http": 200,
+            "latency_s": 29.3,
+            "error": null
+          }
+        ],
+        "kimi_429_total": 6,
+        "kimi_429_consecutive": 0,
+        "usage": {
+          "total_tokens": 11944,
+          "completion_tokens": 5890,
+          "completion_tokens_details": {
+            "reasoning_tokens": 5776
+          },
+          "prompt_tokens": 6054,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "finish_reason": "stop",
+        "content_chars": 421,
+        "rationale": "Build on c003\u2019s positive K512 pipelining and attack both bandwidth gaps: dual eight-row rounds increase routed-down loads in flight, while distance-2 generic prefetch deepens O-proj/shared overlap. Summation order stays unchanged; unlike failed unrolls, these should add overlap without broad VGPR or hot-code growth."
+      },
+      "source": "71a7d90",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_DIST2=1",
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_DUAL=1",
+          "GEPA_K512_PIPE=1",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "d4cc58265d7eda145c68668a0230ba57888b0b4fb8657ab281e28f796888517c",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12073,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1188,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1203,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1161,
+          "mid_generate": 6650
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 178
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 163
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 178
+          }
+        },
+        "source_sha256": "b2687c0eed98172efa06cb00cdb30b3cd80f3f82b603dd25a233ddd650e5e0ed"
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15748971299035475
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15748971299035475,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "headroom": {
+        "cand": 0.0009115004257483937,
+        "inc": 0.0009115004257483937,
+        "margin": 8.849957425160636e-05,
+        "flag": false
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1949,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.23,
+            "pair_min": 204.69,
+            "pair_max": 211.2,
+            "t36_mean_s": 0.19282
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 208.41,
+            "pair_min": 204.79,
+            "pair_max": 211.19,
+            "t36_mean_s": 0.19207
+          },
+          "speedup_B_over_A": 1.0009,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2001,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 206.35,
+            "pair_min": 202.98,
+            "pair_max": 210.78,
+            "t36_mean_s": 0.19845
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.54,
+            "pair_min": 207.8,
+            "pair_max": 210.9,
+            "t36_mean_s": 0.19603
+          },
+          "speedup_B_over_A": 1.0155,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 208.41,
+        "chat": 209.54
+      },
+      "speedup_vs_best": {
+        "short4": 1.0009,
+        "chat": 1.0155
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c027",
+      "time": "2026-11-22T06:29:01Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 1,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_K512_DUAL": 0,
+        "GEPA_GEN_DIST2": 0
+      },
+      "patch": null,
+      "name": null,
+      "optimizer": "grid",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "grid",
+        "kimi_429_total": 6,
+        "note": "kimi asked every 3th reflection"
+      },
+      "source": "71a7d90",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_DIST2=0",
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_DUAL=0",
+          "GEPA_K512_PIPE=1",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "52ad4148387aed1adbdce6646a25d58f0e4b5d9bc6d4a2b644608d70960b03ef",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12029,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1128,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+          "mid_generate": 6651
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 213
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "b2687c0eed98172efa06cb00cdb30b3cd80f3f82b603dd25a233ddd650e5e0ed"
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15520537400152534
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15520537400152534,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "headroom": {
+        "cand": 0.0009115004257483937,
+        "inc": 0.0009115004257483937,
+        "margin": 8.849957425160636e-05,
+        "flag": false
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1946,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.15,
+            "pair_min": 207.2,
+            "pair_max": 209.09,
+            "t36_mean_s": 0.19278
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.24,
+            "pair_min": 206.3,
+            "pair_max": 213.38,
+            "t36_mean_s": 0.1917
+          },
+          "speedup_B_over_A": 1.0052,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1998,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.37,
+            "pair_min": 203.54,
+            "pair_max": 209.97,
+            "t36_mean_s": 0.19773
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.34,
+            "pair_min": 207.37,
+            "pair_max": 211.71,
+            "t36_mean_s": 0.19604
+          },
+          "speedup_B_over_A": 1.0095,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 209.24,
+        "chat": 209.34
+      },
+      "speedup_vs_best": {
+        "short4": 1.0052,
+        "chat": 1.0095
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c028",
+      "time": "2026-11-22T06:31:12Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_K512_DUAL": 0,
+        "GEPA_GEN_DIST2": 1
+      },
+      "patch": null,
+      "name": null,
+      "optimizer": "grid",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "grid",
+        "kimi_429_total": 6,
+        "note": "kimi asked every 3th reflection"
+      },
+      "source": "71a7d90",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_DIST2=1",
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_DUAL=0",
+          "GEPA_K512_PIPE=0",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "aea78962bc85d9dfc57940c9933c0b9478b70ff354a89d6ad89dc4ca74ec55ed",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 11897,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1188,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1161,
+          "mid_generate": 6648
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 178
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 178
+          }
+        },
+        "source_sha256": "b2687c0eed98172efa06cb00cdb30b3cd80f3f82b603dd25a233ddd650e5e0ed"
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15512667899020016
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15512667899020016,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "headroom": {
+        "cand": 0.0009115004257483937,
+        "inc": 0.0009115004257483937,
+        "margin": 8.849957425160636e-05,
+        "flag": false
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1948,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.72,
+            "pair_min": 203.97,
+            "pair_max": 211.36,
+            "t36_mean_s": 0.19286
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 207.23,
+            "pair_min": 204.5,
+            "pair_max": 209.13,
+            "t36_mean_s": 0.19274
+          },
+          "speedup_B_over_A": 0.9976,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2008,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.44,
+            "pair_min": 202.99,
+            "pair_max": 210.76,
+            "t36_mean_s": 0.19773
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 206.92,
+            "pair_min": 204.56,
+            "pair_max": 209.09,
+            "t36_mean_s": 0.19774
+          },
+          "speedup_B_over_A": 0.9975,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 207.23,
+        "chat": 206.92
+      },
+      "speedup_vs_best": {
+        "short4": 0.9976,
+        "chat": 0.9975
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c029",
+      "time": "2026-11-22T06:33:34Z",
+      "axis": "tile_shapes",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_K512_DUAL": 1,
+        "GEPA_GEN_DIST2": 0
+      },
+      "patch": null,
+      "name": null,
+      "optimizer": "kimi",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "kimi",
+        "attempts": [
+          {
+            "model": "moonshotai-kimi-k3.1-pro-trial",
+            "status": "ok",
+            "http": 200,
+            "latency_s": 11.3,
+            "error": null
+          }
+        ],
+        "kimi_429_total": 6,
+        "kimi_429_consecutive": 0,
+        "usage": {
+          "total_tokens": 9869,
+          "completion_tokens": 3170,
+          "completion_tokens_details": {
+            "reasoning_tokens": 3069
+          },
+          "prompt_tokens": 6699,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "finish_reason": "stop",
+        "content_chars": 361,
+        "rationale": "Isolate DUAL on the specialized routed K=512 path, directly doubling bytes in flight where bandwidth is worst. DIST2 regressed alone, and c026\u2019s PIPE-only-like deltas suggest PIPE bypasses DUAL; disabling both avoids confounding and preserves hot-code size."
+      },
+      "source": "71a7d90",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_DIST2=0",
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_DUAL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "4bc37d4b5f3c70dd2a6f0a218be23e7a76e39ad5c69c0bab0cb9df4927aa1021",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12352,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1451,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+          "mid_generate": 6651
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 119
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "b2687c0eed98172efa06cb00cdb30b3cd80f3f82b603dd25a233ddd650e5e0ed"
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15473115298664197
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15473115298664197,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "headroom": {
+        "cand": 0.0009115004257483937,
+        "inc": 0.0009115004257483937,
+        "margin": 8.849957425160636e-05,
+        "flag": false
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1952,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 209.4,
+            "pair_min": 207.33,
+            "pair_max": 211.85,
+            "t36_mean_s": 0.19215
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 208.12,
+            "pair_min": 204.22,
+            "pair_max": 212.04,
+            "t36_mean_s": 0.19268
+          },
+          "speedup_B_over_A": 0.9939,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2011,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.49,
+            "pair_min": 204.31,
+            "pair_max": 212.12,
+            "t36_mean_s": 0.19801
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.48,
+            "pair_min": 207.26,
+            "pair_max": 211.77,
+            "t36_mean_s": 0.1967
+          },
+          "speedup_B_over_A": 1.0096,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 208.12,
+        "chat": 209.48
+      },
+      "speedup_vs_best": {
+        "short4": 0.9939,
+        "chat": 1.0096
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c030",
+      "time": "2026-11-22T06:36:10Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_S2_MOE": 4
+      },
+      "patch": "/mnt/d/ops/rec-gemini-kernels/docs/benchmarks/ohs-gepa-dusk-2026-11-22/patches/s2_bulk_dequant_lds.patch",
+      "name": "s2-bulk-dequant-lds",
+      "optimizer": "external",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "external",
+        "name": "s2-bulk-dequant-lds",
+        "kimi_429_total": 6
+      },
+      "source": "4bb6212",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.4,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_S2_MOE=4",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "c7d8c133afa21ed327c180be2467b372ade2a928e856779dac25dbe32784d46e",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12393,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+          "mid_generate": 7114
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0ELi1EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "c9c56f6b1825709a13eaf7e3bc277056e6516b563489ac289cbcf3c526121528"
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.3,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "5017b350c95b53af7e3ff557e7bf9346",
+          "suite/chat_fp32_bf16kv.npz": "b8410bb527a844601e6ec25742ca2e52",
+          "suite/chat_fp32kv.npz": "dbff5133b60a281af9ca580186f18649",
+          "suite/short4_bf16kv.npz": "a07e13d88d82ab441cae61e2078bbc3f",
+          "suite/short4_fp32_bf16kv.npz": "7f4e675eac6c59e2357ee37c832ce71c",
+          "suite/short4_fp32kv.npz": "a97b32774e295c74499ddf7863df7db5",
+          "ppl/ppl__bf16kv.npz": "9e2f83cbc5302cf20ed255d6d71845da",
+          "ppl/ppl__fp32kv.npz": "f316f8cce72db46209366b092a7ca5c9"
+        },
+        "ppl_longest_launch_s": 0.16481293199467473
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.8546963997,
+          "bf16kv": 114199.11133985387
+        },
+        "ppl_longest_launch_s": 0.16481293199467473,
+        "ppl_rel_vs_incumbent_bf16kv": -0.00015676545740883618,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.1314437286963652e-06,
+              "last_rel": 9.428476297169769e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009308206337613498,
+              "last_rel": 0.0006546316286934388,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003776306166595755,
+              "last_rel": 0.002699765450758686,
+              "tokens_exact": false,
+              "problems": [
+                "last_logits rel err 2.700e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.776e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0359759929829892e-06,
+              "last_rel": 9.414259985817641e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00045752377236222907,
+              "last_rel": 0.00032802262037464995,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.09061518485219872,
+              "last_rel": 0.09631637137254576,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 9.632e-02 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 9.062e-02 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded"
+        },
+        "pass": true
+      },
+      "headroom": {
+        "cand": 0.0009308206337613498,
+        "inc": 0.0009115004257483937,
+        "margin": 6.917936623865024e-05,
+        "flag": true
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2044,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.71,
+            "pair_min": 205.14,
+            "pair_max": 210.65,
+            "t36_mean_s": 0.19262
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 197.5,
+            "pair_min": 194.49,
+            "pair_max": 202.47,
+            "t36_mean_s": 0.20347
+          },
+          "speedup_B_over_A": 0.9508,
+          "tokens_identical_A_B": false
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.21,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.87,
+            "pair_min": 204.75,
+            "pair_max": 212.04,
+            "t36_mean_s": 0.19762
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 197.35,
+            "pair_min": 195.19,
+            "pair_max": 198.76,
+            "t36_mean_s": 0.20813
+          },
+          "speedup_B_over_A": 0.9494,
+          "tokens_identical_A_B": false
+        }
+      },
+      "tok_s": {
+        "short4": 197.5,
+        "chat": 197.35
+      },
+      "speedup_vs_best": {
+        "short4": 0.9508,
+        "chat": 0.9494
       },
       "outcome": "gates_pass"
     }
