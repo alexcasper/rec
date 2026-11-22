@@ -352,7 +352,7 @@ __device__ inline void q4_gemv_cat2048(const Q4Cat& c, const float* __restrict__
     }
 }
 
-template <int K, bool ROUND_BF16 = false, int GM = 0>
+template <int K, bool ROUND_BF16 = false, int GM = 0, int LDT = 1>
 __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         const bf16* __restrict__ s,
                                         const bf16* __restrict__ b,
@@ -464,11 +464,7 @@ __device__ inline void flint_q4_gemv_op(const uint8_t* __restrict__ w,
             float* const         OF = segs ? segs[i].out : out_f;
             bf16* const          OB = segs ? nullptr : out_bf;
             const int            N  = segs ? segs[i].n : n;
-#if GEPA_OSPLIT
-            const size_t         LD = (segs && segs[i].ld > 1) ? (size_t)segs[i].ld : 1;
-#else
-            constexpr size_t     LD = 1;
-#endif
+            constexpr size_t     LD = LDT;   // compile-time row stride (GEPA_OSPLIT instantiates LDT = 2 for O-proj only)
             const int nq = (N + 3) >> 2;
             for (; gq < base + nq; gq += groups) {
                 const int first = (gq - base) * 4;
@@ -1066,9 +1062,10 @@ __device__ inline void mid_generate_impl(
                 sh_seg[1] = {ow + 1024, os + 32, ob + 32, ws_down, MID_HID, 2};
             }
             __syncthreads();
-            flint_q4_gemv_op<MID_HID>(nullptr, nullptr, nullptr, ws_attn, nullptr, nullptr, 0, lane, sg, groups, sh_seg, 1);
-            flint_q4_gemv_op<MID_HID>(nullptr, nullptr, nullptr, ws_attn + MID_HID, nullptr, nullptr, 0, lane, sg, groups,
-                                      sh_seg + 1, 1);
+            flint_q4_gemv_op<MID_HID, false, 0, 2>(nullptr, nullptr, nullptr, ws_attn, nullptr, nullptr, 0, lane, sg, groups,
+                                                   sh_seg, 1);
+            flint_q4_gemv_op<MID_HID, false, 0, 2>(nullptr, nullptr, nullptr, ws_attn + MID_HID, nullptr, nullptr, 0, lane, sg,
+                                                   groups, sh_seg + 1, 1);
             SYNC_ALL();
             for (int i = gtid; i < MID_HID; i += gthreads)
                 ws_x[i] += ws_o[i] + ws_down[i];
