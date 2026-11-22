@@ -64,6 +64,12 @@
 #ifndef GEPA_PF
 #define GEPA_PF 0
 #endif
+// rec-ohs direction 2: MoE act folded into the down phase. Each workgroup recomputes act (same formula, same
+// inputs -> identical values) into sh_xn (dead between gate/up and the next RMSNorm) and the down gemvs read it
+// from LDS: one grid barrier per MoE layer becomes a __syncthreads.
+#ifndef GEPA_ACT_FOLD
+#define GEPA_ACT_FOLD 0
+#endif
 #define GEPA_STR(x) #x
 #define GEPA_UNROLL(n) _Pragma(GEPA_STR(unroll n))
 #if GEPA_RESID_FUSE
@@ -1146,6 +1152,19 @@ __device__ inline void mid_generate_impl(
                 flint_q4_gemv_op<MID_HID, false, GEPA_S2_MOE>(nullptr, nullptr, nullptr, sh_xn, nullptr, nullptr, 0, lane, sg,
                                           groups, sh_seg, 2 * MID_TOPK + 2);
                 SYNC_ALL();
+#if GEPA_ACT_FOLD
+                static_assert(MOE_ACT_N <= MID_HID, "act fold reuses sh_xn[MID_HID]");
+                for (int i = tid; i < MOE_ACT_N; i += 256) {
+                    if constexpr (PURE_FP32) {
+                        sh_xn[i] = silu_f(ws_gate[i]) * ws_up[i];
+                    } else {
+                        bf16 act = tobf(silu_f(tofloat(tobf(ws_gate[i]))) * tofloat(tobf(ws_up[i])));
+                        sh_xn[i] = tofloat(act);
+                    }
+                }
+                __syncthreads();
+                const float* act_src = sh_xn;
+#else
                 for (int i = gtid; i < MOE_ACT_N; i += gthreads) {
                     if constexpr (PURE_FP32) {
                         ws_f_act[i] = silu_f(ws_gate[i]) * ws_up[i];
@@ -1162,15 +1181,17 @@ __device__ inline void mid_generate_impl(
                             sg - MOE_ACT_N / 32, lane, pf_sink);
                 }
                 SYNC_ALL();
+                const float* act_src = ws_f_act;
+#endif
                 for (int t = 0; t < MID_TOPK; ++t) {
                     int e = GEPA_SEL(t);
                     size_t dw_off = (size_t)e * MID_HID * (MID_MOE_I / 2);
                     size_t ds_off = (size_t)e * MID_HID * (MID_MOE_I / 64);
                     q4_block512<MID_MOE_I>(sw_dw + dw_off, sw_ds + ds_off, sw_db + ds_off,
-                                           ws_f_act + t * MID_MOE_I, nullptr, ws_down + t * MID_HID, MID_HID, lane, sg, groups);
+                                           act_src + t * MID_MOE_I, nullptr, ws_down + t * MID_HID, MID_HID, lane, sg, groups);
                 }
                 q4_block512<MID_SH_I>(Q_W(qbase + 9), Q_S(qbase + 9, MID_HID, MID_SH_I), Q_B(qbase + 9, MID_HID, MID_SH_I),
-                                      ws_f_act + MOE_SH0, nullptr, ws_down + MID_TOPK * MID_HID, MID_HID, lane, sg, groups);
+                                      act_src + MOE_SH0, nullptr, ws_down + MID_TOPK * MID_HID, MID_HID, lane, sg, groups);
                 SYNC_ALL();
 
                 if constexpr (MID_TOPK == 2) {
