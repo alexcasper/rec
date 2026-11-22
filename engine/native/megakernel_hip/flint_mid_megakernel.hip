@@ -132,7 +132,14 @@
 #define GEPA_DUMP 0
 #endif
 #ifndef GEPA_SHRINK
+#if defined(FLINT_CFG_FULL) && FLINT_CFG_FULL
+// rec-3cr: full config pins SHRINK=0. The out-of-line tail codegen races nondeterministically in the generic K=4096
+// O-proj gemv (row 0 of quads) under layout-perturbing builds (split-K, dump); SHRINK=0 soaked deterministic and
+// passing at full config (16/16 identical, fp32kv 1.55e-6). Keep pinned until sunny-2gg probe coverage lands.
+#define GEPA_SHRINK 0
+#else
 #define GEPA_SHRINK 1   // PROMOTED (rec-fut run 4, c033): +3.05/+3.59 % ABBA, replicate +2.65/+2.27 %, byte-identical to 24f167d
+#endif
 #endif
 #define GEPA_STR(x) #x
 #define GEPA_UNROLL(n) _Pragma(GEPA_STR(unroll n))

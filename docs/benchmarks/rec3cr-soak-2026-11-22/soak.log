@@ -1,0 +1,28 @@
+full_split_ctl sha c93fc3a9ad29fe87
+{"so": "full_split_ctl.so", "rep": 0, "ok": true, "rc": 0, "launch_s": 0.1726, "tokens": [19629, 52387, 3460], "identical_to_prev": null, "cot": "8080:000 8090:200 busy=15 MemAvailable=16.9GiB vram_free=17.4GiB"}
+{"so": "full_split_ctl.so", "rep": 1, "ok": true, "rc": 0, "launch_s": 0.1807, "tokens": [19629, 52387, 332], "identical_to_prev": false, "cot": "8080:000 8090:200 busy=28 MemAvailable=16.9GiB vram_free=17.4GiB"}
+{"so": "full_split_ctl.so", "rep": 2, "ok": true, "rc": 0, "launch_s": 0.1844, "tokens": [19629, 52387, 3460], "identical_to_prev": false, "cot": "8080:000 8090:200 busy=38 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_ctl.so", "load_s": 8.9, "launches": [0.1726, 0.1807, 0.1844]}
+full_split_shr0 sha be5d057274f1929d
+{"so": "full_split_shr0.so", "rep": 0, "ok": true, "rc": 0, "launch_s": 0.1815, "tokens": [19629, 52387, 332], "identical_to_prev": null, "cot": "8080:000 8090:200 busy=16 MemAvailable=16.7GiB vram_free=17.4GiB"}
+{"so": "full_split_shr0.so", "rep": 1, "ok": true, "rc": 0, "launch_s": 0.1864, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=29 MemAvailable=16.7GiB vram_free=17.4GiB"}
+{"so": "full_split_shr0.so", "rep": 2, "ok": true, "rc": 0, "launch_s": 0.1923, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=39 MemAvailable=16.7GiB vram_free=17.4GiB"}
+{"so": "full_split_shr0.so", "rep": 3, "ok": true, "rc": 0, "launch_s": 0.1911, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=47 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_shr0.so", "rep": 4, "ok": true, "rc": 0, "launch_s": 0.1934, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=53 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_shr0.so", "rep": 5, "ok": true, "rc": 0, "launch_s": 0.1942, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=58 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_shr0.so", "rep": 6, "ok": true, "rc": 0, "launch_s": 0.1946, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=62 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_shr0.so", "rep": 7, "ok": true, "rc": 0, "launch_s": 0.1951, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=65 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_shr0.so", "load_s": 8.9, "launches": [0.1815, 0.1864, 0.1923, 0.1911, 0.1934, 0.1942, 0.1946, 0.1951]}
+full_split_inl sha b86452cad0e92eff
+{"so": "full_split_inl.so", "rep": 0, "ok": true, "rc": 0, "launch_s": 0.206, "tokens": [19629, 52387, 332], "identical_to_prev": null, "cot": "8080:000 8090:200 busy=18 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_inl.so", "rep": 1, "ok": true, "rc": 0, "launch_s": 0.2166, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=32 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_inl.so", "rep": 2, "ok": true, "rc": 0, "launch_s": 0.2189, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=43 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_inl.so", "rep": 3, "ok": true, "rc": 0, "launch_s": 0.2254, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=52 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_inl.so", "rep": 4, "ok": true, "rc": 0, "launch_s": 0.2274, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=58 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_split_inl.so", "load_s": 8.9, "launches": [0.206, 0.2166, 0.2189, 0.2254, 0.2274]}
+full_def_shr0 sha a04bcb0f14b62a58
+{"so": "full_def_shr0.so", "rep": 0, "ok": true, "rc": 0, "launch_s": 0.1767, "tokens": [19629, 52387, 332], "identical_to_prev": null, "cot": "8080:000 8090:200 busy=15 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_def_shr0.so", "rep": 1, "ok": true, "rc": 0, "launch_s": 0.186, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=28 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_def_shr0.so", "rep": 2, "ok": true, "rc": 0, "launch_s": 0.189, "tokens": [19629, 52387, 332], "identical_to_prev": true, "cot": "8080:000 8090:200 busy=38 MemAvailable=16.8GiB vram_free=17.4GiB"}
+{"so": "full_def_shr0.so", "load_s": 8.9, "launches": [0.1767, 0.186, 0.189]}
+done 64s 16:15:05Z -> signal ops_flint restart
