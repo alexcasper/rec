@@ -532,9 +532,10 @@ def main() -> int:
             for name, (ax, vals, _) in sorted(((k, v) for k, v in KNOBS.items() if k in allowed),
                                               key=lambda kv: axis_order.index(kv[1][0])
                                               if kv[1][0] in axis_order else 99):
+                bk = dict(DEFAULTS, **best["knobs"])        # older records predate newer knobs
                 for v in vals:
-                    k = dict(best["knobs"], **{name: v})
-                    if v != best["knobs"][name] and knob_key(k) not in done:
+                    k = dict(bk, **{name: v})
+                    if v != bk[name] and knob_key(k) not in done:
                         cands.append((ax, k))
             if not cands:
                 log("neighbourhood exhausted")
