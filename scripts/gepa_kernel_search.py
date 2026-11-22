@@ -496,14 +496,16 @@ def main() -> int:
     # the incumbent build directory for the A side (iter0 = git incumbent; later = winning candidate)
     done = {knob_key(r["knobs"]) + (r.get("patch") or "") for r in pool["evaluations"] if r["id"] != "iter0"}
     done.add(knob_key(DEFAULTS))
+    # external candidates dedupe on knobs + patch + kernel source commit (a fixed implementation is a new eval)
+    done_src = {knob_key(r["knobs"]) + (r.get("patch") or "") + "@" + str(r.get("source")) for r in pool["evaluations"]}
     n_eval, stale = 0, 0
     ext = json.loads(a.candidate.read_text()) if a.candidate else None
     if isinstance(ext, dict):
         ext = [ext]
     while n_eval < a.max_evals and stale < a.patience:
         if ext is not None:  # external list: each entry evaluated once, relative to the CURRENT best
-            todo = [c for c in ext if knob_key(dict(best["knobs"], **c.get("knobs", {}))) + (c.get("patch") or "")
-                    not in done]
+            todo = [c for c in ext if knob_key(dict(best["knobs"], **c.get("knobs", {}))) + (c.get("patch") or "") + "@" + src[1]
+                    not in done_src]
             if not todo:
                 log("external candidate list exhausted")
                 break
@@ -547,6 +549,7 @@ def main() -> int:
                        opt_rec if ext is None else {"optimizer": "external", "name": ext_name,
                                                     "kimi_429_total": opt.st["kimi_429_total"]})
         done.add(knob_key(knobs) + (patch or ""))
+        done_src.add(knob_key(knobs) + (patch or "") + "@" + src[1])
         n_eval += 1
         if update_front(pool, rec, min_gain):
             log(f"{cid}: ACCEPTED as new best (gain > {min_gain:.3f} on both cases)")
