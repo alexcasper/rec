@@ -1,0 +1,78 @@
+--- a/flint_mid_megakernel.hip
++++ b/flint_mid_megakernel.hip
+@@ -373,7 +373,74 @@
+                                         int n, int lane, int sg, int groups,
+                                         const Q4Seg* segs = nullptr, int nseg = 0 GEPA_ACC_DECL) {
+     static_assert(K % 512 == 0, "flint_q4_gemv_op requires K % 512 == 0");
+-    if constexpr (K == 2048 && GM != 0) {
++    if constexpr (K == 2048 && GM == 4) {
++        // rec-1f4 Step 2 LITERAL bulk-dequant-to-LDS (patch candidate): per warp, a stage of 4 rows x 128 elements is
++        // loaded packed (8 B/lane), dequantized ONCE to fp32 w = q*s + b into the 2 KiB warp pool, and dotted against x.
++        // fp32 (not fp16: fp16 weights carry ~5e-4 rel error/element). Relaxed summation: sum_k x*(q*s+b).
++        float* const lf = (float*)q4_gen_pool(sg % 8);           // [4][128] fp32 = 2 KiB
++        const int lr = lane >> 3, lp = lane & 7;                  // loader: row lr, 16-element piece lp
++        const int nsegs = segs ? nseg : 1;
++        int base = 0, gq = sg;
++        for (int i = 0; i < nsegs; ++i) {
++            const uint8_t* const W  = segs ? segs[i].w : w;
++            const bf16* const    S  = segs ? segs[i].s : s;
++            const bf16* const    Bq = segs ? segs[i].b : b;
++            float* const         OF = segs ? segs[i].out : out_f;
++            bf16* const          OB = segs ? nullptr : out_bf;
++            const int            N  = segs ? segs[i].n : n;
++            const int nq = (N + 3) >> 2;
++            for (; gq < base + nq; gq += groups) {
++                const int first = (gq - base) * 4;
++                float a[4] = {0.0f, 0.0f, 0.0f, 0.0f};
++                const int row_l = first + lr;
++                for (int st = 0; st < 16; ++st) {
++                    const int e0 = st * 128;
++                    float dq[16];
++                    if (row_l < N) {
++                        const int e = e0 + lp * 16;
++                        uint2 q8 = *(const uint2*)(W + (size_t)row_l * 1024 + (e >> 1));
++                        const float sv = tofloat(S[(size_t)row_l * 32 + (e >> 6)]);
++                        const float bv = tofloat(Bq[(size_t)row_l * 32 + (e >> 6)]);
++                        #pragma unroll
++                        for (int k = 0; k < 8; ++k) {
++                            uint32_t u = (k < 4 ? q8.x : q8.y) >> (8 * (k & 3));
++                            dq[2 * k]     = __builtin_fmaf((float)(u & 0xfu), sv, bv);
++                            dq[2 * k + 1] = __builtin_fmaf((float)((u >> 4) & 0xfu), sv, bv);
++                        }
++                    } else {
++                        #pragma unroll
++                        for (int k = 0; k < 16; ++k) dq[k] = 0.0f;
++                    }
++                    __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
++                    __builtin_amdgcn_wave_barrier();        // previous stage's reads done
++                    #pragma unroll
++                    for (int k = 0; k < 16; k += 4)
++                        *(float4*)(lf + lr * 128 + lp * 16 + k) = make_float4(dq[k], dq[k + 1], dq[k + 2], dq[k + 3]);
++                    __builtin_amdgcn_fence(__ATOMIC_RELEASE, "wavefront");
++                    __builtin_amdgcn_wave_barrier();
++                    __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "wavefront");
++                    const float4 xv = *(const float4*)(x + e0 + lane * 4);
++                    #pragma unroll
++                    for (int r = 0; r < 4; ++r) {
++                        const float4 wv = *(const float4*)(lf + r * 128 + lane * 4);
++                        a[r] = __builtin_fmaf(wv.x, xv.x, a[r]);
++                        a[r] = __builtin_fmaf(wv.y, xv.y, a[r]);
++                        a[r] = __builtin_fmaf(wv.z, xv.z, a[r]);
++                        a[r] = __builtin_fmaf(wv.w, xv.w, a[r]);
++                    }
++                }
++                #pragma unroll
++                for (int r = 0; r < 4; ++r) {
++                    float val = simd_sum(a[r]);
++                    if (lane == 0 && first + r < N) {
++                        if (OB) OB[first + r] = tobf(val);
++                        if (OF) GEPA_OUT(OF, first + r, ROUND_BF16 ? tofloat(tobf(val)) : val);
++                    }
++                }
++            }
++            base += nq;
++        }
++    } else if constexpr (K == 2048 && GM != 0) {
+         // rec-1f4 Step 2: g64 groups mapped to lanes (relaxed summation order vs GM=0, same quad stream).
+         float xa[32], xb[32];
+         int oa, ob, ga, gb;                              // byte offsets in the row, group indices
