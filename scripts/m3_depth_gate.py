@@ -77,29 +77,54 @@ def emit(lib, cfg, bank, off, prompt, n_out, mode, workers, max_total, deadline,
             got += n
         exps.append(ex[n:n + 1])
         if pairs:
-            k = int(max(2, min(31, 0.8 * TARGET_S / tp - 1)))
+            # cap-safe ABBA: probe tA (single-position launch at depth); B(k) <= k * tA (shared fixed cost), so
+            # k = floor(0.9 * cap / tA) can never exceed the cap. k < 2 -> speed not measurable under the cap.
+            # (A single-launch-minus-overhead estimate is NOT used: at depth a launch carries depth-dependent fixed
+            # cost the shallow overhead misses; on mid it understated decode ~2x vs the ABBA differential.)
             lt, rows, d0 = int(tokens[-1][-1]), [], start
-            for i in range(pairs):
-                if not fd.wait_idle(60):
-                    raise SystemExit("gate timeout: busy>=5")
-                pre, r = fd.cotenants(), {}
-                for tag in (("A", "B") if i % 2 == 0 else ("B", "A")):
-                    nn = 1 if tag == "A" else k
-                    dt, tk, _, _, _ = run([lt], nn, start)
-                    r[tag] = dt
-                    start += nn
+            try:
+                probe = []
+                for _ in range(2):
+                    dt, tk, _, _, _ = run([lt], 1, start)
+                    probe.append(dt)
+                    start += 1
                     lt = int(tk[-1])
-                post = fd.cotenants()
-                stable = pre.split(",gpu_busy")[0] == post.split(",gpu_busy")[0]
-                rows.append({"pair": i, "tA_s": round(r["A"], 5), "tB_s": round(r["B"], 5), "depth": start,
-                             "stable": stable, "pre": pre, "post": post})
-            v = [x for x in rows if x["stable"] and x["tB_s"] > x["tA_s"]]
-            tA = sum(x["tA_s"] for x in v) / max(1, len(v))
-            tB = sum(x["tB_s"] for x in v) / max(1, len(v))
-            extra["speed"] = {"k": k, "valid_pairs": len(v), "pairs_n": pairs, "depth_range": [d0, start],
-                              "decode_tok_s": round((k - 1) / (tB - tA), 2) if v and tB > tA else None, "pairs": rows}
-            fd.log(f"ROW depth{len(prompt)}: decode {extra['speed']['decode_tok_s']} tok/s ({len(v)}/{pairs} stable pairs, "
-                   f"depth {d0}..{start}, k={k}) | {fd.cotenants()}")
+                tA0 = max(probe)
+                k = int(min(31, 0.9 * fd.CAP_S / tA0))
+                extra["speed_probe"] = {"tA_probe_s": [round(x, 5) for x in probe], "k": k}
+                if k < 2:
+                    extra["speed"] = {"decode_tok_s": None, "k": k, "tA_probe_s": round(tA0, 5),
+                                      "note": "ABBA not measurable under the 0.25 s cap (2*tA > 0.9*cap); 1/tA is a lower "
+                                              "bound on decode tok/s", "lower_bound_tok_s": round(1.0 / tA0, 2)}
+                    fd.log(f"ROW depth{len(prompt)}: speed NOT measurable under cap (tA {tA0 * 1e3:.1f} ms -> k={k}); "
+                           f"lower bound 1/tA = {1.0 / tA0:.2f} tok/s")
+                else:
+                    for i in range(pairs):
+                        if not fd.wait_idle(60):
+                            raise SystemExit("gate timeout: busy>=5")
+                        pre, r = fd.cotenants(), {}
+                        for tag in (("A", "B") if i % 2 == 0 else ("B", "A")):
+                            nn = 1 if tag == "A" else k
+                            dt, tk, _, _, _ = run([lt], nn, start)
+                            r[tag] = dt
+                            start += nn
+                            lt = int(tk[-1])
+                        post = fd.cotenants()
+                        rows.append({"pair": i, "tA_s": round(r["A"], 5), "tB_s": round(r["B"], 5), "depth": start,
+                                     "stable": pre.split(",gpu_busy")[0] == post.split(",gpu_busy")[0], "pre": pre,
+                                     "post": post})
+                    v = [x for x in rows if x["stable"] and x["tB_s"] > x["tA_s"]]
+                    tA = sum(x["tA_s"] for x in v) / max(1, len(v))
+                    tB = sum(x["tB_s"] for x in v) / max(1, len(v))
+                    extra["speed"] = {"method": "ABBA differential (k-1)/(tB-tA), cap-safe k", "k": k,
+                                      "valid_pairs": len(v), "pairs_n": pairs, "depth_range": [d0, start],
+                                      "decode_tok_s": round((k - 1) / (tB - tA), 2) if v and tB > tA else None,
+                                      "pairs": rows}
+                    fd.log(f"ROW depth{len(prompt)}: decode {extra['speed']['decode_tok_s']} tok/s ({len(v)}/{pairs} "
+                           f"stable pairs, depth {d0}..{start}, k={k}, tA probe {tA0 * 1e3:.1f} ms) | {fd.cotenants()}")
+            except SystemExit as e:   # never lose the gate emit to a speed-phase failure
+                extra["speed"] = {"decode_tok_s": None, "error": str(e)}
+                fd.log(f"ROW depth{len(prompt)}: speed phase aborted: {e}")
     finally:
         lib.mid_session_free(sess)
     tok = np.concatenate(tokens)[:n_out]
