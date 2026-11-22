@@ -99,7 +99,7 @@
 #define GEPA_ACTX 0
 #endif
 #ifndef GEPA_SHRINK
-#define GEPA_SHRINK 0
+#define GEPA_SHRINK 1   // PROMOTED (rec-fut run 4, c033): +3.05/+3.59 % ABBA, replicate +2.65/+2.27 %, byte-identical to 24f167d
 #endif
 #define GEPA_STR(x) #x
 #define GEPA_UNROLL(n) _Pragma(GEPA_STR(unroll n))
