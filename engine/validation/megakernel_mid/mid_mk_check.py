@@ -353,7 +353,9 @@ def router_substitution(reference: Reference, d, prompt, tokens, kv_dtype, vocab
 
 
 def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: bool = True,
-          ref_kv: str = "auto") -> dict:
+          ref_kv: str = "auto", spot: bool = False) -> dict:
+    """spot=True (rec-6ek, in-window full-Flint spot): accept a strict PREFIX of the case's n_out tokens (the
+    window emits a short run to bound launch time); every other check and the tier are unchanged."""
     d = np.load(path, allow_pickle=False)
     problems: list[str] = []
     for key in ("schema", "case", "ckpt_sha256", "prompt", "tokens", "last_logits", "step_logits"):
@@ -375,8 +377,9 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
     if case in cases:
         if prompt != cases[case]["prompt"]:
             problems.append("prompt differs from the case prompt")
-        if len(tokens) != cases[case]["n_out"]:
-            problems.append(f"{len(tokens)} tokens, case wants {cases[case]['n_out']}")
+        n_want = cases[case]["n_out"]
+        if (len(tokens) != n_want) if not spot else not (0 < len(tokens) <= n_want):
+            problems.append(f"{len(tokens)} tokens, case wants {n_want}" + (" (spot: 1..n_out)" if spot else ""))
     if d["last_logits"].shape != (vocab,):
         problems.append(f"last_logits shape {d['last_logits'].shape} != ({vocab},)")
     if any(not 0 <= t < vocab for t in tokens):
@@ -389,6 +392,8 @@ def check(ckpt: Path, path: Path, device: str, sha: str | None = None, verbose: 
         return _report(path, {"case": case, "pass": False, "problems": [f"kv_dtype {kv_dtype!r}"]}, verbose)
     reference = Reference(ckpt, device, kv_dtype)
     result = check_arrays(reference, d, prompt, tokens, kv_dtype, vocab, case)
+    if spot:
+        result["spot_prefix"] = f"{len(tokens)}/{cases[case]['n_out']}"
     return _report(path, result, verbose)
 
 
