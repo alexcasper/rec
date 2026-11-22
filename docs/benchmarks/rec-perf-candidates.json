@@ -10,13 +10,14 @@
       "docs/benchmarks/6ob-dusk-2026-11-20/ (lab variants b1-b7)"
     ],
     "host_protocol": "gated busy<5 + wait-for-idle, ABBA order, cotenant state per log line",
-    "push_policy": "nothing pushed without Alex's ask"
+    "push_policy": "nothing pushed without Alex's ask",
+    "updated": "2026-11-22T00:33:02Z"
   },
   "gates": {
     "hard_constraints": {
       "rec_pp2_max_rel": {
-        "fp32_kv": 1e-4,
-        "bf16_kv": 1e-3,
+        "fp32_kv": 0.0001,
+        "bf16_kv": 0.001,
         "reference": "torch fp32 CPU",
         "tiers": "both must pass (spec (a): fp32-KV tier is the sign-off; bf16-KV judged by token agreement only for FULL-config builds)"
       },
@@ -37,7 +38,7 @@
   "byte_identity_reference": {
     "commit": "2fd83cb",
     "what": "rec-6ob explicit-contraction dot16v + batched/bounded-unroll generic gemv (option A re-baseline); bitwise identical under -ffp-contract=off vs fast",
-    "role": "byte-identity reference only — NOT the sweep incumbent"
+    "role": "byte-identity reference only \u2014 NOT the sweep incumbent"
   },
   "incumbent": {
     "commit": "24f167d",
@@ -73,7 +74,9 @@
       "origin": "6ob s4 lab",
       "status": "parked",
       "mutation_family": "barrier cuts",
-      "metrics": {"vs_incumbent": "0.943x (lab)"},
+      "metrics": {
+        "vs_incumbent": "0.943x (lab)"
+      },
       "note": "superseded by the 24f167d chain on dusk"
     },
     {
@@ -82,8 +85,10 @@
       "status": "parked",
       "mutation_family": "barrier cuts",
       "contents": "per-WG top-K + residual fused into the gemv store (-16 barriers/token)",
-      "metrics": {"vs_incumbent": "0.98-0.99x on dusk"},
-      "note": "may pay on full Flint (deeper loop body, different barrier amortization) — revive as a full-config mutation, not a mid one"
+      "metrics": {
+        "vs_incumbent": "0.98-0.99x on dusk"
+      },
+      "note": "may pay on full Flint (deeper loop body, different barrier amortization) \u2014 revive as a full-config mutation, not a mid one"
     },
     {
       "id": "2fd83cb-generic-gemv",
@@ -101,47 +106,1258 @@
   "mutation_axes": [
     {
       "axis": "unroll_factors",
-      "knobs": {"generic_gemv_row_loop": [1, 2, 4, 8], "value_preload_depth": ["v0..v3 (K=2048 path)", "extend to K=1024/4096"]},
+      "knobs": {
+        "generic_gemv_row_loop": [
+          1,
+          2,
+          4,
+          8
+        ],
+        "value_preload_depth": [
+          "v0..v3 (K=2048 path)",
+          "extend to K=1024/4096"
+        ]
+      },
       "prior_evidence": "#pragma unroll 2 + batched row loads won at K=512/1024/4096 (2fd83cb)"
     },
     {
       "axis": "segmented_k_splits",
-      "knobs": {"segment_sizes": [512, 1024, 2048, 4096], "phases": ["QKV", "gate/up", "o_proj", "down_proj", "lm_head"]},
+      "knobs": {
+        "segment_sizes": [
+          512,
+          1024,
+          2048,
+          4096
+        ],
+        "phases": [
+          "QKV",
+          "gate/up",
+          "o_proj",
+          "down_proj",
+          "lm_head"
+        ]
+      },
       "prior_evidence": "K=2048 segmentation of QKV+gate/up = +3.5% (24f167d L3); lm_head segmentation untried"
     },
     {
       "axis": "lds_staging",
-      "knobs": {"per_warp_pool_kib": [0, 2, 4], "staging_order": ["row-major", "quad-stream"], "budget_watch": "32.9 -> 24.7 KiB observed; occupancy couples to LDS size"},
+      "knobs": {
+        "per_warp_pool_kib": [
+          0,
+          2,
+          4
+        ],
+        "staging_order": [
+          "row-major",
+          "quad-stream"
+        ],
+        "budget_watch": "32.9 -> 24.7 KiB observed; occupancy couples to LDS size"
+      },
       "prior_evidence": "L2 LDS pool = 1.086x"
     },
     {
       "axis": "tile_shapes",
-      "knobs": {"workers": [8, 16, 32, 64], "rows_per_pass": "tune", "note": "workers <= max_co_resident (16 on dusk gfx1150; 64 compiled cap; ws_f_maxval[64])"},
+      "knobs": {
+        "workers": [
+          8,
+          16,
+          32,
+          64
+        ],
+        "rows_per_pass": "tune",
+        "note": "workers <= max_co_resident (16 on dusk gfx1150; 64 compiled cap; ws_f_maxval[64])"
+      },
       "prior_evidence": "workers=16 optimal on mid (92.99 vs 111.67 at 8); full-config untested per workers"
     },
     {
       "axis": "mixed_precision_boundaries",
-      "knobs": {"accum_dtypes": ["fp32 accum", "bf16 intermediate stores"], "kv_tiers": ["fp32-KV", "bf16-KV"], "boundaries": ["post-dequant", "post-accumulate", "store boundaries"]},
+      "knobs": {
+        "accum_dtypes": [
+          "fp32 accum",
+          "bf16 intermediate stores"
+        ],
+        "kv_tiers": [
+          "fp32-KV",
+          "bf16-KV"
+        ],
+        "boundaries": [
+          "post-dequant",
+          "post-accumulate",
+          "store boundaries"
+        ]
+      },
       "constraint": "must stay inside rec-pp2 tiers + ppl <1%"
     },
     {
       "axis": "barrier_structure",
-      "knobs": {"barriers_per_moe_layer": "4 (L1) -> fewer", "variants": ["per-WG top-K", "residual fused into gemv store"]},
-      "prior_evidence": "b5/b6 barrier cuts: 0.943x / 0.98-0.99x on mid — parked, revive on full config"
+      "knobs": {
+        "barriers_per_moe_layer": "4 (L1) -> fewer",
+        "variants": [
+          "per-WG top-K",
+          "residual fused into gemv store"
+        ]
+      },
+      "prior_evidence": "b5/b6 barrier cuts: 0.943x / 0.98-0.99x on mid \u2014 parked, revive on full config"
     },
     {
       "axis": "code_size_runtime_flags",
-      "knobs": {"approach": "runtime flags preferred over template variants", "watch": "hot-code size tracked at 11.8k/13.1k/13.7k instructions"},
-      "prior_evidence": "megakernel speed tracks hot-code size (rec-9t8 close observation; I-cache suspected) — record instruction count per candidate"
+      "knobs": {
+        "approach": "runtime flags preferred over template variants",
+        "watch": "hot-code size tracked at 11.8k/13.1k/13.7k instructions"
+      },
+      "prior_evidence": "megakernel speed tracks hot-code size (rec-9t8 close observation; I-cache suspected) \u2014 record instruction count per candidate"
     }
   ],
   "pareto_front": {
     "definition": "decode32 tok/s (short-ctx AND after-512, both axes) subject to hard gates; instruction count recorded as a secondary observation axis",
     "current_front": [
-      {"candidate": "b7-chain/24f167d", "decode32_short4": "~207-209"}
+      {
+        "candidate": "b7-chain/24f167d",
+        "decode32_short4": "~207-209"
+      }
     ],
     "promotion_rule": "front-best that passes gates becomes run-of-record; ties broken by lower code size"
   },
   "rejected": [],
-  "gate_review_owner": "Claude arm (w11:p1F) — gate definitions and any gate changes are reviewed by that lane before enforcement changes"
+  "gate_review_owner": "Claude arm (w11:p1F) \u2014 gate definitions and any gate changes are reviewed by that lane before enforcement changes",
+  "search": {
+    "driver": "scripts/gepa_kernel_search.py (rec/gemini-kernels)",
+    "host": "dusk gfx1150 mid-8L, launches <= 0.25 s, busy<5",
+    "iter0": {
+      "id": "iter0",
+      "commit": "24f167d",
+      "tok_s": {
+        "short4": 207.73,
+        "chat": 207.18
+      },
+      "self_speedup": {
+        "short4": 1.0011,
+        "chat": 0.9919
+      },
+      "noise": 0.008099999999999996,
+      "gates": true,
+      "time": "2026-11-22T00:21:02Z"
+    },
+    "best": {
+      "id": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0
+      },
+      "commit": "24f167d",
+      "tok_s": {
+        "short4": 207.73,
+        "chat": 207.18
+      }
+    },
+    "min_gain": 0.016199999999999992,
+    "runs": [
+      {
+        "time": "2026-11-22T00:33:02Z",
+        "evals": 4,
+        "stopped": "patience",
+        "best": "iter0",
+        "min_gain": 0.016199999999999992
+      }
+    ]
+  },
+  "evaluations": [
+    {
+      "id": "iter0",
+      "time": "2026-11-22T00:21:02Z",
+      "axis": "none (calibration)",
+      "parent": null,
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0
+      },
+      "patch": null,
+      "source": "24f167d",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.3,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "ef811c97e11836daaddb228538a50e4bc2b762b1c83bc69740c24cb121d417d6",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 11911,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+          "mid_generate": 6632
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "1d813f36f5722b6022b28ad10530e9c606f5e601f54e9c029300a75c26dce73c"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1948,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.51,
+            "pair_min": 203.98,
+            "pair_max": 210.3,
+            "t36_mean_s": 0.19257
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 207.73,
+            "pair_min": 204.84,
+            "pair_max": 212.42,
+            "t36_mean_s": 0.19267
+          },
+          "speedup_B_over_A": 1.0011,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1991,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.87,
+            "pair_min": 205.51,
+            "pair_max": 212.31,
+            "t36_mean_s": 0.19669
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 207.18,
+            "pair_min": 204.94,
+            "pair_max": 209.93,
+            "t36_mean_s": 0.19799
+          },
+          "speedup_B_over_A": 0.9919,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 207.73,
+        "chat": 207.18
+      },
+      "speedup_vs_best": {
+        "short4": 1.0011,
+        "chat": 0.9919
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15532101001008414
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15532101001008414,
+        "ppl_gate": true,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c001",
+      "time": "2026-11-22T00:23:57Z",
+      "axis": "unroll_factors",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 2,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0
+      },
+      "patch": null,
+      "source": "ee26f7a",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=2",
+          "GEPA_K512_PIPE=0",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "d0ecd79e78f8155089a6ca2a580ac0e33ab340078121ffdc522ed6ff2161b4b5",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 88,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 88,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 88,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 88,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12640,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1598,
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1510,
+          "mid_generate": 6632
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          }
+        },
+        "source_sha256": "5877fc58d5f573e64fb4b18d933d25ac944fa68e3894a536f2451c18c68feccb"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1987,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.14,
+            "pair_min": 207.06,
+            "pair_max": 210.24,
+            "t36_mean_s": 0.19221
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 203.05,
+            "pair_min": 200.22,
+            "pair_max": 207.14,
+            "t36_mean_s": 0.19697
+          },
+          "speedup_B_over_A": 0.9755,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2035,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.44,
+            "pair_min": 207.15,
+            "pair_max": 209.36,
+            "t36_mean_s": 0.19677
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 204.1,
+            "pair_min": 199.77,
+            "pair_max": 207.33,
+            "t36_mean_s": 0.20153
+          },
+          "speedup_B_over_A": 0.9792,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 203.05,
+        "chat": 204.1
+      },
+      "speedup_vs_best": {
+        "short4": 0.9755,
+        "chat": 0.9792
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15904810099164024
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15904810099164024,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c002",
+      "time": "2026-11-22T00:26:13Z",
+      "axis": "unroll_factors",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 4,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0
+      },
+      "patch": null,
+      "source": "ee26f7a",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=4",
+          "GEPA_K512_PIPE=0",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "17dc04dfd51ab55bc95ae6929b95bf7595e4563d863881ab0c039a127a2a2a9f",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 412,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 412,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 412,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 412,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 13520,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 2478,
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1510,
+          "mid_generate": 6632
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          }
+        },
+        "source_sha256": "5877fc58d5f573e64fb4b18d933d25ac944fa68e3894a536f2451c18c68feccb"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2218,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.27,
+            "pair_min": 206.94,
+            "pair_max": 209.33,
+            "t36_mean_s": 0.19246
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 181.73,
+            "pair_min": 179.84,
+            "pair_max": 183.79,
+            "t36_mean_s": 0.21977
+          },
+          "speedup_B_over_A": 0.8726,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2278,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.51,
+            "pair_min": 204.75,
+            "pair_max": 211.54,
+            "t36_mean_s": 0.19757
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 182.63,
+            "pair_min": 179.97,
+            "pair_max": 184.97,
+            "t36_mean_s": 0.22448
+          },
+          "speedup_B_over_A": 0.8759,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 181.73,
+        "chat": 182.63
+      },
+      "speedup_vs_best": {
+        "short4": 0.8726,
+        "chat": 0.8759
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.5,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.17746529100986663
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.17746529100986663,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c003",
+      "time": "2026-11-22T00:28:35Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 1,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0
+      },
+      "patch": null,
+      "source": "ee26f7a",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=1",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "641e0395007a9268f8b9911d73a49873058d7f616a133caeae419157c8722d4c",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12012,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1128,
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+          "mid_generate": 6634
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 213
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "5877fc58d5f573e64fb4b18d933d25ac944fa68e3894a536f2451c18c68feccb"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1946,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.38,
+            "pair_min": 205.2,
+            "pair_max": 210.41,
+            "t36_mean_s": 0.19255
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 211.57,
+            "pair_min": 210.18,
+            "pair_max": 213.98,
+            "t36_mean_s": 0.19007
+          },
+          "speedup_B_over_A": 1.0153,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1999,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.69,
+            "pair_min": 203.85,
+            "pair_max": 209.4,
+            "t36_mean_s": 0.19719
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.52,
+            "pair_min": 206.87,
+            "pair_max": 211.41,
+            "t36_mean_s": 0.19539
+          },
+          "speedup_B_over_A": 1.0088,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 211.57,
+        "chat": 209.52
+      },
+      "speedup_vs_best": {
+        "short4": 1.0153,
+        "chat": 1.0088
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.1541774399956921
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.1541774399956921,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c004",
+      "time": "2026-11-22T00:30:48Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 0,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0
+      },
+      "patch": null,
+      "source": "ee26f7a",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=0",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "bf39859ea409f0df210f5737c4b19f02a2534b070e53155bd8e0d94a5bc898e2",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 11753,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1120,
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1099,
+          "mid_generate": 6634
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 165
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 162
+          }
+        },
+        "source_sha256": "5877fc58d5f573e64fb4b18d933d25ac944fa68e3894a536f2451c18c68feccb"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.196,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.73,
+            "pair_min": 205.4,
+            "pair_max": 211.26,
+            "t36_mean_s": 0.19286
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.04,
+            "pair_min": 207.28,
+            "pair_max": 210.93,
+            "t36_mean_s": 0.1915
+          },
+          "speedup_B_over_A": 1.0063,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1979,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 209.48,
+            "pair_min": 207.06,
+            "pair_max": 212.73,
+            "t36_mean_s": 0.19662
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.44,
+            "pair_min": 206.42,
+            "pair_max": 211.26,
+            "t36_mean_s": 0.19657
+          },
+          "speedup_B_over_A": 0.9998,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 209.04,
+        "chat": 209.44
+      },
+      "speedup_vs_best": {
+        "short4": 1.0063,
+        "chat": 0.9998
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15497746400069445
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15497746400069445,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    }
+  ]
 }
