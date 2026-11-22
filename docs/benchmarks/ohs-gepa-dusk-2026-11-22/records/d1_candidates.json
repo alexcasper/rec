@@ -1,0 +1,6 @@
+[
+ {"name": "d1-pf4k",  "axis": "lds_staging", "knobs": {"GEPA_PF": 4096}},
+ {"name": "d1-pf8k",  "axis": "lds_staging", "knobs": {"GEPA_PF": 8192}},
+ {"name": "d1-pf2k",  "axis": "lds_staging", "knobs": {"GEPA_PF": 2048}},
+ {"name": "d1-pf16k", "axis": "lds_staging", "knobs": {"GEPA_PF": 16384}}
+]

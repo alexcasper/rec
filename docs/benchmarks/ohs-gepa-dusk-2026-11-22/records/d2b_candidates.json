@@ -1,0 +1,4 @@
+[
+ {"name": "d2-actfold-resid",     "axis": "barrier_structure", "knobs": {"GEPA_ACT_FOLD": 1, "GEPA_RESID_FUSE": 1}},
+ {"name": "d2-actfold-resid-pf4", "axis": "barrier_structure", "knobs": {"GEPA_ACT_FOLD": 1, "GEPA_RESID_FUSE": 1, "GEPA_PF": 4096}}
+]

@@ -1,0 +1,4 @@
+[
+ {"name": "d2-actfold",     "axis": "barrier_structure", "knobs": {"GEPA_ACT_FOLD": 1}},
+ {"name": "d2-actfold-pf4", "axis": "barrier_structure", "knobs": {"GEPA_ACT_FOLD": 1, "GEPA_PF": 4096}}
+]

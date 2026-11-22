@@ -75,3 +75,34 @@ layer-phase) and look bound by per-phase ramp + barrier latency, not issue rate.
 hop and fences on top (rec-6ob.1 prior, confirmed: c011 is worse than c009 at more code).
 Margin note: fp32_bf16kv max rel sits at 8.9-9.3e-4 for every build, baseline included (tier 1e-3). Any future
 relaxed lever has <= 1e-4 headroom on that tier.
+
+## Latency-side levers (GO 2026-11-22): direction 1 (3edf6bf) and direction 2 (5b9a8cd). Both stopped by the stop rule.
+
+All 8 candidates produce suite + ppl npz byte-identical to 24f167d. Gates were inherited, and the fp32_bf16kv
+error is unchanged (no headroom consumed). 0 ABBA rounds dropped; one cotenant state throughout.
+
+Constraint found: sync_all opens with an agent-scope __threadfence (vmcnt(0)), so no load can be held across a
+grid barrier. Direction 1 therefore has warps that are IDLE in a light phase warm the L2 (2 MB on gfx1150) with a
+contiguous prefix of the next weight phase: attention -> O-proj; router + top-K -> shared gate/up (shared segments
+moved first in the quad stream); act -> down; combine -> next-layer Q / lm_head. GEPA_PF = bytes per idle warp.
+
+| id | candidate | short4 / chat | hot instr |
+|---|---|---|---|
+| c015 | d1 PF 4 KiB | 1.007 / 1.006 | 12 155 |
+| c016 | d1 PF 8 KiB | 0.991 / 0.989 | 12 155 |
+| c017 | d1 PF 2 KiB | 1.004 / 1.002 | 12 155 |
+| c018 | d1 PF 16 KiB | 0.961 / 0.969 | 12 155 |
+| c019 | d2 act fold (MoE act in LDS per WG; -7 grid barriers) | 0.989 / 1.002 | 11 825 |
+| c020 | d2 act fold + PF 4 KiB | 0.992 / 1.001 | 12 015 |
+| c021 | d2 act fold + residual fusion (-15 barriers) | 0.992 / 1.000 | 11 684 |
+| c022 | d2 act fold + residual fusion + PF 4 KiB | 0.990 / 1.000 | 11 885 |
+
+Direction 2 as literally specified (gate/up -> act -> down per expert in ONE phase) needs either one workgroup
+per expert (3-4 of 16 WGs busy) or split-K down with float atomics, because down needs the whole act vector.
+The arithmetic-identical form tested here removes the act grid barrier (and, with RESID_FUSE, the O-proj residual
+barrier).
+
+Reading: removing up to 15 grid barriers per token, or overlapping light phases with L2 warm-up, moves decode by
+less than the 0.8 % noise. Bigger prefetch windows hurt, because idle warps then finish after the light phase and
+delay the barrier. On dusk mid-8L, decode time sits inside the weight phases; barrier/restart latency is a
+second-order term.
