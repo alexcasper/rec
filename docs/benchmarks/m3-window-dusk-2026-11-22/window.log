@@ -1,0 +1,4 @@
+12:25:35Z preflight (expect 8080 down=000, llama-qwen inactive, vram_free >= 23 GiB) | 8080:000 8090:200 8091:000  busy=3 MemAvailable=8.7GiB vram_free=37.7GiB
+6297889706cc4d549fcc0aeffae836b9ee31a1dee320747f8d97c861011d735e  /home/dusk/rec-ve/gepa/h/engine/native/megakernel_hip/flint_full.so
+99de3cbcfc089f9bfb9c88ebc187162c4474fff475a23e22b0f4848bba17284c  /home/dusk/xh7/flint-int4.off.npy
+12:25:35Z start: spot (fp32kv short4, 2 continued launches) + rows ctx512, short (12 ABBA pairs each), budget 420 s | 8080:000 8090:200 8091:000  busy=3 MemAvailable=8.7GiB vram_free=37.7GiB

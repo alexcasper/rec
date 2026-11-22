@@ -1,0 +1,1 @@
+{"phase": "pre-stop", "label": "depth512", "depth": 512, "run": 1, "utc": "2026-11-22T11:30:33Z", "prompt_tps": 163.11, "pred_tps": 9.99, "pre": "8080=200 8090=200 8990=up qwen=inactive busy=3 MemAvailable_MiB=8026.29", "post": "8080=200 8090=200 8990=up qwen=inactive busy=100 MemAvailable_MiB=7934.75"}
