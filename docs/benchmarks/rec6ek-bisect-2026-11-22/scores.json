@@ -1,0 +1,103 @@
+{
+ "e3c5ed6": {
+  "pass": true,
+  "step_rel": 1.6236360073757356e-06,
+  "last_rel": 1.008887066848594e-06,
+  "forced_rel": 1.4241220469557447e-06,
+  "row0_forced": 1.1975571396760643e-06,
+  "tokens": [
+   19629,
+   52387,
+   332
+  ],
+  "n_dev": 0,
+  "problems": []
+ },
+ "2fd83cb": {
+  "pass": false,
+  "step_rel": 0.022996069812516968,
+  "last_rel": 0.002750128121695877,
+  "forced_rel": 0.00015339975652750582,
+  "row0_forced": 3.1423085602000356e-05,
+  "tokens": [
+   19629,
+   52387,
+   3460
+  ],
+  "n_dev": 1,
+  "problems": [
+   "1 token(s) differ from the fp32 reference beyond the near-tie margin",
+   "last_logits rel err 2.750e-03 > 0.0001 (fp32-KV tier)"
+  ]
+ },
+ "39629e7": {
+  "pass": true,
+  "step_rel": 1.5514566587782852e-06,
+  "last_rel": 9.211577566878466e-07,
+  "forced_rel": 1.2946563856530702e-06,
+  "row0_forced": 1.100458007385896e-06,
+  "tokens": [
+   19629,
+   52387,
+   332
+  ],
+  "n_dev": 0,
+  "problems": []
+ },
+ "5d36dc9": {
+  "pass": true,
+  "step_rel": 1.5514566587782852e-06,
+  "last_rel": 9.211577566878466e-07,
+  "forced_rel": 1.2946563856530702e-06,
+  "row0_forced": 1.100458007385896e-06,
+  "tokens": [
+   19629,
+   52387,
+   332
+  ],
+  "n_dev": 0,
+  "problems": []
+ },
+ "24f167d": {
+  "pass": true,
+  "step_rel": 1.5514566587782852e-06,
+  "last_rel": 9.211577566878466e-07,
+  "forced_rel": 1.2946563856530702e-06,
+  "row0_forced": 1.100458007385896e-06,
+  "tokens": [
+   19629,
+   52387,
+   332
+  ],
+  "n_dev": 0,
+  "problems": []
+ },
+ "2b98737": {
+  "pass": true,
+  "step_rel": 1.5514566587782852e-06,
+  "last_rel": 9.211577566878466e-07,
+  "forced_rel": 1.2946563856530702e-06,
+  "row0_forced": 1.100458007385896e-06,
+  "tokens": [
+   19629,
+   52387,
+   332
+  ],
+  "n_dev": 0,
+  "problems": []
+ },
+ "5363ad5": {
+  "pass": true,
+  "step_rel": 1.5514566587782852e-06,
+  "last_rel": 9.211577566878466e-07,
+  "forced_rel": 1.2946563856530702e-06,
+  "row0_forced": 1.100458007385896e-06,
+  "tokens": [
+   19629,
+   52387,
+   332
+  ],
+  "n_dev": 0,
+  "problems": []
+ }
+}

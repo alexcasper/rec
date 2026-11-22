@@ -1,0 +1,15 @@
+bank_stream_shim: streamed 22568729664 bytes from /home/dusk/xh7/flint-int4.bank in 256 MiB chunks
+{"so": "full_k_e3c5ed6.so", "ok": true, "rc": 0, "ctrl": [0, 10038, 0, 0], "load_s": 8.7, "launch_s": 0.2467, "tokens": [19629, 52387, 332], "cot": "8080:000 8090:200 busy=2 MemAvailable=17.1GiB vram_free=38.6GiB"}
+bank_stream_shim: streamed 22568729664 bytes from /home/dusk/xh7/flint-int4.bank in 256 MiB chunks
+{"so": "full_k_2fd83cb.so", "ok": true, "rc": 0, "ctrl": [0, 10038, 0, 0], "load_s": 8.9, "launch_s": 0.2343, "tokens": [19629, 52387, 3460], "cot": "8080:000 8090:200 busy=2 MemAvailable=16.9GiB vram_free=38.6GiB"}
+bank_stream_shim: streamed 22568729664 bytes from /home/dusk/xh7/flint-int4.bank in 256 MiB chunks
+{"so": "full_k_39629e7.so", "ok": true, "rc": 0, "ctrl": [0, 10038, 0, 0], "load_s": 8.8, "launch_s": 0.2271, "tokens": [19629, 52387, 332], "cot": "8080:000 8090:200 busy=3 MemAvailable=16.8GiB vram_free=38.6GiB"}
+bank_stream_shim: streamed 22568729664 bytes from /home/dusk/xh7/flint-int4.bank in 256 MiB chunks
+{"so": "full_k_5d36dc9.so", "ok": true, "rc": 0, "ctrl": [0, 4116, 0, 0], "load_s": 8.9, "launch_s": 0.1984, "tokens": [19629, 52387, 332], "cot": "8080:000 8090:200 busy=3 MemAvailable=16.9GiB vram_free=38.6GiB"}
+bank_stream_shim: streamed 22568729664 bytes from /home/dusk/xh7/flint-int4.bank in 256 MiB chunks
+{"so": "full_k_24f167d.so", "ok": true, "rc": 0, "ctrl": [0, 4116, 0, 0], "load_s": 9.0, "launch_s": 0.1811, "tokens": [19629, 52387, 332], "cot": "8080:000 8090:200 busy=2 MemAvailable=17.1GiB vram_free=38.6GiB"}
+bank_stream_shim: streamed 22568729664 bytes from /home/dusk/xh7/flint-int4.bank in 256 MiB chunks
+{"so": "full_k_2b98737.so", "ok": true, "rc": 0, "ctrl": [0, 4116, 0, 0], "load_s": 8.9, "launch_s": 0.1689, "tokens": [19629, 52387, 332], "cot": "8080:000 8090:200 busy=3 MemAvailable=16.9GiB vram_free=38.6GiB"}
+bank_stream_shim: streamed 22568729664 bytes from /home/dusk/xh7/flint-int4.bank in 256 MiB chunks
+{"so": "full_k_5363ad5.so", "ok": true, "rc": 0, "ctrl": [0, 4116, 0, 0], "load_s": 8.8, "launch_s": 0.1722, "tokens": [19629, 52387, 332], "cot": "8080:000 8090:200 busy=2 MemAvailable=16.9GiB vram_free=38.6GiB"}
+done 88s 14:51:30Z -> signal ops_flint restart
