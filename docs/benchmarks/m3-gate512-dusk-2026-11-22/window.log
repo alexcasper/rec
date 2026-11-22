@@ -1,0 +1,16 @@
+16:44:03Z preflight gate512 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:inactive busy=0 MemAvailable=17.0GiB vram_free=38.7GiB
+d95d101f3ba4b7be32e7603becb1b755beff3a2db1a47756654ff76b8e1e9e30  /home/dusk/rec-ve/bisect/flint_full_split_288f4fa.so
+2026-11-22T16:44:32Z GATE wrap512_fp32kv.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 7a3ca4716bad launches 108 longest 0.181 s, 30.1 ms/pos, 24.6 s | flint:down,e4b:idle,qwen:down,gpu_busy=?,Mem
+2026-11-22T16:44:56Z GATE wrap512_fp32kv_r1.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 7a3ca4716bad launches 108 longest 0.181 s, 30.1 ms/pos, 24.3 s | flint:down,e4b:idle,qwen:down,gpu_busy=?,
+2026-11-22T16:44:56Z DETERMINISM fp32kv: PASS (2 fresh-session emits)
+2026-11-22T16:45:21Z GATE wrap512_fp32_bf16kv.npz: tokens[:6]=[86, 16289, 220, 16, 13, 16] md5 77003921c197 launches 108 longest 0.178 s, 30.0 ms/pos, 24.4 s | flint:down,e4b:idle,qwen:down,gpu_busy=?
+2026-11-22T16:45:45Z GATE wrap512_fp32_bf16kv_r1.npz: tokens[:6]=[86, 16289, 220, 16, 13, 16] md5 77003921c197 launches 108 longest 0.180 s, 30.0 ms/pos, 24.5 s | flint:down,e4b:idle,qwen:down,gpu_bus
+2026-11-22T16:45:45Z DETERMINISM fp32_bf16kv: PASS (2 fresh-session emits)
+2026-11-22T16:46:10Z GATE wrap512_bf16kv.npz: tokens[:6]=[86, 16289, 220, 16, 13, 16] md5 ffae853f85b4 launches 108 longest 0.180 s, 30.0 ms/pos, 24.5 s | flint:down,e4b:idle,qwen:down,gpu_busy=?,MemA
+2026-11-22T16:46:35Z GATE wrap512_bf16kv_r1.npz: tokens[:6]=[86, 16289, 220, 16, 13, 16] md5 ffae853f85b4 launches 108 longest 0.181 s, 30.1 ms/pos, 24.5 s | flint:down,e4b:idle,qwen:down,gpu_busy=?,M
+2026-11-22T16:46:35Z DETERMINISM bf16kv: PASS (2 fresh-session emits)
+16:46:35Z gate emits rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:inactive busy=92 MemAvailable=17.0GiB vram_free=38.7GiB
+2026-11-22T16:47:16Z ROW short: decode 38.1 tok/s (12/12 stable pairs, depth 4..64); prefill 4 pos in 0.13 s | flint:down,e4b:idle,qwen:down,gpu_busy=17,MemAvailable=16.9GiB
+2026-11-22T16:48:01Z ROW ctx512: decode 33.55 tok/s (12/12 stable pairs, depth 512..572); prefill 512 pos in 14.14 s | flint:down,e4b:idle,qwen:down,gpu_busy=19,MemAvailable=16.8GiB
+2026-11-22T16:48:01Z window bench ok | max launch 0.15521 s | span 86.0 s
+16:48:02Z done gate_rc=0 bench_rc=0 -> signal ops_flint to restart :8080 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:inactive busy=39 MemAvailable=16.9GiB vram_free=38.7GiB

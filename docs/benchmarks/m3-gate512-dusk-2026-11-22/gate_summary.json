@@ -1,0 +1,28 @@
+{
+ "case": "wrap512",
+ "positions": 536,
+ "lib": "/home/dusk/rec-ve/bisect/flint_full_split_288f4fa.so",
+ "builds": {
+  "fp32kv": {
+   "md5": [
+    "7a3ca4716bad3e69ed26e113350688a0",
+    "7a3ca4716bad3e69ed26e113350688a0"
+   ],
+   "deterministic": true
+  },
+  "fp32_bf16kv": {
+   "md5": [
+    "77003921c19738ab75af23f595a4d19f",
+    "77003921c19738ab75af23f595a4d19f"
+   ],
+   "deterministic": true
+  },
+  "bf16kv": {
+   "md5": [
+    "ffae853f85b43158667e9a2a594cb924",
+    "ffae853f85b43158667e9a2a594cb924"
+   ],
+   "deterministic": true
+  }
+ }
+}

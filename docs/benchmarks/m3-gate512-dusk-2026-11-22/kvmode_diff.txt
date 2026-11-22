@@ -1,0 +1,12 @@
+tokens fp32kv       [86, 16289, 220, 197, 1, 764, 197, 1, 764, 197, 1, 764]
+tokens fp32_bf16kv  [86, 16289, 220, 16, 13, 16, 13, 16, 13, 16, 13, 16]
+tokens bf16kv       [86, 16289, 220, 16, 13, 16, 13, 16, 13, 16, 13, 16]
+step 0: rel(fp32kv vs fp32_bf16kv) 1.872e-02 same-prefix True top2 gap fp32kv 0.406
+step 1: rel(fp32kv vs fp32_bf16kv) 1.686e-02 same-prefix True top2 gap fp32kv 0.915
+step 2: rel(fp32kv vs fp32_bf16kv) 1.220e-02 same-prefix True top2 gap fp32kv 0.822
+step 3: rel(fp32kv vs fp32_bf16kv) 3.064e-02 same-prefix True top2 gap fp32kv 0.022
+step 4: rel(fp32kv vs fp32_bf16kv) 4.743e-01 same-prefix False top2 gap fp32kv 0.158
+step 5: rel(fp32kv vs fp32_bf16kv) 4.149e-01 same-prefix False top2 gap fp32kv 0.210
+prompt positions with any routing difference fp32kv vs fp32_bf16kv: 460 first: [0, 2, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16] of 512
+per-64-position bucket counts: [53, 64, 59, 58, 53, 58, 56, 59]
+layers with any difference: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21] first diff layer at first pos: [32]

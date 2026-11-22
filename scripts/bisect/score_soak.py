@@ -22,18 +22,19 @@ for f in files:
 print(f"{len(files)} npz -> {len(groups)} distinct outputs", flush=True)
 vocab = mk.vocab_of(ckpt)
 sha = mk.shard_sha256(ckpt)
-ref = None
+refs: dict = {}
 res = []
 t0 = time.time()
 for h, names in groups.items():
     d = np.load(soak / names[0])
     kv = str(d["kv_dtype"]) if "kv_dtype" in d.files else "fp32"
-    if ref is None:
-        ref = mk.Reference(ckpt, "cpu", kv)
+    if kv not in refs:
+        refs[kv] = mk.Reference(ckpt, "cpu", kv)
+    ref = refs[kv]
     assert str(d["ckpt_sha256"]) == sha, "ckpt sha mismatch"
     r = mk.check_arrays(ref, d, d["prompt"].tolist(), d["tokens"].tolist(), kv, vocab, str(d["case"]))
     r.pop("_ref", None)
-    row = {"files": names, "tokens": d["tokens"].tolist(), "pass": r["pass"], "problems": r["problems"],
+    row = {"files": names, "kv": kv, "tier": mk.LOGIT_RTOL[kv], "tokens": d["tokens"].tolist(), "pass": r["pass"], "problems": r["problems"],
            "last_logits_rel": r["last_logits_rel"], "step_logits_max_rel": r["step_logits_max_rel"],
            "n_routing_deviations": r.get("n_routing_deviations"), "tokens_exact": r["tokens_exact"],
            "wall_s": round(time.time() - t0, 1)}
