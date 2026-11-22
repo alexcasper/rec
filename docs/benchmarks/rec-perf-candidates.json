@@ -8842,8 +8842,17 @@
     "chat": 0.9725,
     "ctx512": 1.35
    },
-   "outcome": "gates_pass, NOT promoted as mid default (short-ctx -4.5/-2.8% fails the +1.6% rule); depth candidate for full config pending full-config repeat soak (rec-3cr)",
-   "cotenants": "flint:idle,e4b:idle,qwen:inactive, 0 rounds dropped"
+   "outcome": "gates_pass; full-config default now pins SHRINK=0 (288f4fa); split-K depth candidate gateable: needs full-config ctx512/8192 rows + determinism in next window; not a mid default (short-ctx -4.5/-2.8%)",
+   "cotenants": "flint:idle,e4b:idle,qwen:inactive, 0 rounds dropped",
+   "full_config_soak": {
+    "window": "2026-11-22 16:13:53Z-16:15:05Z dusk",
+    "source_commit": "288f4fa",
+    "repeats": 8,
+    "distinct": 1,
+    "fp32kv_spot": "PASS last 9.21e-7 step 1.55e-6, 0 routing devs",
+    "racer_control": "split+SHRINK=1: 3 repeats, 3 distinct outputs, FAIL 5.2e-3..3.95e-2",
+    "caveat": "7-position spot: split branch (MIN=64) untaken; depth determinism of split path at full config pending"
+   }
   }
  ],
  "incumbent_history": [
