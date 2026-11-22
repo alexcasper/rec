@@ -106,3 +106,23 @@ Reading: removing up to 15 grid barriers per token, or overlapping light phases 
 less than the 0.8 % noise. Bigger prefetch windows hurt, because idle warps then finish after the light phase and
 delay the barrier. On dusk mid-8L, decode time sits inside the weight phases; barrier/restart latency is a
 second-order term.
+
+## Profile-directed candidates 1 + 2 (GO 2026-11-22; profile in ../ohs-profile-dusk-2026-11-22)
+
+Driver change: gates run BEFORE the bench, and every record carries the fp32_bf16kv max error vs the incumbent
+(flagged if up). 0 ABBA rounds dropped; cotenants idle/idle/qwen inactive throughout. flint and E4B were NOT
+paused (owned by ops_flint; the standing rule is "untouched").
+
+| id | candidate | short4 / chat tok/s | vs 24f167d | fp32kv max | fp32_bf16kv max (margin) | ppl delta | verdict |
+|---|---|---|---|---|---|---|---|
+| c023 | c1 O-proj split-K, runtime row stride | 189.8 / 188.3 | 0.917 / 0.907 | pass | 9.36e-4 (6.4e-5) FLAG | +8.1e-4 | reject: runtime stride spilled the shared K=2048 loop (scratch 16 -> 128) |
+| c024 | c1b same, compile-time stride (O-proj-only instantiation) | 198.0 / 199.3 | 0.957 / 0.963 | pass | 9.36e-4 (6.4e-5) FLAG | +8.1e-4 | reject: slower |
+| c025 | c2 MoE down as one virtual K=2048 gemv, weights folded | 207.4 / 206.7 | 0.996 / 0.997 | pass | 9.31e-4 (6.9e-5) FLAG | -0.9e-4 | reject: neutral |
+
+The profile's per-phase "loss vs roof" did not convert into time when the phase was moved onto the K=2048 path.
+- O-proj: 2048 rows split into two halves leaves each warp only 2x4 quads, plus an x reload between halves. That is
+  less depth than the generic K=4096 stream gives, plus +614 hot instructions.
+- MoE down: one stream instead of three calls is neutral. The phase is short (52 us/layer) and appears bound by the
+  same per-warp depth (4 quads/warp at N=2048), not by the call structure. vgpr sits at the 256 cap.
+- Every relaxed candidate moves fp32_bf16kv up by ~2e-5, leaving 6-7e-5 under 1e-3.
+Contingent items (router over all warps, attention split) were NOT started: neither candidate landed.

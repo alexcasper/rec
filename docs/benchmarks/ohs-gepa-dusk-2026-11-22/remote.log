@@ -647,3 +647,84 @@
 [03:33:22Z] emit suite /home/dusk/rec-ve/gepa/c/c022/flint_mid.so | busy=4 | flint:idle,e4b:idle,qwen:inactive
 [03:33:29Z] emit ppl /home/dusk/rec-ve/gepa/c/c022/flint_mid.so | busy=4 | flint:idle,e4b:idle,qwen:inactive
 [03:34:11Z] emit done | busy=86 | flint:idle,e4b:idle,qwen:inactive
+
+### 2026-11-22T05:14:36Z build --src /home/dusk/rec-ve/gepa/c/c023/flint_mid_megakernel.hip --out /home/dusk/rec-ve/gepa/c/c023 --define GEPA_GEN_PREFETCH_X=1 --define GEPA_GEN_UNROLL=1 --define GEPA_K512_PIPE=0 --define GEPA_OSPLIT=1 --define GEPA_RESID_FUSE=0 --define GEPA_TOPK_PER_WG=0
+
+### 2026-11-22T05:15:31Z emit --so /home/dusk/rec-ve/gepa/c/c023/flint_mid.so --out /home/dusk/rec-ve/gepa/c/c023/emit --workers 16 --ckpt /home/dusk/rec-ve/ckpt-pp2/mid-prod
+[05:14:37Z] emit suite /home/dusk/rec-ve/gepa/c/c023/flint_mid.so | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[05:14:44Z] emit ppl /home/dusk/rec-ve/gepa/c/c023/flint_mid.so | busy=4 | flint:idle,e4b:idle,qwen:inactive
+[05:15:31Z] emit done | busy=86 | flint:idle,e4b:idle,qwen:inactive
+
+### 2026-11-22T05:16:38Z bench --a /home/dusk/rec-ve/gepa/c/iter0/flint_mid.so --b /home/dusk/rec-ve/gepa/c/c023/flint_mid.so --wa 16 --wb 16 --case short4 --rounds 8 --ckpt /home/dusk/rec-ve/ckpt-pp2/mid-prod
+[05:16:05Z] short4 round 0 AB | A 205.86 B 189.33 | pre busy=3 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:16:09Z] short4 round 1 BA | A 208.02 B 192.45 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:16:14Z] short4 round 2 AB | A 205.81 B 189.06 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:16:19Z] short4 round 3 BA | A 207.5 B 185.11 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:16:24Z] short4 round 4 AB | A 206.88 B 190.35 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:16:28Z] short4 round 5 BA | A 204.29 B 191.28 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:16:33Z] short4 round 6 AB | A 210.2 B 190.33 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:16:38Z] short4 round 7 BA | A 207.27 B 190.97 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+
+### 2026-11-22T05:17:18Z bench --a /home/dusk/rec-ve/gepa/c/iter0/flint_mid.so --b /home/dusk/rec-ve/gepa/c/c023/flint_mid.so --wa 16 --wb 16 --case chat --rounds 8 --ckpt /home/dusk/rec-ve/ckpt-pp2/mid-prod
+[05:16:44Z] chat round 0 AB | A 207.91 B 190.38 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=42 flint:idle,e4b:idle,qwen:inactive
+[05:16:49Z] chat round 1 BA | A 207.55 B 185.47 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=42 flint:idle,e4b:idle,qwen:inactive
+[05:16:53Z] chat round 2 AB | A 211.17 B 186.87 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=42 flint:idle,e4b:idle,qwen:inactive
+[05:16:58Z] chat round 3 BA | A 209.18 B 191.21 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=42 flint:idle,e4b:idle,qwen:inactive
+[05:17:03Z] chat round 4 AB | A 206.36 B 189.5 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=42 flint:idle,e4b:idle,qwen:inactive
+[05:17:08Z] chat round 5 BA | A 206.68 B 187.86 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=42 flint:idle,e4b:idle,qwen:inactive
+[05:17:13Z] chat round 6 AB | A 203.49 B 188.97 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=42 flint:idle,e4b:idle,qwen:inactive
+[05:17:18Z] chat round 7 BA | A 208.59 B 186.13 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=42 flint:idle,e4b:idle,qwen:inactive
+
+### 2026-11-22T05:18:16Z build --src /home/dusk/rec-ve/gepa/c/c024/flint_mid_megakernel.hip --out /home/dusk/rec-ve/gepa/c/c024 --define GEPA_GEN_PREFETCH_X=1 --define GEPA_GEN_UNROLL=1 --define GEPA_K512_PIPE=0 --define GEPA_OSPLIT=1 --define GEPA_RESID_FUSE=0 --define GEPA_TOPK_PER_WG=0
+
+### 2026-11-22T05:19:07Z emit --so /home/dusk/rec-ve/gepa/c/c024/flint_mid.so --out /home/dusk/rec-ve/gepa/c/c024/emit --workers 16 --ckpt /home/dusk/rec-ve/ckpt-pp2/mid-prod
+[05:18:17Z] emit suite /home/dusk/rec-ve/gepa/c/c024/flint_mid.so | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[05:18:23Z] emit ppl /home/dusk/rec-ve/gepa/c/c024/flint_mid.so | busy=4 | flint:idle,e4b:idle,qwen:inactive
+[05:19:07Z] emit done | busy=86 | flint:idle,e4b:idle,qwen:inactive
+
+### 2026-11-22T05:20:15Z bench --a /home/dusk/rec-ve/gepa/c/iter0/flint_mid.so --b /home/dusk/rec-ve/gepa/c/c024/flint_mid.so --wa 16 --wb 16 --case short4 --rounds 8 --ckpt /home/dusk/rec-ve/ckpt-pp2/mid-prod
+[05:19:42Z] short4 round 0 AB | A 208.92 B 199.85 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:19:46Z] short4 round 1 BA | A 207.22 B 201.75 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:19:51Z] short4 round 2 AB | A 207.82 B 201.54 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:19:56Z] short4 round 3 BA | A 206.91 B 196.71 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:20:00Z] short4 round 4 AB | A 208.7 B 201.14 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:20:05Z] short4 round 5 BA | A 202.55 B 184.42 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:20:10Z] short4 round 6 AB | A 203.89 B 200.53 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:20:15Z] short4 round 7 BA | A 209.1 B 199.31 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+
+### 2026-11-22T05:20:54Z bench --a /home/dusk/rec-ve/gepa/c/iter0/flint_mid.so --b /home/dusk/rec-ve/gepa/c/c024/flint_mid.so --wa 16 --wb 16 --case chat --rounds 8 --ckpt /home/dusk/rec-ve/ckpt-pp2/mid-prod
+[05:20:21Z] chat round 0 AB | A 205.77 B 201.57 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:20:25Z] chat round 1 BA | A 205.07 B 202.03 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:20:30Z] chat round 2 AB | A 207.19 B 198.26 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:20:35Z] chat round 3 BA | A 208.05 B 200.34 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:20:40Z] chat round 4 AB | A 208.74 B 200.87 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:20:45Z] chat round 5 BA | A 208.37 B 195.25 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:20:50Z] chat round 6 AB | A 205.66 B 196.46 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:20:54Z] chat round 7 BA | A 207.04 B 199.84 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+
+### 2026-11-22T05:21:22Z build --src /home/dusk/rec-ve/gepa/c/c025/flint_mid_megakernel.hip --out /home/dusk/rec-ve/gepa/c/c025 --define GEPA_DOWNCAT=1 --define GEPA_GEN_PREFETCH_X=1 --define GEPA_GEN_UNROLL=1 --define GEPA_K512_PIPE=0 --define GEPA_RESID_FUSE=0 --define GEPA_TOPK_PER_WG=0
+
+### 2026-11-22T05:22:12Z emit --so /home/dusk/rec-ve/gepa/c/c025/flint_mid.so --out /home/dusk/rec-ve/gepa/c/c025/emit --workers 16 --ckpt /home/dusk/rec-ve/ckpt-pp2/mid-prod
+[05:21:22Z] emit suite /home/dusk/rec-ve/gepa/c/c025/flint_mid.so | busy=3 | flint:idle,e4b:idle,qwen:inactive
+[05:21:29Z] emit ppl /home/dusk/rec-ve/gepa/c/c025/flint_mid.so | busy=4 | flint:idle,e4b:idle,qwen:inactive
+[05:22:12Z] emit done | busy=85 | flint:idle,e4b:idle,qwen:inactive
+
+### 2026-11-22T05:23:19Z bench --a /home/dusk/rec-ve/gepa/c/iter0/flint_mid.so --b /home/dusk/rec-ve/gepa/c/c025/flint_mid.so --wa 16 --wb 16 --case short4 --rounds 8 --ckpt /home/dusk/rec-ve/ckpt-pp2/mid-prod
+[05:22:46Z] short4 round 0 AB | A 210.27 B 208.01 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=39 flint:idle,e4b:idle,qwen:inactive
+[05:22:51Z] short4 round 1 BA | A 208.28 B 206.05 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:22:55Z] short4 round 2 AB | A 210.27 B 204.41 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:23:00Z] short4 round 3 BA | A 209.44 B 210.14 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=39 flint:idle,e4b:idle,qwen:inactive
+[05:23:05Z] short4 round 4 AB | A 204.0 B 208.51 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:23:10Z] short4 round 5 BA | A 206.46 B 208.82 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:23:14Z] short4 round 6 AB | A 210.35 B 208.19 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=39 flint:idle,e4b:idle,qwen:inactive
+[05:23:19Z] short4 round 7 BA | A 207.7 B 205.47 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+
+### 2026-11-22T05:23:59Z bench --a /home/dusk/rec-ve/gepa/c/iter0/flint_mid.so --b /home/dusk/rec-ve/gepa/c/c025/flint_mid.so --wa 16 --wb 16 --case chat --rounds 8 --ckpt /home/dusk/rec-ve/ckpt-pp2/mid-prod
+[05:23:25Z] chat round 0 AB | A 209.94 B 208.84 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:23:30Z] chat round 1 BA | A 208.07 B 203.87 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:23:34Z] chat round 2 AB | A 210.9 B 205.13 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:23:39Z] chat round 3 BA | A 208.06 B 207.44 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:23:44Z] chat round 4 AB | A 207.04 B 208.2 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:23:49Z] chat round 5 BA | A 206.63 B 207.4 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=40 flint:idle,e4b:idle,qwen:inactive
+[05:23:54Z] chat round 6 AB | A 203.88 B 206.47 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive
+[05:23:58Z] chat round 7 BA | A 204.38 B 206.26 | pre busy=4 flint:idle,e4b:idle,qwen:inactive | post busy=41 flint:idle,e4b:idle,qwen:inactive

@@ -1,0 +1,1 @@
+[{"name": "c1-osplit", "axis": "segmented_k_splits", "knobs": {"GEPA_OSPLIT": 1}}]
