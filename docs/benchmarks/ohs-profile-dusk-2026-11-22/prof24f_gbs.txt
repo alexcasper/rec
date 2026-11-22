@@ -1,0 +1,14 @@
+24f167d dusk mid-8L, 2 profile runs x 5 reps, decode positions of prompt4+36; token 4855 us (206.0 tok/s in-kernel)
+phase                                    n/tok   us/tok  MB/tok   GB/s  %roof wait us   us@82 loss us
+O-proj (K=4096, N=2048)                      8    674.0    37.7   56.0    68%    37.8   460.4   213.7
+MoE down (2x K=512 + K=1024, N=2048)         7    364.9    16.5   45.3    55%    18.5   201.4   163.5
+QKV (K=2048, 5120 rows, seg)                 8    683.7    47.2   69.0    84%    18.0   575.4   108.3
+MoE gate/up (K=2048, 4096 rows, seg)         7    493.5    33.0   66.9    82%    21.0   402.8    90.7
+lm_head (K=2048, 150144 rows)                1   2192.1   173.0   78.9    96%     9.8  2109.3    82.8
+router (bf16 32x2048)                        7     49.5     0.9   18.5    23%     9.8    11.2    38.3
+dense gate+up (K=2048, 4096 rows)            1     70.6     4.7   66.8    82%     2.2    57.5    13.1
+dense down (K=2048, N=2048)                  1     37.5     2.4   62.9    77%     3.2    28.8     8.8
+weight phases total                              4565.9   315.4   69.1    84%
+light phases + barriers (attention, norms, KV write, router softmax/topK, act, combine, argmax): 289 us
+  of which attention: 127 us/token (8 layers)
+roof time for weights @82 GB/s: 3847 us -> ceiling 242 tok/s with today's light phases, 260 tok/s weights-only

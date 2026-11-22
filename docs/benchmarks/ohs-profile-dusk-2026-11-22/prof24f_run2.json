@@ -1,0 +1,949 @@
+{
+ "n_out": 36,
+ "workers": 16,
+ "mode": 0,
+ "prompt": [
+  1,
+  5,
+  6,
+  7
+ ],
+ "prod_launch_s": [
+  0.19271,
+  0.19096,
+  0.19029,
+  0.1913,
+  0.19388
+ ],
+ "prod_tokens": [
+  65082,
+  61122,
+  123359,
+  36783,
+  61122,
+  123359,
+  48617,
+  32682,
+  142301,
+  142301,
+  142301,
+  141774,
+  48617,
+  48617,
+  110611,
+  131133,
+  48617,
+  110611,
+  131133,
+  48617,
+  48617,
+  83280,
+  131133,
+  48617,
+  48617,
+  83280,
+  48617,
+  83280,
+  48617,
+  48617,
+  48617,
+  342,
+  54787,
+  342,
+  48617,
+  92134
+ ],
+ "prof_tokens": [
+  65082,
+  61122,
+  123359,
+  36783,
+  61122,
+  123359,
+  48617,
+  32682,
+  142301,
+  142301,
+  142301,
+  141774,
+  48617,
+  48617,
+  110611,
+  131133,
+  48617,
+  110611,
+  131133,
+  48617,
+  48617,
+  83280,
+  131133,
+  48617,
+  48617,
+  83280,
+  48617,
+  83280,
+  48617,
+  48617,
+  48617,
+  342,
+  54787,
+  342,
+  48617,
+  92134
+ ],
+ "wall_clock_khz": 99810,
+ "barriers_per_token": 98,
+ "prof_launch_s": [
+  0.19406,
+  0.1965,
+  0.19584,
+  0.19615,
+  0.19579
+ ],
+ "token_us_median": 4850.36,
+ "tokens_match_prod": true,
+ "per_barrier": [
+  {
+   "k": 0,
+   "line": 739,
+   "section": "1. INT8 affine embedding lookup",
+   "phase_us": 2.81,
+   "work_us": 1.98,
+   "wait_us": 0.8
+  },
+  {
+   "k": 1,
+   "line": 766,
+   "section": "3. Q, K, V projections (K=2048)",
+   "phase_us": 84.68,
+   "work_us": 80.31,
+   "wait_us": 4.33
+  },
+  {
+   "k": 2,
+   "line": 771,
+   "section": "4. Per",
+   "phase_us": 2.73,
+   "work_us": 1.88,
+   "wait_us": 0.84
+  },
+  {
+   "k": 3,
+   "line": 789,
+   "section": "5. Write K, V to head",
+   "phase_us": 2.52,
+   "work_us": 1.68,
+   "wait_us": 0.8
+  },
+  {
+   "k": 4,
+   "line": 829,
+   "section": "6. Attention with Sinks (32 warps across workgro",
+   "phase_us": 16.17,
+   "work_us": 15.27,
+   "wait_us": 0.88
+  },
+  {
+   "k": 5,
+   "line": 834,
+   "section": "7. O projection (K=4096",
+   "phase_us": 85.44,
+   "work_us": 80.99,
+   "wait_us": 4.33
+  },
+  {
+   "k": 6,
+   "line": 837,
+   "section": "7. O projection (K=4096",
+   "phase_us": 1.48,
+   "work_us": 0.52,
+   "wait_us": 0.88
+  },
+  {
+   "k": 7,
+   "line": 852,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 70.47,
+   "work_us": 68.39,
+   "wait_us": 2.26
+  },
+  {
+   "k": 8,
+   "line": 861,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 2.4,
+   "work_us": 1.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 9,
+   "line": 864,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 37.51,
+   "work_us": 34.27,
+   "wait_us": 3.09
+  },
+  {
+   "k": 10,
+   "line": 867,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 1.32,
+   "work_us": 0.48,
+   "wait_us": 0.84
+  },
+  {
+   "k": 11,
+   "line": 766,
+   "section": "3. Q, K, V projections (K=2048)",
+   "phase_us": 84.36,
+   "work_us": 82.0,
+   "wait_us": 2.14
+  },
+  {
+   "k": 12,
+   "line": 771,
+   "section": "4. Per",
+   "phase_us": 3.73,
+   "work_us": 1.68,
+   "wait_us": 2.04
+  },
+  {
+   "k": 13,
+   "line": 789,
+   "section": "5. Write K, V to head",
+   "phase_us": 1.32,
+   "work_us": 0.52,
+   "wait_us": 0.8
+  },
+  {
+   "k": 14,
+   "line": 829,
+   "section": "6. Attention with Sinks (32 warps across workgro",
+   "phase_us": 15.61,
+   "work_us": 14.59,
+   "wait_us": 0.88
+  },
+  {
+   "k": 15,
+   "line": 834,
+   "section": "7. O projection (K=4096",
+   "phase_us": 75.82,
+   "work_us": 71.06,
+   "wait_us": 4.63
+  },
+  {
+   "k": 16,
+   "line": 837,
+   "section": "7. O projection (K=4096",
+   "phase_us": 1.32,
+   "work_us": 0.48,
+   "wait_us": 0.84
+  },
+  {
+   "k": 17,
+   "line": 884,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 6.65,
+   "work_us": 5.65,
+   "wait_us": 0.92
+  },
+  {
+   "k": 18,
+   "line": 915,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 5.33,
+   "work_us": 4.49,
+   "wait_us": 0.84
+  },
+  {
+   "k": 19,
+   "line": 953,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 70.19,
+   "work_us": 67.57,
+   "wait_us": 2.65
+  },
+  {
+   "k": 20,
+   "line": 962,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 2.4,
+   "work_us": 1.48,
+   "wait_us": 0.84
+  },
+  {
+   "k": 21,
+   "line": 972,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 51.92,
+   "work_us": 49.19,
+   "wait_us": 2.52
+  },
+  {
+   "k": 22,
+   "line": 989,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 1.36,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 23,
+   "line": 766,
+   "section": "3. Q, K, V projections (K=2048)",
+   "phase_us": 85.88,
+   "work_us": 83.82,
+   "wait_us": 1.98
+  },
+  {
+   "k": 24,
+   "line": 771,
+   "section": "4. Per",
+   "phase_us": 2.77,
+   "work_us": 1.88,
+   "wait_us": 0.84
+  },
+  {
+   "k": 25,
+   "line": 789,
+   "section": "5. Write K, V to head",
+   "phase_us": 2.56,
+   "work_us": 1.72,
+   "wait_us": 0.8
+  },
+  {
+   "k": 26,
+   "line": 829,
+   "section": "6. Attention with Sinks (32 warps across workgro",
+   "phase_us": 16.37,
+   "work_us": 15.45,
+   "wait_us": 0.92
+  },
+  {
+   "k": 27,
+   "line": 834,
+   "section": "7. O projection (K=4096",
+   "phase_us": 85.66,
+   "work_us": 80.81,
+   "wait_us": 5.05
+  },
+  {
+   "k": 28,
+   "line": 837,
+   "section": "7. O projection (K=4096",
+   "phase_us": 1.44,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 29,
+   "line": 884,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 7.13,
+   "work_us": 5.65,
+   "wait_us": 1.44
+  },
+  {
+   "k": 30,
+   "line": 915,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 5.43,
+   "work_us": 4.57,
+   "wait_us": 0.84
+  },
+  {
+   "k": 31,
+   "line": 953,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 69.69,
+   "work_us": 67.21,
+   "wait_us": 2.6
+  },
+  {
+   "k": 32,
+   "line": 962,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 2.4,
+   "work_us": 1.48,
+   "wait_us": 0.84
+  },
+  {
+   "k": 33,
+   "line": 972,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 52.62,
+   "work_us": 49.73,
+   "wait_us": 2.56
+  },
+  {
+   "k": 34,
+   "line": 989,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 1.36,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 35,
+   "line": 766,
+   "section": "3. Q, K, V projections (K=2048)",
+   "phase_us": 85.84,
+   "work_us": 83.9,
+   "wait_us": 1.88
+  },
+  {
+   "k": 36,
+   "line": 771,
+   "section": "4. Per",
+   "phase_us": 3.21,
+   "work_us": 2.36,
+   "wait_us": 0.84
+  },
+  {
+   "k": 37,
+   "line": 789,
+   "section": "5. Write K, V to head",
+   "phase_us": 2.52,
+   "work_us": 1.72,
+   "wait_us": 0.8
+  },
+  {
+   "k": 38,
+   "line": 829,
+   "section": "6. Attention with Sinks (32 warps across workgro",
+   "phase_us": 15.57,
+   "work_us": 14.59,
+   "wait_us": 0.88
+  },
+  {
+   "k": 39,
+   "line": 834,
+   "section": "7. O projection (K=4096",
+   "phase_us": 84.96,
+   "work_us": 80.69,
+   "wait_us": 4.45
+  },
+  {
+   "k": 40,
+   "line": 837,
+   "section": "7. O projection (K=4096",
+   "phase_us": 1.44,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 41,
+   "line": 884,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 6.97,
+   "work_us": 5.61,
+   "wait_us": 1.4
+  },
+  {
+   "k": 42,
+   "line": 915,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 5.41,
+   "work_us": 4.57,
+   "wait_us": 0.84
+  },
+  {
+   "k": 43,
+   "line": 953,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 70.89,
+   "work_us": 68.57,
+   "wait_us": 2.4
+  },
+  {
+   "k": 44,
+   "line": 962,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 2.36,
+   "work_us": 0.8,
+   "wait_us": 0.84
+  },
+  {
+   "k": 45,
+   "line": 972,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 52.3,
+   "work_us": 49.21,
+   "wait_us": 2.73
+  },
+  {
+   "k": 46,
+   "line": 989,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 1.36,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 47,
+   "line": 766,
+   "section": "3. Q, K, V projections (K=2048)",
+   "phase_us": 86.48,
+   "work_us": 84.52,
+   "wait_us": 2.22
+  },
+  {
+   "k": 48,
+   "line": 771,
+   "section": "4. Per",
+   "phase_us": 2.73,
+   "work_us": 1.88,
+   "wait_us": 0.84
+  },
+  {
+   "k": 49,
+   "line": 789,
+   "section": "5. Write K, V to head",
+   "phase_us": 2.56,
+   "work_us": 1.72,
+   "wait_us": 0.8
+  },
+  {
+   "k": 50,
+   "line": 829,
+   "section": "6. Attention with Sinks (32 warps across workgro",
+   "phase_us": 16.19,
+   "work_us": 15.09,
+   "wait_us": 0.92
+  },
+  {
+   "k": 51,
+   "line": 834,
+   "section": "7. O projection (K=4096",
+   "phase_us": 86.14,
+   "work_us": 80.91,
+   "wait_us": 5.69
+  },
+  {
+   "k": 52,
+   "line": 837,
+   "section": "7. O projection (K=4096",
+   "phase_us": 1.42,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 53,
+   "line": 884,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 7.69,
+   "work_us": 5.75,
+   "wait_us": 2.0
+  },
+  {
+   "k": 54,
+   "line": 915,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 5.41,
+   "work_us": 4.61,
+   "wait_us": 0.84
+  },
+  {
+   "k": 55,
+   "line": 953,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 71.03,
+   "work_us": 67.95,
+   "wait_us": 3.01
+  },
+  {
+   "k": 56,
+   "line": 962,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 2.4,
+   "work_us": 1.44,
+   "wait_us": 0.84
+  },
+  {
+   "k": 57,
+   "line": 972,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 52.26,
+   "work_us": 49.35,
+   "wait_us": 2.65
+  },
+  {
+   "k": 58,
+   "line": 989,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 1.36,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 59,
+   "line": 766,
+   "section": "3. Q, K, V projections (K=2048)",
+   "phase_us": 86.24,
+   "work_us": 84.3,
+   "wait_us": 1.8
+  },
+  {
+   "k": 60,
+   "line": 771,
+   "section": "4. Per",
+   "phase_us": 3.25,
+   "work_us": 2.36,
+   "wait_us": 0.84
+  },
+  {
+   "k": 61,
+   "line": 789,
+   "section": "5. Write K, V to head",
+   "phase_us": 2.52,
+   "work_us": 1.72,
+   "wait_us": 0.8
+  },
+  {
+   "k": 62,
+   "line": 829,
+   "section": "6. Attention with Sinks (32 warps across workgro",
+   "phase_us": 15.33,
+   "work_us": 14.43,
+   "wait_us": 0.9
+  },
+  {
+   "k": 63,
+   "line": 834,
+   "section": "7. O projection (K=4096",
+   "phase_us": 84.84,
+   "work_us": 80.83,
+   "wait_us": 4.33
+  },
+  {
+   "k": 64,
+   "line": 837,
+   "section": "7. O projection (K=4096",
+   "phase_us": 1.36,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 65,
+   "line": 884,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 7.01,
+   "work_us": 5.73,
+   "wait_us": 1.4
+  },
+  {
+   "k": 66,
+   "line": 915,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 5.49,
+   "work_us": 4.61,
+   "wait_us": 0.84
+  },
+  {
+   "k": 67,
+   "line": 953,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 70.69,
+   "work_us": 67.45,
+   "wait_us": 3.03
+  },
+  {
+   "k": 68,
+   "line": 962,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 2.36,
+   "work_us": 0.9,
+   "wait_us": 0.84
+  },
+  {
+   "k": 69,
+   "line": 972,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 51.78,
+   "work_us": 49.05,
+   "wait_us": 2.48
+  },
+  {
+   "k": 70,
+   "line": 989,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 1.36,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 71,
+   "line": 766,
+   "section": "3. Q, K, V projections (K=2048)",
+   "phase_us": 85.18,
+   "work_us": 83.3,
+   "wait_us": 1.86
+  },
+  {
+   "k": 72,
+   "line": 771,
+   "section": "4. Per",
+   "phase_us": 2.73,
+   "work_us": 1.84,
+   "wait_us": 0.84
+  },
+  {
+   "k": 73,
+   "line": 789,
+   "section": "5. Write K, V to head",
+   "phase_us": 2.56,
+   "work_us": 1.72,
+   "wait_us": 0.8
+  },
+  {
+   "k": 74,
+   "line": 829,
+   "section": "6. Attention with Sinks (32 warps across workgro",
+   "phase_us": 16.33,
+   "work_us": 15.37,
+   "wait_us": 0.92
+  },
+  {
+   "k": 75,
+   "line": 834,
+   "section": "7. O projection (K=4096",
+   "phase_us": 85.16,
+   "work_us": 79.77,
+   "wait_us": 5.55
+  },
+  {
+   "k": 76,
+   "line": 837,
+   "section": "7. O projection (K=4096",
+   "phase_us": 1.46,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 77,
+   "line": 884,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 7.05,
+   "work_us": 5.65,
+   "wait_us": 1.44
+  },
+  {
+   "k": 78,
+   "line": 915,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 5.37,
+   "work_us": 4.53,
+   "wait_us": 0.84
+  },
+  {
+   "k": 79,
+   "line": 953,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 69.75,
+   "work_us": 65.7,
+   "wait_us": 4.29
+  },
+  {
+   "k": 80,
+   "line": 962,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 2.38,
+   "work_us": 1.48,
+   "wait_us": 0.84
+  },
+  {
+   "k": 81,
+   "line": 972,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 51.98,
+   "work_us": 49.17,
+   "wait_us": 2.42
+  },
+  {
+   "k": 82,
+   "line": 989,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 1.36,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 83,
+   "line": 766,
+   "section": "3. Q, K, V projections (K=2048)",
+   "phase_us": 85.6,
+   "work_us": 84.12,
+   "wait_us": 1.86
+  },
+  {
+   "k": 84,
+   "line": 771,
+   "section": "4. Per",
+   "phase_us": 3.21,
+   "work_us": 2.32,
+   "wait_us": 0.84
+  },
+  {
+   "k": 85,
+   "line": 789,
+   "section": "5. Write K, V to head",
+   "phase_us": 2.56,
+   "work_us": 1.72,
+   "wait_us": 0.8
+  },
+  {
+   "k": 86,
+   "line": 829,
+   "section": "6. Attention with Sinks (32 warps across workgro",
+   "phase_us": 15.83,
+   "work_us": 14.81,
+   "wait_us": 0.9
+  },
+  {
+   "k": 87,
+   "line": 834,
+   "section": "7. O projection (K=4096",
+   "phase_us": 84.96,
+   "work_us": 81.09,
+   "wait_us": 4.05
+  },
+  {
+   "k": 88,
+   "line": 837,
+   "section": "7. O projection (K=4096",
+   "phase_us": 1.44,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 89,
+   "line": 884,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 7.05,
+   "work_us": 5.77,
+   "wait_us": 1.36
+  },
+  {
+   "k": 90,
+   "line": 915,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 5.49,
+   "work_us": 4.65,
+   "wait_us": 0.84
+  },
+  {
+   "k": 91,
+   "line": 953,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 70.31,
+   "work_us": 67.67,
+   "wait_us": 2.44
+  },
+  {
+   "k": 92,
+   "line": 962,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 2.36,
+   "work_us": 1.48,
+   "wait_us": 0.84
+  },
+  {
+   "k": 93,
+   "line": 972,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 52.68,
+   "work_us": 49.57,
+   "wait_us": 2.6
+  },
+  {
+   "k": 94,
+   "line": 989,
+   "section": "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)",
+   "phase_us": 1.36,
+   "work_us": 0.52,
+   "wait_us": 0.84
+  },
+  {
+   "k": 95,
+   "line": 1005,
+   "section": "11. LM Head Fused INT4 Dequant",
+   "phase_us": 2192.71,
+   "work_us": 2182.25,
+   "wait_us": 9.62
+  },
+  {
+   "k": 96,
+   "line": 1045,
+   "section": "12. Parallel Device Argmax over 150,144 vocab",
+   "phase_us": 13.39,
+   "work_us": 12.36,
+   "wait_us": 0.92
+  },
+  {
+   "k": 97,
+   "line": 1067,
+   "section": "12. Parallel Device Argmax over 150,144 vocab",
+   "phase_us": 2.56,
+   "work_us": 1.72,
+   "wait_us": 0.84
+  }
+ ],
+ "by_section": {
+  "1. INT8 affine embedding lookup": {
+   "barriers": 1,
+   "phase_us": 2.8,
+   "work_us": 2.0,
+   "wait_us": 0.8
+  },
+  "3. Q, K, V projections (K=2048)": {
+   "barriers": 8,
+   "phase_us": 684.3,
+   "work_us": 666.3,
+   "wait_us": 18.1
+  },
+  "4. Per": {
+   "barriers": 8,
+   "phase_us": 24.4,
+   "work_us": 16.2,
+   "wait_us": 7.9
+  },
+  "5. Write K, V to head": {
+   "barriers": 8,
+   "phase_us": 19.1,
+   "work_us": 12.5,
+   "wait_us": 6.4
+  },
+  "6. Attention with Sinks (32 warps across workgro": {
+   "barriers": 8,
+   "phase_us": 127.4,
+   "work_us": 119.6,
+   "wait_us": 7.2
+  },
+  "7. O projection (K=4096": {
+   "barriers": 16,
+   "phase_us": 684.3,
+   "work_us": 640.3,
+   "wait_us": 44.8
+  },
+  "9. MLP (Layer 0 Dense vs Layers 1..7 MoE)": {
+   "barriers": 46,
+   "phase_us": 1083.4,
+   "work_us": 1006.6,
+   "wait_us": 73.0
+  },
+  "11. LM Head Fused INT4 Dequant": {
+   "barriers": 1,
+   "phase_us": 2192.7,
+   "work_us": 2182.2,
+   "wait_us": 9.6
+  },
+  "12. Parallel Device Argmax over 150,144 vocab": {
+   "barriers": 2,
+   "phase_us": 16.0,
+   "work_us": 14.1,
+   "wait_us": 1.8
+  }
+ },
+ "sum_phase_us": 4834.4,
+ "sum_wait_us": 169.6
+}

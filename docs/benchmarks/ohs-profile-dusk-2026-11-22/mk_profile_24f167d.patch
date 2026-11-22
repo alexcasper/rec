@@ -1,0 +1,56 @@
+--- /tmp/k24f_orig.hip	2026-11-22 04:12:46.992554536 +0000
++++ /home/dawn/rec-data/prof/k24f.hip	2026-11-22 04:11:01.623199012 +0000
+@@ -75,6 +75,30 @@
+     return ready[0] != 0u;
+ }
+ 
++#ifdef MK_PROFILE
++constexpr uint32_t MK_PROF_MAX = 1u << 16;
++__device__ uint32_t g_prof_n;
++__device__ int g_prof_line[MK_PROF_MAX];
++__device__ uint64_t g_prof_ta[MK_PROF_MAX];
++__device__ uint64_t g_prof_tr[MK_PROF_MAX];
++extern "C" int mk_prof_reset() {
++    uint32_t z = 0;
++    return (int)hipMemcpyToSymbol(HIP_SYMBOL(g_prof_n), &z, sizeof(z));
++}
++// returns record count (capped at max); wall-clock rate in kHz in *khz
++extern "C" int mk_prof_read(int* line, uint64_t* ta, uint64_t* tr, int max, int* khz) {
++    uint32_t n = 0;
++    hipMemcpyFromSymbol(&n, HIP_SYMBOL(g_prof_n), sizeof(n));
++    int m = (int)(n < (uint32_t)max ? n : (uint32_t)max);
++    if (m > (int)MK_PROF_MAX) m = (int)MK_PROF_MAX;
++    hipMemcpyFromSymbol(line, HIP_SYMBOL(g_prof_line), m * sizeof(int));
++    hipMemcpyFromSymbol(ta, HIP_SYMBOL(g_prof_ta), m * sizeof(uint64_t));
++    hipMemcpyFromSymbol(tr, HIP_SYMBOL(g_prof_tr), m * sizeof(uint64_t));
++    hipDeviceGetAttribute(khz, hipDeviceAttributeWallClockRate, 0);
++    return (int)n;
++}
++#endif
++
+ // ---- MSL load16 / dot16 / q4 building blocks (period-4 pre-scale) ----
+ __device__ inline float load16_f(const float* x, float* v) {
+     float sum = 0.0f;
+@@ -673,7 +697,22 @@
+     __shared__ uint32_t sh_ready[1];
+     uint32_t phase = 0;
+ 
++#ifdef MK_PROFILE
++    // rec-6ob profiling build ONLY: worker 0 / thread 0 records, per barrier, the time its own
++    // workgroup finished the phase (after a WG __syncthreads) and the device-wide release time.
++    #define SYNC_ALL() do { \
++        __syncthreads(); \
++        uint64_t _ta = wall_clock64(); \
++        bool _ok = sync_all(control, tid, phase, sh_ready, workers); \
++        if (group == 0 && tid == 0) { \
++            uint32_t _k = g_prof_n++; \
++            if (_k < MK_PROF_MAX) { g_prof_line[_k] = __LINE__; g_prof_ta[_k] = _ta; g_prof_tr[_k] = wall_clock64(); } \
++        } \
++        if (!_ok) return; \
++    } while (0)
++#else
+     #define SYNC_ALL() if (!sync_all(control, tid, phase, sh_ready, workers)) return
++#endif
+ 
+     auto B = [&](int idx) -> const bf16* { return (const bf16*)(bank + off[idx]); };
+     auto Q_W = [&](int idx) -> const uint8_t* { return bank + off[idx]; };
