@@ -8880,7 +8880,37 @@
     "llama.cpp UD-Q3_K_XL @512": 29.39
    },
    "outcome": "REJECTED (bf16-KV tier). Divergence present from prompt position 0 (split untaken below 64) -> full-config bf16-KV property, not split-K; speed row not quotable",
-   "cotenants": "8080 down, E4B 200, qwen3vl 200 loopback, llama-qwen inactive, display inactive, MemAvailable 16.8-17.0 GiB"
+   "cotenants": "8080 down, E4B 200, qwen3vl 200 loopback, llama-qwen inactive, display inactive, MemAvailable 16.8-17.0 GiB",
+   "outcome_revised_rec_kcb": "Under rec-kcb v1 full-config tiers the 512 row's binding tiers (fp32kv PASS 8.3e-7, determinism PASS) clear except ppl, now PASS (aa54051) -> 512 row ACCEPTABLE under the interim tiers: 33.55 tok/s vs 29.39 (1.14x), display down at the time"
+  },
+  {
+   "id": "m3-gate8k-split-shr0-full",
+   "time": "2026-11-22T19:45:37Z",
+   "knobs": {
+    "FLINT_CFG_FULL": 1,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_SHRINK": 0
+   },
+   "source_commit": "288f4fa",
+   "record_commit": "aa54051",
+   "tiers": "rec-kcb full-config v1 (interim): fp32-KV 1e-4 + N-repeat determinism + ppl<1% (eval_set_full_v1)",
+   "gates": {
+    "fp32kv_depth8192": "FAIL last 7.41e-2 step 0.297, 3 routing devs",
+    "ppl_bf16kv": "PASS +3.4e-3",
+    "ppl_fp32kv": "PASS +1.5e-7",
+    "determinism_bf16kv_depth8192": "PASS 2 fresh sessions",
+    "determinism_fp32kv_depth8192": "not tested (hard stop)"
+   },
+   "tok_s": {
+    "depth8192": 21.55
+   },
+   "incumbent_same_box": {
+    "llama.cpp UD-Q3_K_XL @8192": 26.8
+   },
+   "ratio": 0.8,
+   "outcome": "REJECTED (binding fp32-KV tier at depth 8192). Even ungated, 0.80x vs incumbent: split-K (n_split<=16) does not close the depth gap; rec-e5d needs a different design",
+   "baseline_note": "default full build @wrap512 fails bf16-KV the same way (4.41e-2) -> bf16-KV divergence is baseline (rec-kcb ruling basis)",
+   "cotenants": "8080 down, E4B 200, qwen3vl 200 loopback, llama-qwen inactive, display ACTIVE, MemAvailable 17.1-17.4 GiB"
   }
  ],
  "incumbent_history": [
