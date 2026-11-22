@@ -11,7 +11,7 @@
     ],
     "host_protocol": "gated busy<5 + wait-for-idle, ABBA order, cotenant state per log line",
     "push_policy": "nothing pushed without Alex's ask",
-    "updated": "2026-11-22T02:30:10Z"
+    "updated": "2026-11-22T03:34:12Z"
   },
   "gates": {
     "hard_constraints": {
@@ -279,6 +279,27 @@
       },
       {
         "time": "2026-11-22T02:30:10Z",
+        "evals": 2,
+        "stopped": "max_evals/exhausted",
+        "best": "iter0",
+        "min_gain": 0.016199999999999992
+      },
+      {
+        "time": "2026-11-22T03:23:29Z",
+        "evals": 4,
+        "stopped": "patience",
+        "best": "iter0",
+        "min_gain": 0.016199999999999992
+      },
+      {
+        "time": "2026-11-22T03:28:15Z",
+        "evals": 2,
+        "stopped": "max_evals/exhausted",
+        "best": "iter0",
+        "min_gain": 0.016199999999999992
+      },
+      {
+        "time": "2026-11-22T03:34:12Z",
         "evals": 2,
         "stopped": "max_evals/exhausted",
         "best": "iter0",
@@ -3856,6 +3877,1906 @@
             }
           },
           "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c015",
+      "time": "2026-11-22T03:14:29Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_PF": 4096
+      },
+      "patch": null,
+      "name": "d1-pf4k",
+      "optimizer": "external",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "external",
+        "name": "d1-pf4k",
+        "kimi_429_total": 6
+      },
+      "source": "3edf6bf",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_PF=4096",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "6a2f538f5f8af854c9621e57f09e899c6b4a467fe14fd009ab9e5ca3f650b4f2",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12155,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+          "mid_generate": 6876
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "f9f1f731876c717e1a772b34265fa1203c890f6133306e677ed571739ea9dcf1"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.195,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.8,
+            "pair_min": 205.44,
+            "pair_max": 210.17,
+            "t36_mean_s": 0.19282
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.32,
+            "pair_min": 208.06,
+            "pair_max": 212.13,
+            "t36_mean_s": 0.19127
+          },
+          "speedup_B_over_A": 1.0073,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1998,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.93,
+            "pair_min": 205.33,
+            "pair_max": 211.64,
+            "t36_mean_s": 0.1977
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.1,
+            "pair_min": 206.19,
+            "pair_max": 212.2,
+            "t36_mean_s": 0.19665
+          },
+          "speedup_B_over_A": 1.0056,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 209.32,
+        "chat": 209.1
+      },
+      "speedup_vs_best": {
+        "short4": 1.0073,
+        "chat": 1.0056
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15799221199995372
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15799221199995372,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c016",
+      "time": "2026-11-22T03:16:44Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_PF": 8192
+      },
+      "patch": null,
+      "name": "d1-pf8k",
+      "optimizer": "external",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "external",
+        "name": "d1-pf8k",
+        "kimi_429_total": 6
+      },
+      "source": "3edf6bf",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.3,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_PF=8192",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "5b2a694ae7345b125fc1065bde2e23f1ca7e7237341eaf2dc2a5b66b76f77d33",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12155,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+          "mid_generate": 6876
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "f9f1f731876c717e1a772b34265fa1203c890f6133306e677ed571739ea9dcf1"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1966,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.76,
+            "pair_min": 204.1,
+            "pair_max": 211.04,
+            "t36_mean_s": 0.19287
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 205.98,
+            "pair_min": 204.93,
+            "pair_max": 207.19,
+            "t36_mean_s": 0.19459
+          },
+          "speedup_B_over_A": 0.9914,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2051,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.35,
+            "pair_min": 201.04,
+            "pair_max": 209.11,
+            "t36_mean_s": 0.19794
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 205.05,
+            "pair_min": 201.3,
+            "pair_max": 208.36,
+            "t36_mean_s": 0.19974
+          },
+          "speedup_B_over_A": 0.9889,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 205.98,
+        "chat": 205.05
+      },
+      "speedup_vs_best": {
+        "short4": 0.9914,
+        "chat": 0.9889
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15723320899996907
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15723320899996907,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c017",
+      "time": "2026-11-22T03:18:58Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_PF": 2048
+      },
+      "patch": null,
+      "name": "d1-pf2k",
+      "optimizer": "external",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "external",
+        "name": "d1-pf2k",
+        "kimi_429_total": 6
+      },
+      "source": "3edf6bf",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.3,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_PF=2048",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "a606b9fa5cf07ac65ecbc14f1c9d160505e099fb5d3a1c89094b3654ef31413e",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12155,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+          "mid_generate": 6876
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "f9f1f731876c717e1a772b34265fa1203c890f6133306e677ed571739ea9dcf1"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1953,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.7,
+            "pair_min": 204.03,
+            "pair_max": 211.2,
+            "t36_mean_s": 0.19305
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 208.61,
+            "pair_min": 206.18,
+            "pair_max": 212.27,
+            "t36_mean_s": 0.19225
+          },
+          "speedup_B_over_A": 1.0044,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.201,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.76,
+            "pair_min": 202.82,
+            "pair_max": 211.75,
+            "t36_mean_s": 0.19791
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 208.1,
+            "pair_min": 206.85,
+            "pair_max": 209.54,
+            "t36_mean_s": 0.19681
+          },
+          "speedup_B_over_A": 1.0016,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 208.61,
+        "chat": 208.1
+      },
+      "speedup_vs_best": {
+        "short4": 1.0044,
+        "chat": 1.0016
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15608738899754826
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15608738899754826,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c018",
+      "time": "2026-11-22T03:21:13Z",
+      "axis": "lds_staging",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_PF": 16384
+      },
+      "patch": null,
+      "name": "d1-pf16k",
+      "optimizer": "external",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "external",
+        "name": "d1-pf16k",
+        "kimi_429_total": 6
+      },
+      "source": "3edf6bf",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_PF=16384",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "f03706735baa654fd13d22692dbf92c7311fb61d13e878f89ab07f6d1ca05910",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12155,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1029,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1173,
+          "mid_generate": 6876
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "f9f1f731876c717e1a772b34265fa1203c890f6133306e677ed571739ea9dcf1"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2042,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.13,
+            "pair_min": 206.35,
+            "pair_max": 211.66,
+            "t36_mean_s": 0.19255
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 199.93,
+            "pair_min": 195.26,
+            "pair_max": 202.25,
+            "t36_mean_s": 0.20097
+          },
+          "speedup_B_over_A": 0.9606,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2067,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 206.84,
+            "pair_min": 202.41,
+            "pair_max": 210.1,
+            "t36_mean_s": 0.19815
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 200.46,
+            "pair_min": 197.93,
+            "pair_max": 202.84,
+            "t36_mean_s": 0.20568
+          },
+          "speedup_B_over_A": 0.9692,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 199.93,
+        "chat": 200.46
+      },
+      "speedup_vs_best": {
+        "short4": 0.9606,
+        "chat": 0.9692
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.163344965010765
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.163344965010765,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c019",
+      "time": "2026-11-22T03:23:46Z",
+      "axis": "barrier_structure",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_ACT_FOLD": 1
+      },
+      "patch": null,
+      "name": "d2-actfold",
+      "optimizer": "external",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "external",
+        "name": "d2-actfold",
+        "kimi_429_total": 6
+      },
+      "source": "5b9a8cd",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.2,
+        "defines": [
+          "GEPA_ACT_FOLD=1",
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "52a31f4b095c9cc9723f0f75f0a76120e6b913c3e9236f800389dbd3162cbddd",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 11825,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1038,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1184,
+          "mid_generate": 6526
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "65b018ef4608410fd4b921554406cf69e028811ef5c6fe2bc3fec1d399df45e1"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1956,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.5,
+            "pair_min": 206.17,
+            "pair_max": 210.81,
+            "t36_mean_s": 0.1922
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 206.18,
+            "pair_min": 203.23,
+            "pair_max": 209.09,
+            "t36_mean_s": 0.19387
+          },
+          "speedup_B_over_A": 0.9889,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2001,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.82,
+            "pair_min": 205.61,
+            "pair_max": 209.05,
+            "t36_mean_s": 0.19767
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 208.28,
+            "pair_min": 204.56,
+            "pair_max": 210.71,
+            "t36_mean_s": 0.19757
+          },
+          "speedup_B_over_A": 1.0022,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 206.18,
+        "chat": 208.28
+      },
+      "speedup_vs_best": {
+        "short4": 0.9889,
+        "chat": 1.0022
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15584329700504895
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15584329700504895,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c020",
+      "time": "2026-11-22T03:26:00Z",
+      "axis": "barrier_structure",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 0,
+        "GEPA_ACT_FOLD": 1,
+        "GEPA_PF": 4096
+      },
+      "patch": null,
+      "name": "d2-actfold-pf4",
+      "optimizer": "external",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "external",
+        "name": "d2-actfold-pf4",
+        "kimi_429_total": 6
+      },
+      "source": "5b9a8cd",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.3,
+        "defines": [
+          "GEPA_ACT_FOLD=1",
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_PF=4096",
+          "GEPA_RESID_FUSE=0",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "c02852fb494607a30f05fd209509c25b93ce54fbe22943028b6b87a74c024ffd",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 250
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 250
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 250
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 12015,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1871,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1206,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1038,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": 1184,
+          "mid_generate": 6716
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segi": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "65b018ef4608410fd4b921554406cf69e028811ef5c6fe2bc3fec1d399df45e1"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1963,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 209.14,
+            "pair_min": 205.15,
+            "pair_max": 211.63,
+            "t36_mean_s": 0.19276
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 207.48,
+            "pair_min": 204.53,
+            "pair_max": 209.75,
+            "t36_mean_s": 0.19315
+          },
+          "speedup_B_over_A": 0.9921,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1993,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.9,
+            "pair_min": 205.53,
+            "pair_max": 211.32,
+            "t36_mean_s": 0.19713
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 209.01,
+            "pair_min": 207.63,
+            "pair_max": 211.88,
+            "t36_mean_s": 0.197
+          },
+          "speedup_B_over_A": 1.0005,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 207.48,
+        "chat": 209.01
+      },
+      "speedup_vs_best": {
+        "short4": 0.9921,
+        "chat": 1.0005
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.1563586789998226
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.1563586789998226,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c021",
+      "time": "2026-11-22T03:29:43Z",
+      "axis": "barrier_structure",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 1,
+        "GEPA_ACT_FOLD": 1
+      },
+      "patch": null,
+      "name": "d2-actfold-resid",
+      "optimizer": "external",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "external",
+        "name": "d2-actfold-resid",
+        "kimi_429_total": 6
+      },
+      "source": "5b9a8cd",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.1,
+        "defines": [
+          "GEPA_ACT_FOLD=1",
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_RESID_FUSE=1",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "727d1ab2cd1c558a47ff4c801d05ae3b05cdd38658737233032d8628a0c66de9",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 248
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 11684,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": 1926,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": 1268,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": 1038,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": 1184,
+          "mid_generate": 6268
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "65b018ef4608410fd4b921554406cf69e028811ef5c6fe2bc3fec1d399df45e1"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1952,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 209.05,
+            "pair_min": 205.87,
+            "pair_max": 212.3,
+            "t36_mean_s": 0.19199
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 207.43,
+            "pair_min": 204.83,
+            "pair_max": 209.28,
+            "t36_mean_s": 0.19328
+          },
+          "speedup_B_over_A": 0.9923,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2018,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.46,
+            "pair_min": 204.6,
+            "pair_max": 210.89,
+            "t36_mean_s": 0.1976
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 207.35,
+            "pair_min": 203.35,
+            "pair_max": 210.28,
+            "t36_mean_s": 0.198
+          },
+          "speedup_B_over_A": 0.9995,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 207.43,
+        "chat": 207.35
+      },
+      "speedup_vs_best": {
+        "short4": 0.9923,
+        "chat": 0.9995
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.15559172199573368
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.15559172199573368,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
+        },
+        "pass": true
+      },
+      "outcome": "gates_pass"
+    },
+    {
+      "id": "c022",
+      "time": "2026-11-22T03:31:57Z",
+      "axis": "barrier_structure",
+      "parent": "iter0",
+      "knobs": {
+        "GEPA_GEN_UNROLL": 1,
+        "GEPA_K512_PIPE": 0,
+        "GEPA_GEN_PREFETCH_X": 1,
+        "workers": 16,
+        "GEPA_TOPK_PER_WG": 0,
+        "GEPA_RESID_FUSE": 1,
+        "GEPA_ACT_FOLD": 1,
+        "GEPA_PF": 4096
+      },
+      "patch": null,
+      "name": "d2-actfold-resid-pf4",
+      "optimizer": "external",
+      "kimi_429_total": 6,
+      "optimizer_detail": {
+        "optimizer": "external",
+        "name": "d2-actfold-resid-pf4",
+        "kimi_429_total": 6
+      },
+      "source": "5b9a8cd",
+      "after512": null,
+      "after512_note": "albion-gated (dusk launches <= 0.25 s)",
+      "build": {
+        "status": "ok",
+        "build_s": 2.1,
+        "defines": [
+          "GEPA_ACT_FOLD=1",
+          "GEPA_GEN_PREFETCH_X=1",
+          "GEPA_GEN_UNROLL=1",
+          "GEPA_K512_PIPE=0",
+          "GEPA_PF=4096",
+          "GEPA_RESID_FUSE=1",
+          "GEPA_TOPK_PER_WG=0"
+        ],
+        "so_sha256": "2f9b6b8e2f68c11a111779801901fac9b01de13cc670f9e4e4c881a52f2747fb",
+        "kernels": {
+          "mid_generate": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 250
+          },
+          "mid_generate_fp32_bf16kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 250
+          },
+          "mid_generate_fp32kv": {
+            "lds": 24952,
+            "scratch": 16,
+            "vgpr": 250
+          },
+          "flint_q4_gemv_kernel": {
+            "lds": 32768,
+            "scratch": 16,
+            "vgpr": 248
+          }
+        },
+        "hot_instr": 11885,
+        "hot_funcs": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": 1926,
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": 1268,
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": 1038,
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": 1184,
+          "mid_generate": 6469
+        },
+        "gemv_vgpr_scratch": {
+          "_Z16flint_q4_gemv_opILi2048ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": {
+            "vgpr": 248
+          },
+          "_Z16flint_q4_gemv_opILi4096ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": {
+            "vgpr": 215
+          },
+          "_Z16flint_q4_gemv_opILi512ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": {
+            "vgpr": 115
+          },
+          "_Z16flint_q4_gemv_opILi1024ELb0ELi0EEvPKhPK14__hip_bfloat16S4_PKfPS2_PfiiiiPK5Q4Segib": {
+            "vgpr": 214
+          }
+        },
+        "source_sha256": "65b018ef4608410fd4b921554406cf69e028811ef5c6fe2bc3fec1d399df45e1"
+      },
+      "bench": {
+        "short4": {
+          "status": "ok",
+          "case": "short4",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.1966,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 208.23,
+            "pair_min": 205.52,
+            "pair_max": 210.88,
+            "t36_mean_s": 0.19213
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 206.09,
+            "pair_min": 201.82,
+            "pair_max": 208.53,
+            "t36_mean_s": 0.19375
+          },
+          "speedup_B_over_A": 0.9897,
+          "tokens_identical_A_B": true
+        },
+        "chat": {
+          "status": "ok",
+          "case": "chat",
+          "rounds": 8,
+          "workers": {
+            "A": 16,
+            "B": 16
+          },
+          "max_launch_s": 0.2008,
+          "cotenant_states": [
+            "flint:idle,e4b:idle,qwen:inactive"
+          ],
+          "rounds_dropped_cotenant": 0,
+          "A": {
+            "valid": 8,
+            "differential_tok_s": 207.07,
+            "pair_min": 202.87,
+            "pair_max": 210.54,
+            "t36_mean_s": 0.19766
+          },
+          "B": {
+            "valid": 8,
+            "differential_tok_s": 207.12,
+            "pair_min": 205.03,
+            "pair_max": 211.99,
+            "t36_mean_s": 0.19819
+          },
+          "speedup_B_over_A": 1.0002,
+          "tokens_identical_A_B": true
+        }
+      },
+      "tok_s": {
+        "short4": 206.09,
+        "chat": 207.12
+      },
+      "speedup_vs_best": {
+        "short4": 0.9897,
+        "chat": 1.0002
+      },
+      "emit": {
+        "status": "ok",
+        "suite_s": 2.4,
+        "npz_md5": {
+          "suite/chat_bf16kv.npz": "ca84ee3b28b69e5894e1caa48e3bef17",
+          "suite/chat_fp32_bf16kv.npz": "38ca11bbbdb42b3046480fac518f3016",
+          "suite/chat_fp32kv.npz": "c3d43e9be5ff1c33c055495aa82c0a1e",
+          "suite/short4_bf16kv.npz": "b1b5a5fe95c97e91e073b186077ffa27",
+          "suite/short4_fp32_bf16kv.npz": "3f51dee7b6cb3fc072749fedaa8ab03b",
+          "suite/short4_fp32kv.npz": "764d3ffd7ef85af7014858d2eec0a908",
+          "ppl/ppl__bf16kv.npz": "dcdd42e8576dbc31f2e554e66572db1f",
+          "ppl/ppl__fp32kv.npz": "095113af95846180d04a07f5c30fe6f1"
+        },
+        "ppl_longest_launch_s": 0.1570084449922433
+      },
+      "gates": {
+        "ppl": {
+          "fp32kv": 114114.85273051188,
+          "bf16kv": 114217.0166227086
+        },
+        "ppl_longest_launch_s": 0.1570084449922433,
+        "ppl_rel_vs_incumbent_bf16kv": 0.0,
+        "ppl_gate": true,
+        "rec_pp2": {
+          "pass": true,
+          "items": {
+            "short4/fp32kv": {
+              "pass": true,
+              "step_rel": 1.156108498100375e-06,
+              "last_rel": 8.530526173629791e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.0009115004257483937,
+              "last_rel": 0.000642974166704851,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "short4/bf16kv": {
+              "pass": false,
+              "step_rel": 0.003910329026600476,
+              "last_rel": 0.0027323608449436264,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.732e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.910e-03 > 0.001 (bf16-KV tier)"
+              ]
+            },
+            "chat/fp32kv": {
+              "pass": true,
+              "step_rel": 1.0703087227021327e-06,
+              "last_rel": 8.29351474941078e-07,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/fp32_bf16kv": {
+              "pass": true,
+              "step_rel": 0.00043684485800310756,
+              "last_rel": 0.000311480451863734,
+              "tokens_exact": true,
+              "problems": []
+            },
+            "chat/bf16kv": {
+              "pass": false,
+              "step_rel": 0.0038895373927485682,
+              "last_rel": 0.0028211513839470994,
+              "tokens_exact": true,
+              "problems": [
+                "last_logits rel err 2.821e-03 > 0.001 (bf16-KV tier)",
+                "step_logits max rel err 3.890e-03 > 0.001 (bf16-KV tier)"
+              ]
+            }
+          },
+          "rule": "fp32kv @1e-4 + fp32_bf16kv @1e-3 must PASS on short4+chat; bf16kv production recorded",
+          "inherited_from": "iter0",
+          "note": "all 6 suite npz byte-identical to the incumbent's"
         },
         "pass": true
       },
