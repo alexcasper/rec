@@ -106,3 +106,22 @@ One flag, for honesty: the tie allowance is the piece that makes depth rows pass
 justified by "one ulp on a degenerate trajectory, kernel exonerated against two reference
 paths" — solid, but it is still a gate relaxation. Declining it costs the 1.17× depth
 projection and keeps 1.13× (gqa); nothing else in the matrix changes.
+
+---
+
+## Addendum (2026-11-23 03:20Z — rec-e5d gap closure + iteration 3; gemini-kernels `4ba4c94`, pool updated)
+
+**The draft 2e-6 tie band is now known to be too tight — and possibly unnecessary.** Two new facts:
+
+1. **gqa's own full-config fp32-KV emit @8192** (tokens 24/24 exact, strict 1.215e-4/5.24e-4): **5 k/k+1 ties, two at 3.28e-6 and 2.53e-6 — ABOVE the draft 2e-6 band.** gqa is not tie-free at full config; its earlier "strict-clean" status was mid-8192 only. Forced scoring passes at 9.5e-6. So under the draft amendment, gqa would FAIL too — no build is clean under a 2e-6 band.
+2. **Iteration 3 found lop8** (8 positions per warp iteration): mid ctx8192 **166.82 tok/s (+7.9% over lop4's 154.6)**, ALL mid gates PASS — including **8192 fp32kv STRICT PASS 1.25e-5 with ZERO routing deviations** — determinism, G0 8/8, ppl PASS, short 0.978/0.981 (same SHRINK=0 pin class as def0). Projected full @8192 **~33.0 tok/s (~1.23× vs 26.80)**, UNMEASURED, needs an owner window.
+
+**Revised ruling options** (supersedes the Item-1 option list; evidence unchanged for the exonerations):
+- **(i) Widen the tie band to 4e-6 (~8 fp32 ulps)** — covers every observed tie (4.5–6.6e-7 kernel-side, 2.5–3.3e-6 gqa-side), keeps forced-judging and the ≤1e-4/2e-4 logit tiers as drafted. All builds then quotable; risk: a wider band admits marginally larger router flips (still adjacent-rank only).
+- **(ii) Keep 2e-6 and gate the depth row on lop8**, which ran tie-free at mid 8192 — if its full-config emit is also 0-dev, no allowance is consumed for the shipped build; the allowance exists only to make other builds' historical rows quotable. Risk: lop8's full-config tie behavior is unmeasured until its owner window; if ties appear above 2e-6, the row fails and a re-ruling is needed.
+- **(iii) as drafted (2e-6)** — quotable builds: none at 8192 (lop4/split0/gqa all carry ties above band); depth stays incumbent territory pending lop8.
+- **(iv) depth allowance only, no tie band** — 8192 judged on forced logits (≤2e-4) + ppl + determinism, routing ties recorded informationally. Simplest; weakest router guarantee.
+
+Recommendation: **(ii) with (i) as fallback** — measure lop8 at full depth first (one ~12-min owner window, same shape as the last three); its strict-clean mid record makes it the only candidate that might need no relaxation at all, which is the strongest possible position for the decision matrix. If lop8 shows ties at depth, fall back to (i).
+
+Speed table update (full @8192, vs incumbent 26.80): measured lop4 **31.36 (1.17×)**, gqa 29.53 (1.10×); projected lop8 ~33.0 (1.23×, unmeasured). Mid ctx8192: lop8 166.82, lop4 154.6, split0 96.4, def0 30.09. All commits local (`4ba4c94` gemini-kernels; pool updated); push ledger unchanged.
