@@ -1,0 +1,2 @@
+flint :8080 paused (ops_flint) for rec-e5d confirmation window: DOWN/PAUSED 2026-11-23T01:02:10Z (clean kill, no :8080 listener, health dark, GPU 0%, MemAvailable 17635 MiB). RESTART: pending ops_rec DONE or 30-min timeout (whichever first) — timestamp to be appended below.
+RESTART_UTC: 2026-11-23T01:22:52Z (health ok ~9s after launch; in-band probe depth512 decode 29.48 tok/s, prefill 440.18; ops_rec DONE received 01:21:25Z — 30-min timeout not hit, watcher disarmed).
