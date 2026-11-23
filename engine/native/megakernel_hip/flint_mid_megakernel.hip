@@ -157,10 +157,15 @@
 #endif
 #ifndef GEPA_SHRINK
 #if defined(FLINT_CFG_FULL) && FLINT_CFG_FULL
-// rec-3cr: full config pins SHRINK=0. The out-of-line tail codegen races nondeterministically in the generic K=4096
-// O-proj gemv (row 0 of quads) under layout-perturbing builds (split-K, dump); SHRINK=0 soaked deterministic and
-// passing at full config (16/16 identical, fp32kv 1.55e-6). Keep pinned until sunny-2gg probe coverage lands.
-#define GEPA_SHRINK 0
+// rec-11b: SHRINK=1 is allowed at full config again, but ONLY with the explicit VMEM fence
+// (gepa_vmem_fence) at every q4_rows_tail call site. rec-3cr evidence: the out-of-line tail
+// codegen raced nondeterministically (O-proj K=4096, row 0 of quads; 3 codegens/3 answers),
+// and the race-window disasm shows the caller keeps vmcnt(2) outstanding ACROSS the call and
+// the callee entry waits vmcnt(0)/expcnt(0)/lgkmcnt(0) but NOT vscnt — while the caller holds
+// 144 B of scratch spill traffic (90 stores / 111 reloads, s1 k_gfx1150.s). The fence closes
+// the same-type-WAW/WAR + vscnt-never-waited corner (class B, sunny memo 6dbb2bc) at the
+// boundary instead of pinning the codegen.
+#define GEPA_SHRINK 1
 #else
 #define GEPA_SHRINK 1   // PROMOTED (rec-fut run 4, c033): +3.05/+3.59 % ABBA, replicate +2.65/+2.27 %, byte-identical to 24f167d
 #endif
@@ -471,6 +476,25 @@ __device__ inline void q4_gemv_cat2048(const Q4Cat& c, const float* __restrict__
 
 // Partial-quad rows (n % 4 != 0), unstaged, blocks in order: the exact arithmetic of the in-line tails.
 // GEPA_SHRINK calls this out of line so the never-taken tails leave the hot instruction stream.
+// rec-11b: the boundary fence is FULL-CONFIG ONLY (FLINT_CFG_FULL) — the promoted mid short-ctx
+// build (c033) stays byte-identical to 24f167d, and the race was only ever observed on the full
+// K=4096 O-proj path. Mid keeps its proven SHRINK=1 codegen untouched.
+#if GEPA_SHRINK && defined(FLINT_CFG_FULL)
+// rec-11b class-B boundary fence (see the GEPA_SHRINK comment): fully drain VMEM before
+// entering / resuming around the out-of-line tail — loads (vmcnt) AND stores (vscnt, the
+// gfx10+ counter the caller never waits). Tails are rare partial quads, so the cost is off
+// the hot path. Keep in sync with any new q4_rows_tail call site.
+__device__ __forceinline__ void gepa_vmem_fence() {
+    asm volatile("s_waitcnt vmcnt(0)\n\ts_waitcnt_vscnt null, 0x0" ::: "memory");
+}
+#ifndef GEPA_FENCE_TAIL
+#define GEPA_FENCE_TAIL 1
+#endif
+#else
+#ifndef GEPA_FENCE_TAIL
+#define GEPA_FENCE_TAIL 0
+#endif
+#endif
 template <int K, bool ROUND_BF16, int XU, bool XPURE>
 __device__ __attribute__((noinline)) void q4_rows_tail(const uint8_t* __restrict__ w, const bf16* __restrict__ s,
                                                        const bf16* __restrict__ b, const float* __restrict__ x,
@@ -708,8 +732,9 @@ __device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict
             } else {
                 sum = load16_f(x + scalar, v);
             }
-#if GEPA_SHRINK
+#if GEPA_FENCE_TAIL
             if (first + 4 > n) {
+                gepa_vmem_fence();
                 q4_rows_tail<K, ROUND_BF16, XU, XPURE>(w, s, b, x, out_bf, out_f, first, n, lane GEPA_ACC_ARG);
                 continue;
             }
@@ -931,7 +956,8 @@ __device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict
         }
         // partial trailing quad (n % 4 != 0): unstaged, one row at a time, blocks in order (as before)
         for (; first < n; first += step) {
-#if GEPA_SHRINK
+#if GEPA_FENCE_TAIL
+            gepa_vmem_fence();
             q4_rows_tail<K, ROUND_BF16, XU, XPURE>(w, s, b, x, out_bf, out_f, first, first + 4 < n ? first + 4 : n, lane
                                                   GEPA_ACC_ARG);
             continue;
