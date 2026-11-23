@@ -9183,6 +9183,78 @@
     0.9622
    ],
    "outcome": "strict-clean alternative depth build; same caveats"
+  },
+  {
+   "config": "FULL Flint (flint-int4), dusk, depth8192 seeded prompt, production bf16-KV ABBA 12 pairs (depth 8215..8265, k=3)",
+   "source_commit": "390c4cd",
+   "record_commit": "9a57e3c",
+   "incumbent_8192": 26.8,
+   "window": ":8080 paused 01:02:10Z (ops_flint) -> run 01:07:26-01:21:25Z -> restarted 01:22:52Z (in-band 29.48); ~20.7 min down (0.7 over cap: pre-start confirmation wait)",
+   "cotenants": "E4B 200, qwen3vl 200/200, llama-qwen inactive, display ACTIVE, busy 0 at preflight; per line in window.log",
+   "id": "e5d-full8k-lop4",
+   "time": "2026-11-23T01:55:45Z",
+   "knobs": {
+    "FLINT_CFG_FULL": 1,
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 4
+   },
+   "lib_sha256_prefix": "d01d28a4c273c2cf",
+   "decode_tok_s_8192": 31.36,
+   "valid_pairs": "12/12",
+   "vs_incumbent": 1.17,
+   "vs_split_k_21_55": 1.455,
+   "prefill_8192_s": 278.4,
+   "fp32kv_8192": {
+    "tokens_exact": true,
+    "strict": "FAIL last 7.412e-2 / step 0.2969 (3 routing devs; identical to default/split; unforced trajectory)",
+    "routing_devs": [
+     {
+      "layer": 3,
+      "pos": 3232,
+      "gap": 4.77e-07
+     },
+     {
+      "layer": 26,
+      "pos": 3255,
+      "gap": 4.47e-07
+     },
+     {
+      "layer": 38,
+      "pos": 6456,
+      "gap": 2.09e-07
+     }
+    ],
+    "forced_max": 1.93e-05,
+    "forced_pass_1e-4": true,
+    "note": "forced = rec-kcb proposal, NOT enacted"
+   },
+   "determinism_full": "1 session only (mid: PASS suite x2, wrap512 x3, 8192 x2)",
+   "outcome": "MEASURED M3 depth build: 1.170x incumbent @8192 ungated; strict fp32-KV fails only via 1-ulp router ties; promotion Alex-gated (rec-kcb)"
+  },
+  {
+   "config": "FULL Flint (flint-int4), dusk, depth8192 seeded prompt, production bf16-KV ABBA 12 pairs (depth 8215..8265, k=3)",
+   "source_commit": "390c4cd",
+   "record_commit": "9a57e3c",
+   "incumbent_8192": 26.8,
+   "window": ":8080 paused 01:02:10Z (ops_flint) -> run 01:07:26-01:21:25Z -> restarted 01:22:52Z (in-band 29.48); ~20.7 min down (0.7 over cap: pre-start confirmation wait)",
+   "cotenants": "E4B 200, qwen3vl 200/200, llama-qwen inactive, display ACTIVE, busy 0 at preflight; per line in window.log",
+   "id": "e5d-full8k-gqa",
+   "time": "2026-11-23T01:55:45Z",
+   "knobs": {
+    "FLINT_CFG_FULL": 1,
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_GQA": 1
+   },
+   "lib_sha256_prefix": "430b6f260ff6bc14",
+   "decode_tok_s_8192": 29.53,
+   "valid_pairs": "12/12",
+   "vs_incumbent": 1.102,
+   "vs_split_k_21_55": 1.37,
+   "prefill_8192_s": 294.9,
+   "fp32kv_8192": "not emitted at full config (mid strict PASS 1.24e-5)",
+   "determinism_full": "1 session only (mid PASS)",
+   "outcome": "fallback depth build: 1.102x incumbent @8192 ungated; full-config fp32-KV unmeasured"
   }
  ],
  "incumbent_history": [
