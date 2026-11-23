@@ -146,6 +146,21 @@
 #endif
 typedef __bf16 gepa_bf16x2 __attribute__((ext_vector_type(2)));
 #endif
+// rec-sj3 iter 7 (on the DOT2 base), production mode only, validation modes exact:
+// GEPA_ATTN_DOT2_SHORT (a): packed v_dot2_f32_bf16 q.k on the non-split one-warp-per-head path (n_ctx <= SPLIT_MIN, sinks folded
+//   in as before); scale applied after simd_sum.
+// GEPA_ATTN_DOT2_EXP2 (b): scale placement on the DOT2 LOP path: the reduced score is multiplied by MID_ATTN_SCALE*log2(e) and the
+//   online softmax uses exp2f; the running max is converted back to natural units (x ln 2) before the lane-group merge, so the
+//   partial layout and the shared split merge are unchanged.
+#ifndef GEPA_ATTN_DOT2_SHORT
+#define GEPA_ATTN_DOT2_SHORT 0
+#endif
+#ifndef GEPA_ATTN_DOT2_EXP2
+#define GEPA_ATTN_DOT2_EXP2 0
+#endif
+#if (GEPA_ATTN_DOT2_SHORT || GEPA_ATTN_DOT2_EXP2) && !GEPA_ATTN_DOT2
+#error "GEPA_ATTN_DOT2_SHORT / GEPA_ATTN_DOT2_EXP2 require GEPA_ATTN_DOT2"
+#endif
 #ifndef GEPA_ATTN_NSPLIT
 #define GEPA_ATTN_NSPLIT 0
 #endif
@@ -1707,7 +1722,11 @@ __device__ inline void mid_generate_impl(
                         #pragma unroll
                         for (int off = LW / 2; off >= 1; off >>= 1)
                             partial += __shfl_xor_sync(0xffffffffffffffffull, partial, off);
+#if GEPA_ATTN_DOT2_EXP2
+                        if constexpr (D2) partial *= MID_ATTN_SCALE * 1.4426950408889634f;   // log2 units
+#else
                         if constexpr (D2) partial *= MID_ATTN_SCALE;
+#endif
 #else
                         float partial = 0.0f;
                         #pragma unroll
@@ -1716,6 +1735,23 @@ __device__ inline void mid_generate_impl(
                         for (int off = LW / 2; off >= 1; off >>= 1)
                             partial += __shfl_xor_sync(0xffffffffffffffffull, partial, off);
 #endif
+#if GEPA_ATTN_DOT2_EXP2
+                        if (live) {
+                            if (partial > hi) {
+                                const float f = D2 ? exp2f(hi - partial) : expf(hi - partial);
+                                #pragma unroll
+                                for (int j = 0; j < LD; ++j) a16[j] = a16[j] * f + vf[j];
+                                z = z * f + 1.0f; hi = partial;
+                            } else {
+                                const float f = D2 ? exp2f(partial - hi) : expf(partial - hi);
+                                #pragma unroll
+                                for (int j = 0; j < LD; ++j) a16[j] += f * vf[j];
+                                z += f;
+                            }
+                        }
+                    }
+                    if constexpr (D2) hi *= 0.6931471805599453f;            // log2 -> natural units for the merge
+#else
                         if (live) {
                             if (partial > hi) {
                                 const float f = expf(hi - partial);
@@ -1730,6 +1766,7 @@ __device__ inline void mid_generate_impl(
                             }
                         }
                     }
+#endif
                     {   // merge the LP position groups (lanes sl, sl+LW, ... hold the same dims)
                         float H = hi;
                         #pragma unroll
@@ -1825,16 +1862,41 @@ __device__ inline void mid_generate_impl(
                     if constexpr (!PURE_FP32) qv = tofloat(tobf(qv));
                     qreg[j] = qv * MID_ATTN_SCALE;
                 }
+#if GEPA_ATTN_DOT2_SHORT
+                uint32_t qps[2];                                        // unscaled bf16 q pairs (dims lane*4 .. +3)
+                #pragma unroll
+                for (int j = 0; j < 2; ++j)
+                    qps[j] = (uint32_t)__builtin_bit_cast(uint16_t, tobf(ws_q[(size_t)h * MID_HDIM + lane * 4 + 2 * j])) |
+                             ((uint32_t)__builtin_bit_cast(uint16_t, tobf(ws_q[(size_t)h * MID_HDIM + lane * 4 + 2 * j + 1])) << 16);
+#endif
                 float hi = tofloat(sinks[h]);
                 float z = 1.0f;
                 for (int t = t_start; t <= pos; ++t) {
                     size_t t_slot = is_sliding ? (size_t)(t % MID_WIN) : (size_t)t;
                     const KVT* kt = kc + t_slot * MID_HDIM + lane * 4;
                     const KVT* vt = vc + t_slot * MID_HDIM + lane * 4;
+#if GEPA_ATTN_DOT2_SHORT
+                    float score;
+                    if constexpr (!PURE_FP32 && sizeof(KVT) == 2) {
+                        const uint32_t* kp = reinterpret_cast<const uint32_t*>(kt);
+                        float partial = 0.0f;
+                        #pragma unroll
+                        for (int j = 0; j < 2; ++j)
+                            partial = __builtin_amdgcn_fdot2_f32_bf16(__builtin_bit_cast(gepa_bf16x2, qps[j]),
+                                                                      __builtin_bit_cast(gepa_bf16x2, kp[j]), partial, false);
+                        score = simd_sum(partial) * MID_ATTN_SCALE;
+                    } else {
+                        float partial = 0.0f;
+                        #pragma unroll
+                        for (int j = 0; j < 4; ++j) partial += qreg[j] * kv_load<KVT, PURE_FP32>(kt[j]);
+                        score = simd_sum(partial);
+                    }
+#else
                     float partial = 0.0f;
                     #pragma unroll
                     for (int j = 0; j < 4; ++j) partial += qreg[j] * kv_load<KVT, PURE_FP32>(kt[j]);
                     float score = simd_sum(partial);
+#endif
                     float next = fmaxf(hi, score);
                     float low = expf(-fabsf(score - hi));
                     bool wins = score > hi;
