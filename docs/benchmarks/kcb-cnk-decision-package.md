@@ -158,3 +158,30 @@ Recommendation stands: ratify v1 + Item-1 amendment as drafted; ship lop8 as the
 build. The megakernel then holds gated wins at BOTH decision depths — 1.14× @512 and 1.22×
 @8192 — with footprint 21.0 GiB vs 18.5 GB (bytes/token disclosed per row) and prefill
 remaining the known open gap (37 vs 450 pos/s serial; batched prefill queued).
+
+## Addendum 3 (2026-11-23 11:40Z — lop8f CONFIRMED; supersedes lop8 as the recommended depth build)
+
+**lop8f** (lop8 + SHRINK=1 re-enabled + the rec-11b fence, sha ec34a711) measured in the
+rec04i window (4/4 rc 0, longest launch 0.191 s, 34.6 min downtime):
+
+- **depth8192: 33.42 tok/s (12/12 stable ABBA pairs) = 1.247× vs incumbent 26.80** — front-best,
+  supersedes lop8's 32.73. Projection track: 33.0 → 32.73 (lop8) → 33.42 (lop8f).
+- wrap512 determinism PASS both KV modes ×2 fresh, md5s (fp32kv dabb2919, bf16kv eec63518)
+  **identical to the SHRINK=0 pin's outputs** — the fence re-enables SHRINK output-neutrally.
+- speed512 on the same build: 25.04 tok/s vs R11r 24.75 (+1.2%).
+- ppl eval_set_full_v1 bf16kv 3.2987 (matches lop8); fp32kv emit @8192 recorded (md5 c142fc53),
+  dawn scoring (strict/forced + tie census) is the one formal step open.
+- Residual: 8192 fp32kv ×2-fresh determinism formalization folds into the next window
+  (in-window emit md5 8e8c0124 matches the historical deterministic default-build md5 —
+  evidence green, pair formalization pending).
+
+**Single-build consequence:** with SHRINK re-enabled, lop8f covers BOTH decision depths —
+no separate 512/8192 builds. The @512 0.84× shrunk-build row (R11r) is obsolete as a
+build-selection problem; a re-baselined @512 row on lop8f (one short window) would replace it.
+
+**The ruling Alex owes is unchanged and now settles more:** ratify rec-kcb v1 + the rec-cnk
+amendment (2e-6 forced-judging; lop8f's tie census lands with its fp32kv scoring) → the
+megakernel ships gated at **1.14× @512 (33.55, split-K+SHRINK=0) and 1.25× @8192 (33.42,
+lop8f)** vs the incumbent's 29.39/26.80 — or adopt llama.cpp for the depth rows on paper while
+the measured wins go unquoted. Footnote as always: footprint 21.0 GiB vs 18.5 GB, prefill
+37 vs 450 pos/s (batched prefill queued).
