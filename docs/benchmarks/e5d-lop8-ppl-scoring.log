@@ -1,0 +1,13 @@
+# rec-e5d lop8 full-config ppl gate scoring (coordinator, 2026-11-23, scored on dusk)
+# source npz: dusk:~/rec-ve/m3window/e5dlop8-20261123T040930Z/lop8_ppl/{ppl__fp32kv,ppl__bf16kv}.npz
+# (combined raw npz pair archived as e5d-lop8-ppl-npz-combined.bin — concatenation, split by size)
+# evalset sha256 prefix: 1b06d9280fe6e1e9 (identical across both tiers)
+# tokens: 1528 (8 seqs x 191 positions)
+# ppl fp32kv: 3.2803 | ppl bf16kv: 3.2987 | delta 0.5565% — GATE <1%: PASS
+# top1 agreement fp32kv-vs-bf16kv: 98.43%
+# gate evidence now complete for the lop8 full-config build:
+#   determinism PASS (wrap512 fp32kv+bf16kv, 2 fresh repeats each, identical md5s)
+#   ppl PASS (this scoring)
+#   + depth8192 perf row 32.73 tok/s (12/12 stable pairs) = 1.22x vs incumbent 26.80
+# combined bin sha256:
+621b3ed11455fbed64327c7f78fff2c7a0a0553ca5c23c25c6ff8b72273dd8f2
