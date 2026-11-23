@@ -1,0 +1,33 @@
+{
+ "case": "wrap512",
+ "positions": 536,
+ "lib": "/home/dusk/rec-ve/bisect/e5d/full_lop4.so",
+ "builds": {
+  "fp32kv": {
+   "md5": [
+    "7579906f26162b7c7cbad6bf2c6ec0f0",
+    "7579906f26162b7c7cbad6bf2c6ec0f0"
+   ],
+   "fresh_repeats": 2,
+   "deterministic": true,
+   "speed": null,
+   "t_pos_s": [
+    0.03,
+    0.03
+   ]
+  },
+  "bf16kv": {
+   "md5": [
+    "ee87c6fe4344d221fd91de8a2a4378fd",
+    "ee87c6fe4344d221fd91de8a2a4378fd"
+   ],
+   "fresh_repeats": 2,
+   "deterministic": true,
+   "speed": null,
+   "t_pos_s": [
+    0.03,
+    0.03
+   ]
+  }
+ }
+}

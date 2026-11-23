@@ -1,0 +1,19 @@
+02:25:40Z +0s preflight e5d gap closure | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=16.9GiB vram_free=38.7GiB
+d01d28a4c273c2cf10a7f24ad90b6e0cb4087df3b5eef7d7e81c6e7628b8e30f  /home/dusk/rec-ve/bisect/e5d/full_lop4.so
+430b6f260ff6bc146b78b59e6b63fdf2027beeffda91780d456e49667dca1c95  /home/dusk/rec-ve/bisect/e5d/full_gqa.so
+02:25:40Z +0s START gqa_fp32kv (budget 290s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=16.9GiB vram_free=38.7GiB
+2026-11-23T02:30:18Z GATE depth8192_fp32kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 6ce09a88ecee launches 1748 longest 0.174 s, 35.4 ms/pos, 273.3 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,MemAvailable=16.8GiB
+02:30:18Z +278s END gqa_fp32kv rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=91 MemAvailable=17.0GiB vram_free=38.7GiB
+02:30:18Z +278s START lop4_det512 (budget 150s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=86 MemAvailable=17.0GiB vram_free=38.7GiB
+2026-11-23T02:30:56Z GATE wrap512_fp32kv.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 7579906f2616 launches 108 longest 0.162 s, 30.0 ms/pos, 33.6 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.9GiB
+2026-11-23T02:31:20Z GATE wrap512_fp32kv_r1.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 7579906f2616 launches 108 longest 0.163 s, 30.0 ms/pos, 24.1 s | flint:down,e4b:idle,qwen:down,gpu_busy=97,MemAvailable=16.8Gi
+2026-11-23T02:31:44Z GATE wrap512_bf16kv.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 ee87c6fe4344 launches 108 longest 0.159 s, 30.0 ms/pos, 23.3 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8GiB
+2026-11-23T02:32:08Z GATE wrap512_bf16kv_r1.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 ee87c6fe4344 launches 108 longest 0.159 s, 30.0 ms/pos, 23.8 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8G
+02:32:08Z +388s END lop4_det512 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=91 MemAvailable=17.0GiB vram_free=38.7GiB
+02:32:08Z +388s START gqa_det512 (budget 150s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=86 MemAvailable=17.0GiB vram_free=38.7GiB
+2026-11-23T02:32:46Z GATE wrap512_fp32kv.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 5e1029b9e231 launches 108 longest 0.168 s, 30.0 ms/pos, 34.0 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,MemAvailable=16.8GiB
+2026-11-23T02:33:10Z GATE wrap512_fp32kv_r1.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 5e1029b9e231 launches 108 longest 0.171 s, 30.0 ms/pos, 23.9 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8G
+2026-11-23T02:33:35Z GATE wrap512_bf16kv.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 332ca2bedb27 launches 108 longest 0.168 s, 30.0 ms/pos, 24.5 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8GiB
+2026-11-23T02:34:00Z GATE wrap512_bf16kv_r1.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 332ca2bedb27 launches 108 longest 0.168 s, 30.0 ms/pos, 24.5 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8G
+02:34:00Z +500s END gqa_det512 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.0GiB vram_free=38.7GiB
+02:34:00Z +500s done -> signal ops_flint to restart :8080 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=87 MemAvailable=17.0GiB vram_free=38.7GiB

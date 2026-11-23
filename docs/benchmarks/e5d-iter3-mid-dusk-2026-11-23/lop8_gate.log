@@ -1,0 +1,16 @@
+02:57:10Z [lop8] start sha d3198ff5ce33235d | busy=0 8080=200 MemAvail=16.4GiB
+suite determinism (2 emits): PASS 8 | G0 vs 24f167d: 8 / 8
+wrap512 fp32kv determinism: PASS
+wrap512 fp32_bf16kv determinism: PASS
+wrap512 bf16kv determinism: PASS
+{"fp32kv": {"launches": 15, "longest_s": 0.2335, "tokens6": [132421, 115526, 44734, 83939, 35350, 22141], "positions": 536}, "fp32_bf16kv": {"launches": 15, "longest_s": 0.2326, "tokens6": [132421, 11
+2026-11-23T02:59:59Z GATE depth8192_fp32kv.npz: tokens[:6]=[59404, 107761, 85638, 137578, 105545, 21172] md5 14814c8311e6 launches 1644 longest 0.040 s, 30.0 ms
+2026-11-23T03:00:46Z GATE depth8192_fp32kv_r1.npz: tokens[:6]=[59404, 107761, 85638, 137578, 105545, 21172] md5 14814c8311e6 launches 1644 longest 0.040 s, 30.0
+2026-11-23T03:00:46Z DETERMINISM fp32kv: PASS (2 fresh-session emits)
+2026-11-23T03:00:50Z PPL fp32kv: (8, 31) nll 11.644961 ppl 114114.8527 longest 0.012 s, 3.4 s | flint:idle,e4b:idle,qwen:down,gpu_busy=87,Me
+2026-11-23T03:00:54Z PPL bf16kv: (8, 31) nll 11.645856 ppl 114217.0166 longest 0.013 s, 3.3 s | flint:idle,e4b:idle,qwen:down,gpu_busy=88,Me
+2026-11-23T03:01:12Z PPL fp32kv: (8, 191) nll 12.087135 ppl 177572.6230 longest 0.013 s, 18.1 s | flint:idle,e4b:idle,qwen:down,gpu_busy=91,
+2026-11-23T03:01:30Z PPL bf16kv: (8, 191) nll 12.087792 ppl 177689.2945 longest 0.013 s, 17.8 s | flint:idle,e4b:idle,qwen:down,gpu_busy=89,
+short4 ABBA vs 2b98737: ok promo 217.57 cand 212.69 B/A 0.9776 drops 0 ['flint:idle,e4b:idle,qwen:inactive']
+chat ABBA vs 2b98737: ok promo 217.14 cand 213.03 B/A 0.9811 drops 0 ['flint:idle,e4b:idle,qwen:inactive']
+03:02:26Z [lop8] done | busy=36 8080=200 MemAvail=16.4GiB

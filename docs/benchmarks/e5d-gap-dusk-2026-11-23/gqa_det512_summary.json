@@ -1,0 +1,33 @@
+{
+ "case": "wrap512",
+ "positions": 536,
+ "lib": "/home/dusk/rec-ve/bisect/e5d/full_gqa.so",
+ "builds": {
+  "fp32kv": {
+   "md5": [
+    "5e1029b9e2310db182845eb9ce58e998",
+    "5e1029b9e2310db182845eb9ce58e998"
+   ],
+   "fresh_repeats": 2,
+   "deterministic": true,
+   "speed": null,
+   "t_pos_s": [
+    0.03,
+    0.03
+   ]
+  },
+  "bf16kv": {
+   "md5": [
+    "332ca2bedb27c946747cae534c2860b0",
+    "332ca2bedb27c946747cae534c2860b0"
+   ],
+   "fresh_repeats": 2,
+   "deterministic": true,
+   "speed": null,
+   "t_pos_s": [
+    0.03,
+    0.03
+   ]
+  }
+ }
+}

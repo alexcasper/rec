@@ -1,0 +1,18 @@
+2026-11-23T02:25:40Z offset table /home/dusk/xh7/flint-int4.off.npy
+2026-11-23T02:25:45Z VRAM preflight: need 21.83 GiB + 1.5 slack, sysfs free 38.74 GiB (waited 0.0 s) | flint:down,e4b:idle,qwen:down,gpu_busy=0,MemAvailable=16.9GiB
+2026-11-23T02:25:45Z bank stream   0.25/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=16.6GiB
+2026-11-23T02:25:46Z bank stream   2.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=4,MemAvailable=16.6GiB
+2026-11-23T02:25:48Z bank stream   4.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=5,MemAvailable=16.6GiB
+2026-11-23T02:25:50Z bank stream   6.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=5,MemAvailable=16.6GiB
+2026-11-23T02:25:52Z bank stream   8.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=5,MemAvailable=16.6GiB
+2026-11-23T02:25:53Z bank stream  10.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=4,MemAvailable=16.4GiB
+2026-11-23T02:25:55Z bank stream  12.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=4,MemAvailable=16.3GiB
+2026-11-23T02:25:57Z bank stream  14.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=5,MemAvailable=16.3GiB
+2026-11-23T02:25:58Z bank stream  16.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=5,MemAvailable=16.3GiB
+2026-11-23T02:26:00Z bank stream  18.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=5,MemAvailable=16.3GiB
+2026-11-23T02:26:02Z bank stream  20.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=5,MemAvailable=16.5GiB
+2026-11-23T02:26:03Z bank stream  21.02/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=5,MemAvailable=16.6GiB
+2026-11-23T02:26:03Z session created in 18.8 s (bank 21.019 GiB streamed H2D, 1.12 GiB/s) | flint:down,e4b:idle,qwen:down,gpu_busy=5,MemAvailable=16.8GiB
+2026-11-23T02:30:18Z GATE depth8192_fp32kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 6ce09a88ecee launches 1748 longest 0.174 s, 35.4 ms/pos, 273.3 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,MemAvailable=16.8GiB
+2026-11-23T02:30:18Z DETERMINISM fp32kv: not tested (1 emit) (1 fresh-session emits)
+{"case": "depth8192", "positions": 8216, "lib": "/home/dusk/rec-ve/bisect/e5d/full_gqa.so", "builds": {"fp32kv": {"md5": ["6ce09a88ecee3aca1e61402fbad46f78"], "fresh_repeats": 1, "deterministic": null, "speed": null, "t_pos_s": [0.03543602750141872]}}}

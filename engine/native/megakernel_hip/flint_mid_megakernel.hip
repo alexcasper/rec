@@ -120,6 +120,12 @@
 #ifndef GEPA_ATTN_LOP
 #define GEPA_ATTN_LOP 0
 #endif
+#ifndef GEPA_ATTN_LOP_PF
+#define GEPA_ATTN_LOP_PF 0
+#endif
+#ifndef GEPA_ATTN_LOP_UNROLL
+#define GEPA_ATTN_LOP_UNROLL 1
+#endif
 #if GEPA_ATTN_GQA && GEPA_ATTN_SPLIT
 #error "GEPA_ATTN_GQA and GEPA_ATTN_SPLIT are alternative depth-attention paths"
 #endif
@@ -1412,15 +1418,18 @@ __device__ inline void mid_generate_impl(
                         if constexpr (!PURE_FP32) qv = tofloat(tobf(qv));
                         qreg[j] = qv * MID_ATTN_SCALE;
                     }
-#if GEPA_ATTN_LOP == 4
-                    // candidate (1) lanes-over-positions: 4 positions per iteration, lane group pg = lane/8 takes t+pg,
-                    // sub-lane sl = lane%8 holds dims [sl*16, sl*16+16): 3-step reduction instead of 5; groups merged at
-                    // the end into the same per-(head, chunk) partial. qreg/acc of the 1-lane-4-dim form are unused.
-                    const int pg = lane >> 3, sl = lane & 7;
-                    float q16[16], a16[16];
+#if GEPA_ATTN_LOP
+                    // candidate (1) lanes-over-positions: LP positions per iteration; lane group pg = lane / LW takes t + pg,
+                    // sub-lane sl = lane % LW holds dims [sl*LD, sl*LD+LD): log2(LW)-step reduction instead of 5; groups merged
+                    // at the end into the same per-(head, chunk) partial. iter 3: GEPA_ATTN_LOP_PF prefetches the next
+                    // iteration's K/V into registers; GEPA_ATTN_LOP_UNROLL unrolls the position loop.
+                    constexpr int LP = GEPA_ATTN_LOP, LW = 32 / LP, LD = MID_HDIM / LW;
+                    static_assert(LP == 4 || LP == 8, "GEPA_ATTN_LOP must be 4 or 8");
+                    const int pg = lane / LW, sl = lane % LW;
+                    float q16[LD], a16[LD];
                     #pragma unroll
-                    for (int j = 0; j < 16; ++j) {
-                        float qv = ws_q[(size_t)h * MID_HDIM + sl * 16 + j];
+                    for (int j = 0; j < LD; ++j) {
+                        float qv = ws_q[(size_t)h * MID_HDIM + sl * LD + j];
                         if constexpr (!PURE_FP32) qv = tofloat(tobf(qv));
                         q16[j] = qv * MID_ATTN_SCALE;
                         a16[j] = 0.0f;
@@ -1428,48 +1437,84 @@ __device__ inline void mid_generate_impl(
                     float hi = -INFINITY, z = 0.0f;
                     const int ta = t_start + c * clen;
                     const int tb = (ta + clen - 1 < pos) ? ta + clen - 1 : pos;
-                    for (int t0 = ta; t0 <= tb; t0 += 4) {
+                    auto slot_of = [&](int t0) -> size_t {
                         const int t = t0 + pg;
-                        const bool live = t <= tb;
-                        const int tt = live ? t : tb;
-                        const size_t t_slot = is_sliding ? (size_t)(tt % MID_WIN) : (size_t)tt;
-                        const KVT* kt = kc + t_slot * MID_HDIM + sl * 16;
-                        const KVT* vt = vc + t_slot * MID_HDIM + sl * 16;
+                        const int tt = t <= tb ? t : tb;
+                        return is_sliding ? (size_t)(tt % MID_WIN) : (size_t)tt;
+                    };
+#if GEPA_ATTN_LOP_PF
+                    float kn[LD], vn[LD];
+                    {
+                        const size_t s0 = slot_of(ta);
+                        #pragma unroll
+                        for (int j = 0; j < LD; ++j) {
+                            kn[j] = kv_load<KVT, PURE_FP32>(kc[s0 * MID_HDIM + sl * LD + j]);
+                            vn[j] = kv_load<KVT, PURE_FP32>(vc[s0 * MID_HDIM + sl * LD + j]);
+                        }
+                    }
+#endif
+#if GEPA_ATTN_LOP_UNROLL > 1
+                    #pragma unroll GEPA_ATTN_LOP_UNROLL
+#endif
+                    for (int t0 = ta; t0 <= tb; t0 += LP) {
+                        const bool live = t0 + pg <= tb;
+                        float kf[LD], vf[LD];
+#if GEPA_ATTN_LOP_PF
+                        #pragma unroll
+                        for (int j = 0; j < LD; ++j) { kf[j] = kn[j]; vf[j] = vn[j]; }
+                        if (t0 + LP <= tb) {                       // uniform: next iteration exists
+                            const size_t s1 = slot_of(t0 + LP);
+                            #pragma unroll
+                            for (int j = 0; j < LD; ++j) {
+                                kn[j] = kv_load<KVT, PURE_FP32>(kc[s1 * MID_HDIM + sl * LD + j]);
+                                vn[j] = kv_load<KVT, PURE_FP32>(vc[s1 * MID_HDIM + sl * LD + j]);
+                            }
+                        }
+#else
+                        {
+                            const size_t s0 = slot_of(t0);
+                            #pragma unroll
+                            for (int j = 0; j < LD; ++j) {
+                                kf[j] = kv_load<KVT, PURE_FP32>(kc[s0 * MID_HDIM + sl * LD + j]);
+                                vf[j] = kv_load<KVT, PURE_FP32>(vc[s0 * MID_HDIM + sl * LD + j]);
+                            }
+                        }
+#endif
                         float partial = 0.0f;
                         #pragma unroll
-                        for (int j = 0; j < 16; ++j) partial += q16[j] * kv_load<KVT, PURE_FP32>(kt[j]);
-                        partial += __shfl_xor_sync(0xffffffffffffffffull, partial, 4);
-                        partial += __shfl_xor_sync(0xffffffffffffffffull, partial, 2);
-                        partial += __shfl_xor_sync(0xffffffffffffffffull, partial, 1);
+                        for (int j = 0; j < LD; ++j) partial += q16[j] * kf[j];
+                        #pragma unroll
+                        for (int off = LW / 2; off >= 1; off >>= 1)
+                            partial += __shfl_xor_sync(0xffffffffffffffffull, partial, off);
                         if (live) {
                             if (partial > hi) {
                                 const float f = expf(hi - partial);
                                 #pragma unroll
-                                for (int j = 0; j < 16; ++j) a16[j] = a16[j] * f + kv_load<KVT, PURE_FP32>(vt[j]);
+                                for (int j = 0; j < LD; ++j) a16[j] = a16[j] * f + vf[j];
                                 z = z * f + 1.0f; hi = partial;
                             } else {
                                 const float f = expf(partial - hi);
                                 #pragma unroll
-                                for (int j = 0; j < 16; ++j) a16[j] += f * kv_load<KVT, PURE_FP32>(vt[j]);
+                                for (int j = 0; j < LD; ++j) a16[j] += f * vf[j];
                                 z += f;
                             }
                         }
                     }
-                    {   // merge the 4 position groups into lanes of group 0, in the 1-lane-4-dim partial layout
+                    {   // merge the LP position groups (lanes sl, sl+LW, ... hold the same dims)
                         float H = hi;
-                        H = fmaxf(H, __shfl_xor_sync(0xffffffffffffffffull, H, 8));
-                        H = fmaxf(H, __shfl_xor_sync(0xffffffffffffffffull, H, 16));
+                        #pragma unroll
+                        for (int off = LW; off < 32; off <<= 1) H = fmaxf(H, __shfl_xor_sync(0xffffffffffffffffull, H, off));
                         const float w = (z > 0.0f) ? expf(hi - H) : 0.0f;
                         float zz = z * w;
-                        zz += __shfl_xor_sync(0xffffffffffffffffull, zz, 8);
-                        zz += __shfl_xor_sync(0xffffffffffffffffull, zz, 16);
+                        #pragma unroll
+                        for (int off = LW; off < 32; off <<= 1) zz += __shfl_xor_sync(0xffffffffffffffffull, zz, off);
                         float* pp = part + (size_t)u * PSTR;
                         #pragma unroll
-                        for (int j = 0; j < 16; ++j) {
+                        for (int j = 0; j < LD; ++j) {
                             float a_ = a16[j] * w;
-                            a_ += __shfl_xor_sync(0xffffffffffffffffull, a_, 8);
-                            a_ += __shfl_xor_sync(0xffffffffffffffffull, a_, 16);
-                            if (pg == 0) pp[sl * 16 + j] = a_;
+                            #pragma unroll
+                            for (int off = LW; off < 32; off <<= 1) a_ += __shfl_xor_sync(0xffffffffffffffffull, a_, off);
+                            if (pg == 0) pp[sl * LD + j] = a_;
                         }
                         if (lane == 0) { pp[MID_HDIM] = H; pp[MID_HDIM + 1] = zz; }
                     }

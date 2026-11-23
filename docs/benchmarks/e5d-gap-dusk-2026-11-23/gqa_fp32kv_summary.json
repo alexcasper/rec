@@ -1,0 +1,18 @@
+{
+ "case": "depth8192",
+ "positions": 8216,
+ "lib": "/home/dusk/rec-ve/bisect/e5d/full_gqa.so",
+ "builds": {
+  "fp32kv": {
+   "md5": [
+    "6ce09a88ecee3aca1e61402fbad46f78"
+   ],
+   "fresh_repeats": 1,
+   "deterministic": null,
+   "speed": null,
+   "t_pos_s": [
+    0.03543602750141872
+   ]
+  }
+ }
+}
