@@ -9482,6 +9482,34 @@
    "ppl": "fp32kv 3.2803 / bf16kv 3.2987, delta 0.5609% < 1% PASS \u2014 bit-identical to SHRINK=0 lop8 (3.2803/3.2987), confirms output-equivalence",
    "verdict": "SHRINK=1+fence is output-identical to the pinned SHRINK=0 build at equal-or-better speed (+2.1%, within noise) and is the cleaner default recipe; the -DGEPA_SHRINK=0 pin remains for exact reproduction of the 8816eebf measurement row",
    "record_commit": "PENDING"
+  },
+  {
+   "id": "rec04j-lop8f-512-full",
+   "time": "2026-11-23T14:42:12Z",
+   "knobs": {
+    "FLINT_CFG_FULL": 1,
+    "GEPA_SHRINK": 1,
+    "GEPA_FENCE_TAIL": 1,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8
+   },
+   "source_commit": "ee04ff3",
+   "record_commit": "a9074e5",
+   "lib_sha256_prefix": "ec34a71153bae74b",
+   "config": "FULL Flint, dusk, window-bench rows short+ctx512, 12 ABBA pairs, mode 0 (prod bf16-KV); same protocol as R11r/gate512",
+   "ctx512_decode_tok_s": 37.69,
+   "short_decode_tok_s": 38.75,
+   "valid_pairs": "12/12 both rows",
+   "vs_incumbent_29_39": 1.282,
+   "supersedes": "R11r @512 0.84x (default build 5363ad5, 24.75)",
+   "prior_rows": {
+    "R11r_default": 24.75,
+    "gate512_split_shr0": 33.55
+   },
+   "det512": "PASS (stageC, not repeated)",
+   "window": "PAUSED 14:37:57Z (ops_flint) -> bench 14:38:05-14:39:31Z rc 0, longest launch 0.162 s -> RESTARTED ~14:40:08Z; 2m11s down; ops_flint in-band 29.53; on-box probe 30.23/30.32",
+   "cotenants": "E4B 200, qwen3vl 200/200, llama-qwen inactive, display ACTIVE, busy 0 at preflight; per line in window.log",
+   "outcome": "lop8f single build wins both depths (1.28x @512, 1.25x @8192 per rec-04i 33.42); promotion Alex-gated (rec-kcb)"
   }
  ],
  "incumbent_history": [
