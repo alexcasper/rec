@@ -9459,6 +9459,29 @@
    "short4_chat_vs_2b98737": null,
    "optimizer": "external",
    "outcome": "control re-run of iter-3 lop8 (166.82 then): stays front-best"
+  },
+  {
+   "id": "rec04i-lop8-shrink1-fence",
+   "time": "2026-11-23T11:31:53Z",
+   "knobs": {
+    "FLINT_CFG_FULL": 1,
+    "GEPA_SHRINK": 1,
+    "GEPA_FENCE_TAIL": 1,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8
+   },
+   "source_commit": "ee04ff3",
+   "lib_sha256_prefix": "ec34a71153bae74b",
+   "resources": "VGPR 256 / scratch 288 B / LDS 25272 (vs SHRINK=0 measured 251/32 B)",
+   "config": "FULL Flint lop8 SHRINK=1+VMEM-fence, dusk, depth8192 seeded prompt, prod bf16-KV ABBA 12 pairs (depth 8215..8265, k=3), window rec04i-20261123T112615Z (:8080 down, cotenants logged)",
+   "decode_tok_s_8192": 33.42,
+   "valid_pairs": "12/12",
+   "vs_shrink0_measured_32_73": 1.021,
+   "vs_incumbent_26_80": 1.247,
+   "determinism": "PASS wrap512 2x2 fresh sessions: fp32kv dabb2919bbc8 x2, bf16kv eec63518fa18 x2 \u2014 byte-identical to rec-3cr SHRINK=0 lop8 remedy md5s (dabb2919/eec63518); all e5d gates carry over",
+   "ppl": "fp32kv 3.2803 / bf16kv 3.2987, delta 0.5609% < 1% PASS \u2014 bit-identical to SHRINK=0 lop8 (3.2803/3.2987), confirms output-equivalence",
+   "verdict": "SHRINK=1+fence is output-identical to the pinned SHRINK=0 build at equal-or-better speed (+2.1%, within noise) and is the cleaner default recipe; the -DGEPA_SHRINK=0 pin remains for exact reproduction of the 8816eebf measurement row",
+   "record_commit": "PENDING"
   }
  ],
  "incumbent_history": [
