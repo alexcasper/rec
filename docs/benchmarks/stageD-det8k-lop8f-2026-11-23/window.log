@@ -1,0 +1,10 @@
+15:48:35Z +0s stageD armed, waiting for :8080 down | 8080:200 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=16.3GiB vram_free=17.9GiB
+15:48:55Z +20s window open :8080 down | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=3 MemAvailable=16.9GiB vram_free=38.7GiB
+ec34a71153bae74b0001be1ff9512f6943a9faa75a653622a6d6bfd2763fc338  /home/dusk/rec-ve/fut11b/lop8f/flint_mid.so
+15:48:55Z +20s START b1 (fresh session, fp32kv+bf16kv emits, budget 600s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=3 MemAvailable=17.0GiB vram_free=38.7GiB
+15:53:09Z +274s END b1 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=16.9GiB vram_free=38.7GiB
+2026-11-23T15:53:09Z GATE depth8192_bf16kv.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 82c59b75995e launches 1644 longest 0.185 s, 30.8 ms/pos, 250.8 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,Me
+15:53:09Z +274s START b2 (fresh session, fp32kv+bf16kv emits, budget 600s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=86 MemAvailable=16.9GiB vram_free=38.7GiB
+15:57:23Z +528s END b2 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=91 MemAvailable=17.0GiB vram_free=38.7GiB
+2026-11-23T15:57:23Z GATE depth8192_bf16kv.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 82c59b75995e launches 1644 longest 0.181 s, 31.2 ms/pos, 251.0 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,Me
+15:57:23Z +528s stageD complete | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=86 MemAvailable=17.0GiB vram_free=38.7GiB
