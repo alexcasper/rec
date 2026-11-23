@@ -9510,6 +9510,39 @@
    "window": "PAUSED 14:37:57Z (ops_flint) -> bench 14:38:05-14:39:31Z rc 0, longest launch 0.162 s -> RESTARTED ~14:40:08Z; 2m11s down; ops_flint in-band 29.53; on-box probe 30.23/30.32",
    "cotenants": "E4B 200, qwen3vl 200/200, llama-qwen inactive, display ACTIVE, busy 0 at preflight; per line in window.log",
    "outcome": "lop8f single build wins both depths (1.28x @512, 1.25x @8192 per rec-04i 33.42); promotion Alex-gated (rec-kcb)"
+  },
+  {
+   "id": "recbhz-iter5-hillclimb",
+   "time": "2026-11-23T17:19:09Z",
+   "knobs": {
+    "note": "mid-8L ctx8192+short ABBA 12/12 each, :8080 up, dusk; levers GEPA_ATTN_NSPLIT/LDS/LASTMERGE on mid SPLIT+LOP8"
+   },
+   "source_commit": "5281d5c",
+   "config": "rec-bhz iteration 5 (charter: bandwidth levers on the depth path). CONTAMINATION + RECOVERY: first sweep (16:43-16:52Z) collided with the kernels-lane it5 bench (rows 1-4 dropped, kernels-lane killed theirs; stageE is run of record); post-collision ALL 588ab8d builds (incl controls) read -12% ctx8192 -> root-caused to merge_head lambda captures extending lifetimes across the split u-loop (24 extra scratch ops, gemini-kernels 5281d5c restores inline merge for lever-off path); iter4-era lop8 .so d3198ff5 re-benched mid-incident at 167.63/207.67 exonerating the box. Controls on fixed source: ctl5b (SHRINK=1) 167.71/208.59 (811a45fc), ctl5s0b (SHRINK=0) 167.41/207.14 (8ea25ad6) = iter4 band restored.",
+   "rows": {
+    "control_ctl5b": {
+     "ctx8192": 167.71,
+     "short": 208.59
+    },
+    "ns4b (NSPLIT=4, confounded)": {
+     "ctx8192": 148.59,
+     "short": 181.52,
+     "verdict": "rejected - lever effect provably negative (row below control; refactor cost >= 0)"
+    },
+    "lds1b (LDS staging, confounded)": {
+     "ctx8192": 144.62,
+     "short": 180.3,
+     "verdict": "rejected - same bound; kernels-lane clean row lds -2.6% concurs"
+    },
+    "lm1b (LASTMERGE, confounded)": {
+     "ctx8192": 147.44,
+     "short": 180.8,
+     "verdict": "rejected - same bound"
+    }
+   },
+   "cross_check_p1F": "kernels-lane clean pre-collision rows 16:39-16:43Z: lop8m 168.11/209.13, lds 163.71 (-2.6%), ns8 164.49 (-2.2%)",
+   "verdict": "ITERATION 5 REJECTED: no lever clears +1.6%; stop rule met (a/b/d negative + iter4 unroll negative). Delta delivered instead: RA regression found+fixed (5281d5c) - promoted-source safety restored, controls back to 167.41-167.71 (SHRINK=1 mid +split+lop8 healthy, +0.18% noise vs SHRINK=0). lop8f Pareto unchanged: 33.42 @8192 / 37.69 @512.",
+   "record_commit": "PENDING"
   }
  ],
  "incumbent_history": [
