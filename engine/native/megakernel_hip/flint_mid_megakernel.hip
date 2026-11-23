@@ -133,6 +133,19 @@
 //   16 fp32) is copied to LDS once by the whole workgroup (wide uint4 loads) and read by all 8 heads, so global K/V traffic drops 8x.
 //   The tile reuses the gemv pool (q4_gen_db, 16 KiB, idle during attention): no LDS growth. Per-warp position order is identical
 //   to the GEPA_ATTN_LOP=8 path, so outputs are expected byte-identical. Requires GEPA_ATTN_LOP == 8.
+// rec-dor iter 6 (b) GEPA_ATTN_DOT2: production mode only (PURE_FP32=false, bf16 K/V). q is already bf16-rounded there and K is
+//   stored bf16, so q.k runs as packed v_dot2_f32_bf16 (2 products/instr, fp32 accumulate, no K unpack); MID_ATTN_SCALE is applied
+//   after the lane reduction. RELAXED (summation/rounding order) in the production bf16-KV mode only; the fp32kv and fp32_bf16kv
+//   validation modes keep the exact path (binding fp32-KV tier and mid bf16-KV headroom untouched). LOP path only, not with LOP_PF.
+#ifndef GEPA_ATTN_DOT2
+#define GEPA_ATTN_DOT2 0
+#endif
+#if GEPA_ATTN_DOT2
+#if !GEPA_ATTN_LOP || GEPA_ATTN_LOP_PF
+#error "GEPA_ATTN_DOT2 requires GEPA_ATTN_LOP and no GEPA_ATTN_LOP_PF"
+#endif
+typedef __bf16 gepa_bf16x2 __attribute__((ext_vector_type(2)));
+#endif
 #ifndef GEPA_ATTN_NSPLIT
 #define GEPA_ATTN_NSPLIT 0
 #endif
@@ -1613,7 +1626,7 @@ __device__ inline void mid_generate_impl(
                     // at the end into the same per-(head, chunk) partial. iter 3: GEPA_ATTN_LOP_PF prefetches the next
                     // iteration's K/V into registers; GEPA_ATTN_LOP_UNROLL unrolls the position loop.
                     constexpr int LP = GEPA_ATTN_LOP, LW = 32 / LP, LD = MID_HDIM / LW;
-                    static_assert(LP == 4 || LP == 8, "GEPA_ATTN_LOP must be 4 or 8");
+                    static_assert(LP == 4 || LP == 8 || LP == 16, "GEPA_ATTN_LOP must be 4, 8 or 16");
                     const int pg = lane / LW, sl = lane % LW;
                     float q16[LD], a16[LD];
                     #pragma unroll
@@ -1623,6 +1636,16 @@ __device__ inline void mid_generate_impl(
                         q16[j] = qv * MID_ATTN_SCALE;
                         a16[j] = 0.0f;
                     }
+#if GEPA_ATTN_DOT2
+                    constexpr bool D2 = !PURE_FP32 && sizeof(KVT) == 2;
+                    uint32_t qp[LD / 2];
+                    #pragma unroll
+                    for (int j = 0; j < LD / 2; ++j) {                // unscaled bf16 q pairs (low half = even dim)
+                        const bf16 lo = tobf(ws_q[(size_t)h * MID_HDIM + sl * LD + 2 * j]);
+                        const bf16 hi2 = tobf(ws_q[(size_t)h * MID_HDIM + sl * LD + 2 * j + 1]);
+                        qp[j] = (uint32_t)__builtin_bit_cast(uint16_t, lo) | ((uint32_t)__builtin_bit_cast(uint16_t, hi2) << 16);
+                    }
+#endif
                     float hi = -INFINITY, z = 0.0f;
                     const int ta = t_start + c * clen;
                     const int tb = (ta + clen - 1 < pos) ? ta + clen - 1 : pos;
@@ -1669,12 +1692,30 @@ __device__ inline void mid_generate_impl(
                             }
                         }
 #endif
+#if GEPA_ATTN_DOT2
+                        float partial = 0.0f;
+                        if constexpr (D2) {
+                            const uint32_t* kp = reinterpret_cast<const uint32_t*>(kc + slot_of(t0) * MID_HDIM + sl * LD);
+                            #pragma unroll
+                            for (int j = 0; j < LD / 2; ++j)
+                                partial = __builtin_amdgcn_fdot2_f32_bf16(__builtin_bit_cast(gepa_bf16x2, qp[j]),
+                                                                          __builtin_bit_cast(gepa_bf16x2, kp[j]), partial, false);
+                        } else {
+                            #pragma unroll
+                            for (int j = 0; j < LD; ++j) partial += q16[j] * kf[j];
+                        }
+                        #pragma unroll
+                        for (int off = LW / 2; off >= 1; off >>= 1)
+                            partial += __shfl_xor_sync(0xffffffffffffffffull, partial, off);
+                        if constexpr (D2) partial *= MID_ATTN_SCALE;
+#else
                         float partial = 0.0f;
                         #pragma unroll
                         for (int j = 0; j < LD; ++j) partial += q16[j] * kf[j];
                         #pragma unroll
                         for (int off = LW / 2; off >= 1; off >>= 1)
                             partial += __shfl_xor_sync(0xffffffffffffffffull, partial, off);
+#endif
                         if (live) {
                             if (partial > hi) {
                                 const float f = expf(hi - partial);
