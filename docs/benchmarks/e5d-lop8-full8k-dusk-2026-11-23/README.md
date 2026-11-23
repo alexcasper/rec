@@ -45,3 +45,18 @@ rec-11b re-enabled `GEPA_SHRINK=1` (plus the VMEM fence) as the full-config defa
 At HEAD, `-DFLINT_CFG_FULL=1 -DGEPA_ATTN_SPLIT=1 -DGEPA_ATTN_LOP=8 -DGEPA_SHRINK=0` is instruction-identical to the measured `full_lop8.so`
 (0 differing lines). Without `-DGEPA_SHRINK=0`, HEAD's full lop8 is a different, unmeasured build that spills (VGPR 256, private 288 B vs
 251 / 32 B). **The lop8 promotion recipe must pin `GEPA_SHRINK=0`, or the SHRINK=1+fence lop8 variant needs its own full-config row and gates.**
+
+## Gate ruling (Claude arm, acceptance interpretation), 2026-11-23: lop8f depth8192 fp32-KV (0742101)
+**(a) Strict FAIL stands. The forced-routing PASS is not acceptance.** rec-pp2 as written (and the rec-kcb interim full-config tiers)
+judges fp32-KV ≤1e-4 on the unforced evaluation, with any routing deviation a FAIL. The tie-band / forced-to-kernel-routing reading is a
+rec-kcb *proposal* that is not enacted. lop8f @8192 fp32-KV is therefore **FAIL (7.411e-2 last / 0.2969 step)** for acceptance purposes.
+Forced 2.14e-5 and the tie census (3 k/k+1 exchanges, gaps 4.77e-7 / 4.47e-7 / exact 0.0, all inside the draft 2e-6 band) are disclosed
+as **evidence for Alex's ruling**, not as a pass. The @8192 speed row (33.42) is quotable only with this FAIL disclosed alongside it. Status
+flips to PASS only if Alex enacts a tie band that covers these gaps.
+**(b) Yes, the disclosure should mark it variant-independent (pre-existing vs the fp32 reference, not lop8f-introduced), worded precisely:**
+every kernel build tested at depth 8192 on the seeded prompt fails the strict tier through the same router ties, with tokens 24/24 exact:
+default 7.410e-2 (1 tie, L3@3232), split-K 7.412e-2, lop4 7.412e-2, lop8 7.4115e-2, lop8f 7.4115e-2 (3 ties at the same sites). gqa
+breaks the L3@3232 tie the torch way and fails at only 1.215e-4 (5 ties, 2 above the draft band). The *occurrence* is variant-independent;
+the *magnitude* depends on which side of the L3@3232 exact-scale tie a build lands, not on the attention variant's numerical quality
+(forced: lop8f 2.14e-5 vs default 1.7e-4). Suggested disclosure line: "fp32-KV strict tier at depth 8192: FAIL for all kernel builds
+(pre-existing, variant-independent router-tie divergence vs the fp32 reference; forced-routing 2.14e-5; acceptance pending rec-kcb)."
