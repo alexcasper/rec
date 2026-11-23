@@ -1,0 +1,22 @@
+[1 lop8] 2026-11-23T06:15:04Z ROW short: decode 207.7 tok/s (12/12 stable pairs, depth 4..316); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=16.2GiB
+[1 lop8] 2026-11-23T06:16:19Z ROW ctx8192: decode 167.14 tok/s (12/12 stable pairs, depth 8192..8504); prefill 8192 pos in 44.41 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.2GiB
+[1 lop8] 2026-11-23T06:16:19Z window bench ok | max launch 0.18647 s | span 100.6 s
+[2 lop8pf] 2026-11-23T06:16:47Z ROW short: decode 201.77 tok/s (12/12 stable pairs, depth 4..328); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=16.2GiB
+[2 lop8pf] 2026-11-23T06:18:03Z ROW ctx8192: decode 166.21 tok/s (12/12 stable pairs, depth 8192..8504); prefill 8192 pos in 45.12 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.2GiB
+[2 lop8pf] 2026-11-23T06:18:03Z window bench ok | max launch 0.19553 s | span 103.2 s
+[3 lop8u2] 2026-11-23T06:18:30Z ROW short: decode 207.5 tok/s (12/12 stable pairs, depth 4..328); prefill 4 pos in 0.03 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=16.2GiB
+[3 lop8u2] 2026-11-23T06:19:45Z ROW ctx8192: decode 167.18 tok/s (12/12 stable pairs, depth 8192..8504); prefill 8192 pos in 44.42 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.2GiB
+[3 lop8u2] 2026-11-23T06:19:45Z window bench ok | max launch 0.19584 s | span 101.5 s
+[4 lop8] 2026-11-23T06:20:12Z ROW short: decode 207.05 tok/s (12/12 stable pairs, depth 4..328); prefill 4 pos in 0.03 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=16.2GiB
+[4 lop8] 2026-11-23T06:21:27Z ROW ctx8192: decode 167.53 tok/s (12/12 stable pairs, depth 8192..8504); prefill 8192 pos in 44.42 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.2GiB
+[4 lop8] 2026-11-23T06:21:27Z window bench ok | max launch 0.19687 s | span 101.8 s
+[5 lop8u2] 2026-11-23T06:21:53Z ROW short: decode 207.38 tok/s (12/12 stable pairs, depth 4..328); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=16.2GiB
+[5 lop8u2] 2026-11-23T06:23:09Z ROW ctx8192: decode 167.55 tok/s (12/12 stable pairs, depth 8192..8504); prefill 8192 pos in 44.42 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.2GiB
+[5 lop8u2] 2026-11-23T06:23:09Z window bench ok | max launch 0.19717 s | span 101.5 s
+[6 lop8pf] 2026-11-23T06:23:37Z ROW short: decode 201.19 tok/s (12/12 stable pairs, depth 4..328); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=16.2GiB
+[6 lop8pf] 2026-11-23T06:24:52Z ROW ctx8192: decode 166.33 tok/s (12/12 stable pairs, depth 8192..8504); prefill 8192 pos in 45.12 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.2GiB
+[6 lop8pf] 2026-11-23T06:24:52Z window bench ok | max launch 0.19539 s | span 103.4 s
+[7 lop8] 2026-11-23T06:25:19Z ROW short: decode 206.73 tok/s (12/12 stable pairs, depth 4..316); prefill 4 pos in 0.03 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=16.2GiB
+[7 lop8] 2026-11-23T06:26:34Z ROW ctx8192: decode 167.11 tok/s (12/12 stable pairs, depth 8192..8504); prefill 8192 pos in 44.46 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.2GiB
+[7 lop8] 2026-11-23T06:26:34Z window bench ok | max launch 0.18864 s | span 101.5 s
+done /home/dusk/rec-ve/bisect/it4/bench-20261123T061438Z
