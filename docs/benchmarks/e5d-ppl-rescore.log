@@ -1,0 +1,25 @@
+e5d-iter2-mid/def0/v1                        bf16kv  rel -6.881017e-04 PASS  recorded -6.881017e-04 REPRODUCES
+e5d-iter2-mid/def0/v1                        fp32kv  rel -3.462496e-08 PASS  recorded -3.462496e-08 REPRODUCES
+e5d-iter2-mid/def0/full                      bf16kv  rel +1.583460e-04 PASS  recorded +1.583460e-04 REPRODUCES
+e5d-iter2-mid/def0/full                      fp32kv  rel +2.451355e-08 PASS  recorded +2.451355e-08 REPRODUCES
+e5d-iter2-mid/split0/v1                      bf16kv  rel -6.881017e-04 PASS  recorded -6.881017e-04 REPRODUCES
+e5d-iter2-mid/split0/v1                      fp32kv  rel -3.462496e-08 PASS  recorded -3.462496e-08 REPRODUCES
+e5d-iter2-mid/split0/full                    bf16kv  rel +1.962265e-04 PASS  recorded +1.962265e-04 REPRODUCES
+e5d-iter2-mid/split0/full                    fp32kv  rel +1.755699e-08 PASS  recorded +1.755699e-08 REPRODUCES
+e5d-iter2-mid/lop4/v1                        bf16kv  rel -6.881017e-04 PASS  recorded -6.881017e-04 REPRODUCES
+e5d-iter2-mid/lop4/v1                        fp32kv  rel -3.462496e-08 PASS  recorded -3.462496e-08 REPRODUCES
+e5d-iter2-mid/lop4/full                      bf16kv  rel +1.742134e-04 PASS  recorded +1.742134e-04 REPRODUCES
+e5d-iter2-mid/lop4/full                      fp32kv  rel +2.455939e-08 PASS  recorded +2.455939e-08 REPRODUCES
+e5d-iter2-mid/gqa/v1                         bf16kv  rel -6.881017e-04 PASS  recorded -6.881017e-04 REPRODUCES
+e5d-iter2-mid/gqa/v1                         fp32kv  rel -3.462496e-08 PASS  recorded -3.462496e-08 REPRODUCES
+e5d-iter2-mid/gqa/full                       bf16kv  rel +2.006115e-04 PASS  recorded +2.006115e-04 REPRODUCES
+e5d-iter2-mid/gqa/full                       fp32kv  rel +1.838706e-08 PASS  recorded +1.838706e-08 REPRODUCES
+e5d-iter3-mid/lop8/v1                        bf16kv  rel -6.881017e-04 PASS  recorded -6.881017e-04 REPRODUCES
+e5d-iter3-mid/lop8/v1                        fp32kv  rel -3.462496e-08 PASS  recorded -3.462496e-08 REPRODUCES
+e5d-iter3-mid/lop8/full                      bf16kv  rel +4.019857e-05 PASS  recorded +4.019857e-05 REPRODUCES
+e5d-iter3-mid/lop8/full                      fp32kv  rel +1.358631e-08 PASS  recorded +1.358631e-08 REPRODUCES
+e5d-lop8-full8k/lop8/full                    bf16kv  rel +6.918391e-03 PASS  recorded +6.918391e-03 REPRODUCES
+e5d-lop8-full8k/lop8/full                    fp32kv  rel +1.196980e-07 PASS  recorded +1.196980e-07 REPRODUCES
+m3-gate8k/split_shr0/full                    bf16kv  rel +3.383919e-03 PASS  recorded +3.383919e-03 REPRODUCES
+m3-gate8k/split_shr0/full                    fp32kv  rel +1.536820e-07 PASS  recorded +1.536820e-07 REPRODUCES
+12 rows, 0 mismatches

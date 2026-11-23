@@ -1,0 +1,138 @@
+{
+ "schema": "rec-e5d-ppl-manifest/1",
+ "note": "kernel ppl npz (dusk emits) committed in-repo; rescore on dawn with scripts/bisect/rescore_ppl.py --manifest this-file",
+ "entries": [
+  {
+   "id": "e5d-iter2-mid/def0/v1",
+   "dir": "docs/benchmarks/e5d-iter2-mid-dusk-2026-11-22/ppl/def0/v1",
+   "ckpt": "mid",
+   "evalset": "eval_set_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": -3.4624960010276595e-08,
+    "bf16kv": -0.0006881016911870486
+   }
+  },
+  {
+   "id": "e5d-iter2-mid/def0/full",
+   "dir": "docs/benchmarks/e5d-iter2-mid-dusk-2026-11-22/ppl/def0/full",
+   "ckpt": "mid",
+   "evalset": "eval_set_full_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": 2.451354874644096e-08,
+    "bf16kv": 0.0001583460286624927
+   }
+  },
+  {
+   "id": "e5d-iter2-mid/split0/v1",
+   "dir": "docs/benchmarks/e5d-iter2-mid-dusk-2026-11-22/ppl/split0/v1",
+   "ckpt": "mid",
+   "evalset": "eval_set_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": -3.4624960010276595e-08,
+    "bf16kv": -0.0006881016911870486
+   }
+  },
+  {
+   "id": "e5d-iter2-mid/split0/full",
+   "dir": "docs/benchmarks/e5d-iter2-mid-dusk-2026-11-22/ppl/split0/full",
+   "ckpt": "mid",
+   "evalset": "eval_set_full_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": 1.7556985421052218e-08,
+    "bf16kv": 0.00019622653886575137
+   }
+  },
+  {
+   "id": "e5d-iter2-mid/lop4/v1",
+   "dir": "docs/benchmarks/e5d-iter2-mid-dusk-2026-11-22/ppl/lop4/v1",
+   "ckpt": "mid",
+   "evalset": "eval_set_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": -3.4624960010276595e-08,
+    "bf16kv": -0.0006881016911870486
+   }
+  },
+  {
+   "id": "e5d-iter2-mid/lop4/full",
+   "dir": "docs/benchmarks/e5d-iter2-mid-dusk-2026-11-22/ppl/lop4/full",
+   "ckpt": "mid",
+   "evalset": "eval_set_full_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": 2.4559387634681684e-08,
+    "bf16kv": 0.00017421344075674305
+   }
+  },
+  {
+   "id": "e5d-iter2-mid/gqa/v1",
+   "dir": "docs/benchmarks/e5d-iter2-mid-dusk-2026-11-22/ppl/gqa/v1",
+   "ckpt": "mid",
+   "evalset": "eval_set_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": -3.4624960010276595e-08,
+    "bf16kv": -0.0006881016911870486
+   }
+  },
+  {
+   "id": "e5d-iter2-mid/gqa/full",
+   "dir": "docs/benchmarks/e5d-iter2-mid-dusk-2026-11-22/ppl/gqa/full",
+   "ckpt": "mid",
+   "evalset": "eval_set_full_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": 1.8387055433777277e-08,
+    "bf16kv": 0.00020061154883932453
+   }
+  },
+  {
+   "id": "e5d-iter3-mid/lop8/v1",
+   "dir": "docs/benchmarks/e5d-iter3-mid-dusk-2026-11-23/ppl/lop8/v1",
+   "ckpt": "mid",
+   "evalset": "eval_set_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": -3.4624960010276595e-08,
+    "bf16kv": -0.0006881016911870486
+   }
+  },
+  {
+   "id": "e5d-iter3-mid/lop8/full",
+   "dir": "docs/benchmarks/e5d-iter3-mid-dusk-2026-11-23/ppl/lop8/full",
+   "ckpt": "mid",
+   "evalset": "eval_set_full_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": 1.3586312519464627e-08,
+    "bf16kv": 4.019856889359019e-05
+   }
+  },
+  {
+   "id": "e5d-lop8-full8k/lop8/full",
+   "dir": "docs/benchmarks/e5d-lop8-full8k-dusk-2026-11-23/ppl",
+   "ckpt": "full",
+   "evalset": "eval_set_full_v1.json",
+   "scorer": "score_ppl_full (fp32 Reference, kv_store_dtype toggled)",
+   "expected": {
+    "bf16kv": 0.006918390752318926,
+    "fp32kv": 1.19698026157522e-07
+   }
+  },
+  {
+   "id": "m3-gate8k/split_shr0/full",
+   "dir": "docs/benchmarks/m3-gate8k-dusk-2026-11-22/B_ppl",
+   "ckpt": "full",
+   "evalset": "eval_set_full_v1.json",
+   "scorer": "score_ppl_full (fp32 Reference, kv_store_dtype toggled)",
+   "expected": {
+    "bf16kv": 0.00338391898799717,
+    "fp32kv": 1.5368204353549686e-07
+   }
+  }
+ ]
+}
