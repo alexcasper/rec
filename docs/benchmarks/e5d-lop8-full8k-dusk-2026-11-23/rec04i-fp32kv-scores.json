@@ -1,0 +1,40 @@
+{
+ "case": "depth8192",
+ "kv": "fp32",
+ "tier": 0.0001,
+ "strict_pass": false,
+ "strict_last": 0.07411471860746714,
+ "strict_step": 0.2968848794941142,
+ "problems": [
+  "last_logits rel err 7.411e-02 > 0.0001 (fp32-KV tier)",
+  "step_logits max rel err 2.969e-01 > 0.0001 (fp32-KV tier)",
+  "3 routing deviation(s) in the fp32-KV tier"
+ ],
+ "forced_max": 2.138208049880913e-05,
+ "forced_pass_1e4": true,
+ "n_dev": 3,
+ "ties": [
+  {
+   "layer": 3,
+   "pos": 3232,
+   "gap": 4.76837158203125e-07,
+   "k_k1": true,
+   "within_2e6": true
+  },
+  {
+   "layer": 26,
+   "pos": 3255,
+   "gap": 4.470348358154297e-07,
+   "k_k1": true,
+   "within_2e6": true
+  },
+  {
+   "layer": 38,
+   "pos": 6456,
+   "gap": 0.0,
+   "k_k1": true,
+   "within_2e6": true
+  }
+ ],
+ "all_within_2e6": true
+}
