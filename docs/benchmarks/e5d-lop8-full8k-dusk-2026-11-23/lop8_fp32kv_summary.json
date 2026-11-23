@@ -1,0 +1,18 @@
+{
+ "case": "depth8192",
+ "positions": 8216,
+ "lib": "/home/dusk/rec-ve/bisect/e5d/full_lop8.so",
+ "builds": {
+  "fp32kv": {
+   "md5": [
+    "c142fc5397fbd41e5773b71c2db0d8b3"
+   ],
+   "fresh_repeats": 1,
+   "deterministic": null,
+   "speed": null,
+   "t_pos_s": [
+    0.03301407379913144
+   ]
+  }
+ }
+}

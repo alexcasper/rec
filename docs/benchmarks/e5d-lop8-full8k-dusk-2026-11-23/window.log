@@ -1,0 +1,22 @@
+04:09:30Z +0s preflight e5d lop8 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=17.0GiB vram_free=38.7GiB
+8816eebf589b0ebf6a80a122f335014d4cbb5008b6a88882ba6ce7fd4f2cf356  /home/dusk/rec-ve/bisect/e5d/full_lop8.so
+04:09:30Z +0s START lop8_bench (budget 330s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=17.0GiB vram_free=38.7GiB
+2026-11-23T04:14:18Z ROW depth8192: decode 32.73 tok/s (12/12 stable pairs, depth 8215..8265, k=3, tA probe 60.4 ms) | flint:down,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.8GiB
+2026-11-23T04:14:19Z GATE depth8192_bf16kv.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 82c59b75995e launches 1670 longest 0.183 s, 30.9 ms/pos, 283.4 s | flint:down,e4b:idle,qwen:down,gpu_busy=37,MemAvailable=16.8GiB
+{"case": "depth8192", "positions": 8216, "lib": "/home/dusk/rec-ve/bisect/e5d/full_lop8.so", "builds": {"bf16kv": {"md5": ["82c59b75995e614452b1ad09d81f2556"], "fresh_repeats": 1, "deterministic": null, "speed": {"method
+04:14:19Z +289s END lop8_bench rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=35 MemAvailable=17.0GiB vram_free=38.7GiB
+04:14:19Z +289s START lop8_fp32kv (budget 290s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=32 MemAvailable=17.0GiB vram_free=38.7GiB
+2026-11-23T04:18:32Z GATE depth8192_fp32kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 c142fc5397fb launches 1644 longest 0.194 s, 33.0 ms/pos, 250.4 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8GiB
+04:18:32Z +542s END lop8_fp32kv rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.0GiB vram_free=38.7GiB
+04:18:32Z +542s START lop8_det512 (budget 150s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=87 MemAvailable=17.0GiB vram_free=38.7GiB
+2026-11-23T04:18:58Z GATE wrap512_fp32kv.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 dabb2919bbc8 launches 108 longest 0.162 s, 30.0 ms/pos, 23.5 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8GiB
+2026-11-23T04:19:22Z GATE wrap512_fp32kv_r1.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 dabb2919bbc8 launches 108 longest 0.162 s, 30.0 ms/pos, 23.5 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8G
+2026-11-23T04:19:45Z GATE wrap512_bf16kv.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 eec63518fa18 launches 108 longest 0.160 s, 30.0 ms/pos, 23.4 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8GiB
+2026-11-23T04:20:10Z GATE wrap512_bf16kv_r1.npz: tokens[:6]=[86, 16289, 220, 197, 1, 764] md5 eec63518fa18 launches 108 longest 0.160 s, 30.0 ms/pos, 24.1 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=16.8G
+04:20:10Z +640s END lop8_det512 rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.0GiB vram_free=38.7GiB
+04:20:10Z +640s START lop8_ppl (budget 230s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=87 MemAvailable=17.0GiB vram_free=38.7GiB
+04:23:14Z +824s END lop8_ppl rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.0GiB vram_free=38.7GiB
+04:23:14Z +824s done -> signal ops_flint to restart :8080 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=87 MemAvailable=17.0GiB vram_free=38.7GiB
+04:24:04Z health=200
+probe decode 30.16 tok/s (64 tok), prefill 79.9 tok/s
+probe decode 30.10 tok/s (64 tok), prefill 87.7 tok/s

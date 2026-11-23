@@ -1,0 +1,31 @@
+2026-11-23T04:20:10Z offset table /home/dusk/xh7/flint-int4.off.npy
+2026-11-23T04:20:10Z VRAM preflight: need 21.18 GiB + 1.5 slack, sysfs free 38.74 GiB (waited 0.0 s) | flint:down,e4b:idle,qwen:down,gpu_busy=65,MemAvailable=16.9GiB
+2026-11-23T04:20:10Z bank stream   0.25/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=54,MemAvailable=16.6GiB
+2026-11-23T04:20:11Z bank stream   2.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=30,MemAvailable=16.6GiB
+2026-11-23T04:20:12Z bank stream   4.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.6GiB
+2026-11-23T04:20:13Z bank stream   6.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=11,MemAvailable=16.6GiB
+2026-11-23T04:20:14Z bank stream   8.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=9,MemAvailable=16.6GiB
+2026-11-23T04:20:15Z bank stream  10.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:20:15Z bank stream  12.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:20:16Z bank stream  14.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:20:17Z bank stream  16.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:20:18Z bank stream  18.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:20:19Z bank stream  20.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:20:19Z bank stream  21.02/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:20:19Z session created in 9.2 s (bank 21.019 GiB streamed H2D, 2.30 GiB/s) | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.8GiB
+2026-11-23T04:21:42Z PPL fp32kv: (8, 191) nll 1.187943 ppl 3.2803 longest 0.057 s, 91.4 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,MemAvailable=16.8GiB
+2026-11-23T04:21:42Z VRAM preflight: need 21.18 GiB + 1.5 slack, sysfs free 38.59 GiB (waited 0.5 s) | flint:down,e4b:idle,qwen:down,gpu_busy=58,MemAvailable=16.8GiB
+2026-11-23T04:21:43Z bank stream   0.25/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=50,MemAvailable=16.6GiB
+2026-11-23T04:21:43Z bank stream   2.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=28,MemAvailable=16.6GiB
+2026-11-23T04:21:44Z bank stream   4.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=16.6GiB
+2026-11-23T04:21:45Z bank stream   6.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=11,MemAvailable=16.6GiB
+2026-11-23T04:21:46Z bank stream   8.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=9,MemAvailable=16.6GiB
+2026-11-23T04:21:47Z bank stream  10.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:21:48Z bank stream  12.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:21:48Z bank stream  14.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:21:49Z bank stream  16.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:21:50Z bank stream  18.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:21:51Z bank stream  20.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=8,MemAvailable=16.6GiB
+2026-11-23T04:21:51Z bank stream  21.02/21.02 GiB | host buffer 256 MiB | flint:down,e4b:idle,qwen:down,gpu_busy=7,MemAvailable=16.6GiB
+2026-11-23T04:21:51Z session created in 9.1 s (bank 21.019 GiB streamed H2D, 2.32 GiB/s) | flint:down,e4b:idle,qwen:down,gpu_busy=7,MemAvailable=16.8GiB
+2026-11-23T04:23:14Z PPL bf16kv: (8, 191) nll 1.193524 ppl 3.2987 longest 0.058 s, 92.0 s | flint:down,e4b:idle,qwen:down,gpu_busy=99,MemAvailable=16.9GiB
