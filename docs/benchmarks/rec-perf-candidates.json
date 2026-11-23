@@ -9543,6 +9543,41 @@
    "cross_check_p1F": "kernels-lane clean pre-collision rows 16:39-16:43Z: lop8m 168.11/209.13, lds 163.71 (-2.6%), ns8 164.49 (-2.2%)",
    "verdict": "ITERATION 5 REJECTED: no lever clears +1.6%; stop rule met (a/b/d negative + iter4 unroll negative). Delta delivered instead: RA regression found+fixed (5281d5c) - promoted-source safety restored, controls back to 167.41-167.71 (SHRINK=1 mid +split+lop8 healthy, +0.18% noise vs SHRINK=0). lop8f Pareto unchanged: 33.42 @8192 / 37.69 @512.",
    "record_commit": "PENDING"
+  },
+  {
+   "id": "recdor-iter6-dot2",
+   "time": "2026-11-23T17:53:28Z",
+   "knobs": {
+    "GEPA_ATTN_DOT2": 1,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8,
+    "note": "mid-8L; production-mode q.k via packed v_dot2_f32_bf16, scale after reduction; validation modes exact"
+   },
+   "source_commit": "de70bbe",
+   "lib_sha256_prefix": "93f19052d3566dc7",
+   "config": "rec-dor iter 6, mid-8L ctx8192+short ABBA 12/12 x2 replicates + control x3, :8080 up, extended per-row cotenant gate (foreign-driver pgrep + qwen3vl zero-ESTAB + busy3s<15), bisect/it6/bench-20261123T174004Z",
+   "rows": {
+    "ctl6 mean": {
+     "ctx8192": 167.62,
+     "short": 208.03
+    },
+    "dot2 mean": {
+     "ctx8192": 173.51,
+     "short": 209.56
+    },
+    "smin16 mean": {
+     "ctx8192": 167.84,
+     "short": 208.17
+    }
+   },
+   "vs_control": {
+    "ctx8192": 1.035,
+    "short": 1.007
+   },
+   "gates": "ALL GREEN: suite det 2 emits PASS G0 8/8 vs 24f167d; wrap512 det PASS x3 KV modes; depth8192 fp32kv 2 fresh sessions md5 14814c8311 BYTE-IDENTICAL to iter4 control (production numerics exact); ppl KV deltas +0.089%/+0.087% PASS; short4/chat ABBA vs promo 2b98737 0.9842/0.9875 (better than iter4 candidates)",
+   "also_rejected": "smin16 +0.13% noise; LOP=16 compile-rejected (private 400 B, 710 scratch ops)",
+   "verdict": "PARETO JOINER, not self-promoted: dominates control on both axes but does not meet the +1.6%-both-cases promotion rule (short +0.7%). byte-identical depth output + all gates green make it a clean default-recipe candidate pending Alex ruling + owner-window full-config dot2 confirm (Pareto vs 33.42 @8192 / 37.69 @512 lop8f).",
+   "record_commit": "PENDING"
   }
  ],
  "incumbent_history": [
