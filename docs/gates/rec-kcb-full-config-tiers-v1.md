@@ -1,7 +1,12 @@
 # rec-kcb ruling — full-config (FLINT_CFG_FULL) acceptance tiers, v1
 
-**Status: INTERIM, effective 2026-11-22, pending Alex review.** Ruled by the Claude arm (gate-definition owner per charter);
-it matches the coordinator's stated position. It does not settle the open mid-config bf16-KV sign-offs.
+**Status: RATIFIED by Alex via Bedivere 2026-11-23 (rec-kcb CLOSED): KEEP THE MEGAKERNEL LINEAGE —
+bf16-KV is REJECTED for the full 18.5 GB config (fails rec-pp2 1e-3 tier at 2.74e-2 from position 0,
+rounding-boundary amplification per eb06650, unattainable by any non-bit-exact kernel); fp32-KV is the
+run-of-record. The open question is resolved: full-config binding tiers = fp32-KV max-rel (rec-pp2 1e-4
+tier) + perplexity delta vs the stock reference — now codified in
+`engine/validation/megakernel_mid/qgate/gate_spec_full_v1.json`, which serve/eval pipelines check
+explicitly (production row = fp32-KV). No further bf16-KV attempts at full config unless Alex reopens.**
 
 ## Evidence
 `docs/benchmarks/m3-gate512-dusk-2026-11-22/ref_vs_ref.json`: on the same full-Flint wrap512 trajectory, torch fp32-KV vs torch
@@ -23,11 +28,18 @@ good kernels from bad ones at full config.
    2/3 of positions on the split-K branch.) Emitter: `scripts/m3_depth_gate.py --ppl-set`; scorer: `qgate/score_ppl_full.py`
    (protocol validated on mid: fp32kv rel 1.8e-8).
 
-## Demoted at full config
-- **bf16-KV 1e-3 logit tier:** informational. Computed and recorded for every full-config row (fp32_bf16kv and bf16kv vs the
-  bf16-KV reference), never binding at full config.
+## Rejected at full config (Alex ruling 2026-11-23)
+- **bf16-KV 1e-3 logit tier: REJECTED — the bf16-KV production mode is dead at full config.** Evidence:
+  2.74e-2 vs 1e-3 from position 0 (148 routing devs on wrap512); eb06650 root cause (rounding-boundary
+  amplification; torch ref-vs-ref gap 1.85e-2, argmax flip at step 3) makes the tier unattainable by any
+  non-bit-exact kernel. Informational bf16-KV readings may still be recorded per row, never binding.
+  Candidate note: the DOT2 lever compiles only into the bf16-KV path, so it is a no-op for the shipped
+  fp32-KV config (rec-dor amendment).
 
 ## Unchanged
 - Mid config: rec-pp2 two-tier (fp32-KV 1e-4 / bf16-KV 1e-3) + ppl < 1% on eval_set_v1, as before.
 - rec-1f4 qgate T1–T4 stays mandatory pre-promotion evidence (mid).
-- `GEPA_SHRINK=0` stays the pinned full-config default until sunny-2gg probe coverage lands.
+- Full-config SHRINK state: the SHRINK=0 pin was replaced by the explicit VMEM boundary fence in rec-11b
+  (98ce41d/ee04ff3, SHRINK=1 deterministic at full config, rec-04i row 33.42 @8192 / 37.69 @512 in
+  production bf16-KV mode). `-DGEPA_SHRINK=0` remains the recipe ONLY for instruction-identical
+  reproduction of the measured 8816eebf lib (rec-04i pin).

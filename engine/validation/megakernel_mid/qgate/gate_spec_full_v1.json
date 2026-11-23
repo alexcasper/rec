@@ -1,0 +1,48 @@
+{
+    "schema": "rec-qgate-spec/1",
+    "version": 1,
+    "bead": "rec-kcb (CLOSED 2026-11-23, Alex ruling via Bedivere: KEEP THE MEGAKERNEL LINEAGE)",
+    "config": "FLINT_CFG_FULL, full 18.5 GB Flint",
+    "evalset": "eval_set_full_v1.json",
+    "evalset_sha256_prefix": "1b06d928",
+    "anchors": {
+        "bf16kv_rejection": "rec-kcb CLOSED: fails rec-pp2 1e-3 tier at 2.74e-2 from position 0; root cause eb06650 (bf16 rounding-boundary amplification, unattainable by non-bit-exact kernels)",
+        "disclosure": "bffe8ea (strict-tier depth FAIL variant-independent, 7.41e-2 via 3 k/k+1 router ties)",
+        "correctness_reference": "rec_mlx.torch_rocm fp32 compute, cpu, teacher-forced (spec (a))",
+        "shrink_recipe": "HEAD default is SHRINK=1+VMEM-fence (98ce41d/ee04ff3, rec-11b); measured 8816eebf row reproduces with -DGEPA_SHRINK=0 (rec-04i recipe pin)"
+    },
+    "production_row": {
+        "kv_mode": "fp32kv",
+        "why": "Alex ruling: fp32-KV is the run-of-record for the full config; serve/eval pipelines gate THIS row explicitly",
+        "T_fp32kv_logits": {
+            "rule": "ABSOLUTE: kernel mode 2 (fp32 compute, fp32 KV) vs torch fp32 CPU reference",
+            "logit_rtol": 0.0001,
+            "applies_to": "last and step logits",
+            "routing": "judged through the kernel's step_experts (mid_mk_check spec (a))",
+            "cases": "wrap512 plus every depth case a row is quoted at"
+        },
+        "T_fp32kv_ppl": {
+            "rule": "ABSOLUTE: teacher-forced ppl on eval_set_full_v1, fp32-KV mode",
+            "ppl_rel_max": 0.0001,
+            "reference": "torch fp32 compute, fp32 KV store",
+            "emitter": "scripts/m3_depth_gate.py --ppl-set",
+            "scorer": "qgate/score_ppl_full.py (protocol validated on mid: fp32kv rel 1.8e-8)"
+        },
+        "T_determinism": {
+            "rule": ">= 2 independent emits (fresh sessions, full bank re-stream) byte-identical, every gated case",
+            "note": "fp32kv strict-tier depth may FAIL logits via the known k/k+1 router ties (rec-cnk, disclosed bffe8ea) while tokens stay exact and emits stay byte-identical; determinism and disclosure reporting are separate checks"
+        }
+    },
+    "rejected": {
+        "kv_mode": "bf16kv / fp32_bf16kv",
+        "status": "REJECTED at full config by Alex ruling 2026-11-23",
+        "evidence": "2.74e-2 vs the 1e-3 tier from position 0, 148 routing devs on wrap512; eb06650: bf16 rounding-boundary amplification (torch ref-vs-ref gap 1.85e-2, argmax flip at step 3) - unattainable by ANY non-bit-exact kernel",
+        "policy": "No further full-config bf16-KV attempts unless Alex reopens. informational bf16-KV readings may still be recorded per row, never binding"
+    },
+    "promoted_rows": {
+        "lop8f_SHRINK1_fence": {"lib_sha256_prefix": "ec34a71153bae74b", "rows_tok_s": {"depth8192": 33.42, "ctx512": 37.69}, "caveat": "measured in production bf16-KV mode BEFORE the rec-kcb ruling; fp32-KV production row pending the next Alex window (KV bytes double at depth: expect @8192 below 33.42, @512 moves less)"}
+    },
+    "open_questions": [
+        "fp32-KV production re-measure of the promoted lop8f rows (next Alex window)"
+    ]
+}
