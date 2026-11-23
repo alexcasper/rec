@@ -1,0 +1,138 @@
+{
+ "case": "depth8192",
+ "positions": 8216,
+ "lib": "/home/dusk/rec-ve/bisect/e5d/full_lop4.so",
+ "builds": {
+  "bf16kv": {
+   "md5": [
+    "2b02090eeb901026fca27ef487a3fede"
+   ],
+   "fresh_repeats": 1,
+   "deterministic": null,
+   "speed": {
+    "method": "ABBA differential (k-1)/(tB-tA), cap-safe k",
+    "k": 3,
+    "valid_pairs": 12,
+    "pairs_n": 12,
+    "depth_range": [
+     8215,
+     8265
+    ],
+    "decode_tok_s": 31.36,
+    "pairs": [
+     {
+      "pair": 0,
+      "tA_s": 0.06685,
+      "tB_s": 0.12769,
+      "depth": 8221,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 1,
+      "tA_s": 0.06338,
+      "tB_s": 0.13022,
+      "depth": 8225,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.0GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 2,
+      "tA_s": 0.06628,
+      "tB_s": 0.12696,
+      "depth": 8229,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 3,
+      "tA_s": 0.0632,
+      "tB_s": 0.12968,
+      "depth": 8233,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.0GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 4,
+      "tA_s": 0.06688,
+      "tB_s": 0.12621,
+      "depth": 8237,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 5,
+      "tA_s": 0.06307,
+      "tB_s": 0.12993,
+      "depth": 8241,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 6,
+      "tA_s": 0.06641,
+      "tB_s": 0.12638,
+      "depth": 8245,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 7,
+      "tA_s": 0.06305,
+      "tB_s": 0.13322,
+      "depth": 8249,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 8,
+      "tA_s": 0.06629,
+      "tB_s": 0.12654,
+      "depth": 8253,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 9,
+      "tA_s": 0.06352,
+      "tB_s": 0.12982,
+      "depth": 8257,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 10,
+      "tA_s": 0.06549,
+      "tB_s": 0.12723,
+      "depth": 8261,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     },
+     {
+      "pair": 11,
+      "tA_s": 0.06408,
+      "tB_s": 0.12995,
+      "depth": 8265,
+      "stable": true,
+      "pre": "flint:down,e4b:idle,qwen:down,gpu_busy=2,MemAvailable=17.1GiB",
+      "post": "flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB"
+     }
+    ]
+   },
+   "t_pos_s": [
+    0.032370228198124094
+   ]
+  }
+ }
+}

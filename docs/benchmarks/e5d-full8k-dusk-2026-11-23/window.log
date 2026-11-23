@@ -1,0 +1,17 @@
+01:07:26Z +0s preflight e5d full8k | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=17.2GiB vram_free=38.7GiB
+d01d28a4c273c2cf10a7f24ad90b6e0cb4087df3b5eef7d7e81c6e7628b8e30f  /home/dusk/rec-ve/bisect/e5d/full_lop4.so
+430b6f260ff6bc146b78b59e6b63fdf2027beeffda91780d456e49667dca1c95  /home/dusk/rec-ve/bisect/e5d/full_gqa.so
+01:07:26Z +0s START lop4_bench (budget 330s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=17.2GiB vram_free=38.7GiB
+2026-11-23T01:12:07Z ROW depth8192: decode 31.36 tok/s (12/12 stable pairs, depth 8215..8265, k=3, tA probe 66.6 ms) | flint:down,e4b:idle,qwen:down,gpu_busy=17,MemAvailable=17.1GiB
+2026-11-23T01:12:07Z GATE depth8192_bf16kv.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 2b02090eeb90 launches 1670 longest 0.192 s, 32.4 ms/pos, 278.4 s | flint:down,e4b:idle,qwen:down,gpu_busy=38,MemAvailable=17.1GiB
+{"case": "depth8192", "positions": 8216, "lib": "/home/dusk/rec-ve/bisect/e5d/full_lop4.so", "builds": {"bf16kv": {"md5": ["2b02090eeb901026fca27ef487a3fede"], "fresh_repeats": 1, "deterministic": null, "speed": {"method
+01:12:07Z +281s END lop4_bench rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=35 MemAvailable=17.2GiB vram_free=38.7GiB
+01:12:07Z +281s START gqa_bench (budget 330s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=33 MemAvailable=17.2GiB vram_free=38.7GiB
+2026-11-23T01:17:05Z ROW depth8192: decode 29.53 tok/s (12/12 stable pairs, depth 8215..8265, k=3, tA probe 68.0 ms) | flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=17.1GiB
+2026-11-23T01:17:05Z GATE depth8192_bf16kv.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 82bd65823e2e launches 1792 longest 0.172 s, 35.5 ms/pos, 294.9 s | flint:down,e4b:idle,qwen:down,gpu_busy=39,MemAvailable=17.0GiB
+{"case": "depth8192", "positions": 8216, "lib": "/home/dusk/rec-ve/bisect/e5d/full_gqa.so", "builds": {"bf16kv": {"md5": ["82bd65823e2ec44287beaf05504a03b4"], "fresh_repeats": 1, "deterministic": null, "speed": {"method"
+01:17:05Z +579s END gqa_bench rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=36 MemAvailable=17.2GiB vram_free=38.7GiB
+01:17:05Z +579s START lop4_fp32kv (budget 300s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=34 MemAvailable=17.2GiB vram_free=38.7GiB
+2026-11-23T01:21:25Z GATE depth8192_fp32kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 d0a316ee0837 launches 1710 longest 0.171 s, 34.8 ms/pos, 257.3 s | flint:down,e4b:idle,qwen:down,gpu_busy=100,MemAvailable=17.1GiB
+01:21:25Z +839s END lop4_fp32kv rc=0 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=92 MemAvailable=17.2GiB vram_free=38.7GiB
+01:21:25Z +839s done -> signal ops_flint to restart :8080 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=87 MemAvailable=17.2GiB vram_free=38.7GiB
