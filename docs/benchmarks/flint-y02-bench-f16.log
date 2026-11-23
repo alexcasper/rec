@@ -1,0 +1,17 @@
+=== cotenant gate 2026-11-20T20:31:53Z ===
+port 8080 busy slots: 0
+port 8091 busy slots: 0
+gpu_busy: 3 
+--- warmup1 2026-11-20T20:31:53Z ---
+[ Prompt: 4543.5 t/s | Generation: 64.7 t/s ]
+--- warmup2 2026-11-20T20:31:54Z ---
+[ Prompt: 4609.3 t/s | Generation: 64.9 t/s ]
+--- warmup3 2026-11-20T20:31:55Z ---
+[ Prompt: 4589.9 t/s | Generation: 65.3 t/s ]
+--- timed1 2026-11-20T20:31:56Z ---
+[ Prompt: 4522.1 t/s | Generation: 65.2 t/s ]
+--- timed2 2026-11-20T20:31:58Z ---
+[ Prompt: 4655.3 t/s | Generation: 64.8 t/s ]
+--- timed3 2026-11-20T20:31:59Z ---
+[ Prompt: 4668.6 t/s | Generation: 64.3 t/s ]
+=== done 2026-11-20T20:32:00Z ===
