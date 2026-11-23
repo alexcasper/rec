@@ -356,3 +356,43 @@ Scripts: `engine/.build/torch_conformance.py` (conformance + tiny bench),
 `engine/.build/mid_bench_gpu.py` (mid bench, generates weights with seed 0).
 AUP arm: replicate the mid-8L shapes exactly; report both configs if compute
 allows, mid-8L minimum.
+
+## Reference numbers — incumbent llama.cpp arm on the same mid-8L shape (dusk, Radeon 890M gfx1150, 2026-11-20, flint-y02)
+
+Support-seat measurement (ops_flint) so ops_rec comparisons are same-shape.
+The synthetic production checkpoint `~/rec-ve/ckpt-e2e/mid` (seed 0,
+mlx-affine-int4, INT8 embeddings) was dequantized with the rec-aip
+bit-exact dequant path (`mx.dequantize`, g64) and packed as a flint-arch
+GGUF by `convert_mid_gguf.py` (copies in `docs/benchmarks/` and the flint
+repo `tools/`). llama.cpp build b4-a37cc46, `build-vulkan` (Vulkan/RADV,
+same binary as the flint :8080 server), `-ngl 99 -c 1024 -fa on`, f16 KV
+cache, single stream greedy (temp 0, seed 0).
+
+Protocol: prefill512 = 3 warmup + 3 timed; decode32 = 32 greedy tokens
+after the same 512-token prefill. Windows are llama.cpp's internal
+sync-bounded timing (prompt-eval rate / eval rate). Deviation from the
+canonical windows above: llama-cli's decode window covers all 32 generated
+steps — there are no separate 4 warmup decode steps. Prompt is 512 BOS
+special tokens (the synthetic vocab has no free text ids; per-step shapes
+and hence work are identical to a 512-token prefill, values differ).
+Before every run the cotenant gate held: flint :8080 and qwen :8091
+`/slots` 0 processing, gpu_busy 3%. Raw logs: `flint-y02-bench-f16.log`,
+`flint-y02-bench-q4.log` (runs on dusk in `~/flint-mid/`).
+
+| arm | weights resident | prefill512 tok/s | decode32 tok/s |
+|---|---|---|---|
+| mid-8L llama.cpp F16 | 3.06 GiB | 4,655.3 [4,522.1–4,668.6] | 64.8 [64.3–65.2] |
+| mid-8L llama.cpp Q4_K_M | 0.91 GiB | 5,650.0 [5,634.9–5,704.0] | 157.3 [157.1–159.5] |
+
+Context, same shape: eager torch bf16 37.2 (dusk), 58.7 (albion R9700),
+megakernel 120.78 (run of record). The llama.cpp F16 arm on the dusk iGPU
+is above both eager arms; the Q4 arm's decode implies ~37.6 GB/s effective
+active-weight bandwidth, matching the ~38 GB/s measured on the full Flint
+model (flint-5yy notes), so the numbers sit in the expected band.
+
+Caveats: weights here are dequant(INT4), not the bf16 seed-0 values the
+torch arms generate (random-weight checkpoint; values differ within
+quantization error, timing unaffected). No token-parity gate vs the rec
+engine was run — greedy determinism only. The Q4_K_M re-quantization uses
+llama.cpp's own format, not the production mlx-affine-int4 layout.
+gfx1150 only; albion was not run.
