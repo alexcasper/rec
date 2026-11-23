@@ -126,6 +126,32 @@
 #ifndef GEPA_ATTN_LOP_UNROLL
 #define GEPA_ATTN_LOP_UNROLL 1
 #endif
+// rec-e5d iter 5 (charter bandwidth levers on the depth path):
+// GEPA_ATTN_NSPLIT: split-K chunks per head (0 = auto: groups / heads, capped at 16). Lever (a).
+// GEPA_ATTN_LDS: lever (b) LDS staging. When groups == heads * n_split (one unit per warp; mid and full at 16 workers), workgroup g
+//   owns (kv-head g / n_split, chunk g % n_split) and its 8 warps are that kv-head's 8 q-heads. Each K/V tile (32 positions bf16 /
+//   16 fp32) is copied to LDS once by the whole workgroup (wide uint4 loads) and read by all 8 heads, so global K/V traffic drops 8x.
+//   The tile reuses the gemv pool (q4_gen_db, 16 KiB, idle during attention): no LDS growth. Per-warp position order is identical
+//   to the GEPA_ATTN_LOP=8 path, so outputs are expected byte-identical. Requires GEPA_ATTN_LOP == 8.
+#ifndef GEPA_ATTN_NSPLIT
+#define GEPA_ATTN_NSPLIT 0
+#endif
+#ifndef GEPA_ATTN_LDS
+#define GEPA_ATTN_LDS 0
+#endif
+// GEPA_ATTN_LASTMERGE: lever (d), b6-class barrier cut on the split path. Each (head, chunk) unit publishes its partial (release
+//   fence + agent-scope acq_rel fetch_add on a per-head counter); the unit that arrives last merges that head (same code, same
+//   chunk order -> expected byte-identical). Removes the partials->merge grid barrier: one SYNC_ALL per split-K layer.
+//   Counters live in the ws_f_logits tail (past every partial layout) and are zeroed in the KV-write phase, behind its barrier.
+#ifndef GEPA_ATTN_LASTMERGE
+#define GEPA_ATTN_LASTMERGE 0
+#endif
+#if GEPA_ATTN_LASTMERGE && (!GEPA_ATTN_SPLIT || GEPA_ATTN_GQA)
+#error "GEPA_ATTN_LASTMERGE applies to the GEPA_ATTN_SPLIT path"
+#endif
+#if GEPA_ATTN_LDS && GEPA_ATTN_LOP != 8
+#error "GEPA_ATTN_LDS requires GEPA_ATTN_LOP=8"
+#endif
 #if GEPA_ATTN_GQA && GEPA_ATTN_SPLIT
 #error "GEPA_ATTN_GQA and GEPA_ATTN_SPLIT are alternative depth-attention paths"
 #endif
@@ -1340,6 +1366,10 @@ __device__ inline void mid_generate_impl(
                 l_kv[k_off] = kv_store<KVT>(ws_k[i]);
                 l_kv[v_off] = kv_store<KVT>(ws_v[i]);
             }
+#if GEPA_ATTN_LASTMERGE
+            if (sg == 0 && lane < MID_HEADS)                   // per-head arrival counters for this layer's split merge
+                reinterpret_cast<uint32_t*>(ws_f_logits + MID_VOCAB - 64)[lane] = 0u;
+#endif
             SYNC_ALL();
 
             // ---- 6. Attention with Sinks (32 warps across workgroups, 1 q-head per warp) ----
@@ -1431,11 +1461,140 @@ __device__ inline void mid_generate_impl(
             } else
 #elif GEPA_ATTN_SPLIT
             const int n_ctx = pos - t_start + 1;
+#if GEPA_ATTN_NSPLIT
+            const int n_split = GEPA_ATTN_NSPLIT;
+            static_assert(MID_HEADS * GEPA_ATTN_NSPLIT * (MID_HDIM + 2) <= MID_VOCAB, "split partials overflow ws_f_logits");
+#else
             const int n_split = groups / MID_HEADS < 16 ? groups / MID_HEADS : 16;
+#endif
             if (n_ctx > GEPA_ATTN_SPLIT_MIN && n_split > 1) {   // uniform across workgroups -> the extra barrier is safe
                 constexpr int PSTR = MID_HDIM + 2;              // per partial: acc[128], max, denom
                 float* const part = ws_f_logits;                // [heads][n_split][PSTR], free until lm_head
                 const int clen = (n_ctx + n_split - 1) / n_split;
+                auto merge_head = [&](int h) {                  // fold in the sink, normalise (chunk order 0..n_split-1)
+                    const float* ph = part + (size_t)h * n_split * PSTR;
+                    float H = tofloat(sinks[h]);
+                    for (int c = 0; c < n_split; ++c)
+                        if (ph[c * PSTR + MID_HDIM + 1] > 0.0f) H = fmaxf(H, ph[c * PSTR + MID_HDIM]);
+                    float Z = expf(tofloat(sinks[h]) - H), acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                    for (int c = 0; c < n_split; ++c) {
+                        const float zc = ph[c * PSTR + MID_HDIM + 1];
+                        if (!(zc > 0.0f)) continue;
+                        const float w = expf(ph[c * PSTR + MID_HDIM] - H);
+                        Z += zc * w;
+                        #pragma unroll
+                        for (int j = 0; j < 4; ++j) acc[j] += ph[c * PSTR + lane * 4 + j] * w;
+                    }
+                    #pragma unroll
+                    for (int j = 0; j < 4; ++j)
+                        ws_attn[(size_t)h * MID_HDIM + lane * 4 + j] = acc[j] / Z;
+                };
+#if GEPA_ATTN_LASTMERGE
+                static_assert(MID_HEADS * 16 * (MID_HDIM + 2) <= MID_VOCAB - 64, "counters overlap split partials");
+                uint32_t* const cnt = reinterpret_cast<uint32_t*>(ws_f_logits + MID_VOCAB - 64);
+                auto arrive = [&](int u_) {
+                    __threadfence();                                // release this unit's partial (agent scope)
+                    uint32_t old = 0u;
+                    if (lane == 0)
+                        old = __hip_atomic_fetch_add(cnt + u_ / n_split, 1u, __ATOMIC_ACQ_REL, __HIP_MEMORY_SCOPE_AGENT);
+                    old = __shfl_sync(0xffffffffffffffffull, old, 0);
+                    if (old == (uint32_t)(n_split - 1)) {           // last arrival for this head
+                        __threadfence();                            // acquire: see every chunk's partial
+                        merge_head(u_ / n_split);
+                    }
+                };
+#endif
+#if GEPA_ATTN_LDS
+                if (groups == MID_HEADS * n_split && MID_HEADS / MID_NKV == 8) {   // uniform: every workgroup takes this branch
+                    constexpr int LP = 8, LW = 4, LD = MID_HDIM / LW;
+                    constexpr int TT = 16384 / (2 * MID_HDIM * (int)sizeof(KVT));     // tile positions: 32 (bf16) / 16 (fp32)
+                    constexpr int RW = MID_HDIM * (int)sizeof(KVT) / 16;               // uint4 words per K or V row
+                    static_assert(TT % LP == 0, "tile must hold whole LP groups");
+                    KVT* const tk = reinterpret_cast<KVT*>(q4_gen_pool(0));            // [TT][HDIM]
+                    KVT* const tv = tk + TT * MID_HDIM;                                // [TT][HDIM]
+                    const int wq = tid >> 5, pg = lane / LW, sl = lane % LW;
+                    const int kvh = group / n_split, c = group % n_split, h = kvh * 8 + wq, u = h * n_split + c;
+                    const KVT* kc = l_kv + (0 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
+                    const KVT* vc = l_kv + (1 * MID_NKV + (size_t)kvh) * l_cap * MID_HDIM;
+                    float q16[LD], a16[LD];
+                    #pragma unroll
+                    for (int j = 0; j < LD; ++j) {
+                        float qv = ws_q[(size_t)h * MID_HDIM + sl * LD + j];
+                        if constexpr (!PURE_FP32) qv = tofloat(tobf(qv));
+                        q16[j] = qv * MID_ATTN_SCALE;
+                        a16[j] = 0.0f;
+                    }
+                    float hi = -INFINITY, z = 0.0f;
+                    const int ta = t_start + c * clen;
+                    const int tb = (ta + clen - 1 < pos) ? ta + clen - 1 : pos;
+                    __syncthreads();                                   // gemv pool readers of this workgroup are done
+                    for (int t0 = ta; t0 <= tb; t0 += TT) {
+                        const int nt = (tb - t0 + 1 < TT) ? tb - t0 + 1 : TT;
+                        for (int i = tid; i < 2 * TT * RW; i += 256) {  // cooperative copy, one uint4 per thread per step
+                            const int sel = i / (TT * RW), r = (i / RW) % TT, wd = i % RW;
+                            if (r < nt) {
+                                const int t = t0 + r;
+                                const size_t slot = is_sliding ? (size_t)(t % MID_WIN) : (size_t)t;
+                                const uint4* src = reinterpret_cast<const uint4*>((sel ? vc : kc) + slot * MID_HDIM) + wd;
+                                reinterpret_cast<uint4*>((sel ? tv : tk) + (size_t)r * MID_HDIM)[wd] = *src;
+                            }
+                        }
+                        __syncthreads();
+                        for (int r0 = 0; r0 < nt; r0 += LP) {           // same position order as the LOP=8 path
+                            const int r = r0 + pg;
+                            const bool live = r < nt;
+                            const int rr = live ? r : nt - 1;
+                            float kf[LD], vf[LD];
+                            #pragma unroll
+                            for (int j = 0; j < LD; ++j) {
+                                kf[j] = kv_load<KVT, PURE_FP32>(tk[(size_t)rr * MID_HDIM + sl * LD + j]);
+                                vf[j] = kv_load<KVT, PURE_FP32>(tv[(size_t)rr * MID_HDIM + sl * LD + j]);
+                            }
+                            float partial = 0.0f;
+                            #pragma unroll
+                            for (int j = 0; j < LD; ++j) partial += q16[j] * kf[j];
+                            #pragma unroll
+                            for (int off = LW / 2; off >= 1; off >>= 1)
+                                partial += __shfl_xor_sync(0xffffffffffffffffull, partial, off);
+                            if (live) {
+                                if (partial > hi) {
+                                    const float f = expf(hi - partial);
+                                    #pragma unroll
+                                    for (int j = 0; j < LD; ++j) a16[j] = a16[j] * f + vf[j];
+                                    z = z * f + 1.0f; hi = partial;
+                                } else {
+                                    const float f = expf(partial - hi);
+                                    #pragma unroll
+                                    for (int j = 0; j < LD; ++j) a16[j] += f * vf[j];
+                                    z += f;
+                                }
+                            }
+                        }
+                        __syncthreads();                               // tile fully consumed before the next copy
+                    }
+                    {   // merge the LP position groups, same as the LOP path
+                        float H = hi;
+                        #pragma unroll
+                        for (int off = LW; off < 32; off <<= 1) H = fmaxf(H, __shfl_xor_sync(0xffffffffffffffffull, H, off));
+                        const float w = (z > 0.0f) ? expf(hi - H) : 0.0f;
+                        float zz = z * w;
+                        #pragma unroll
+                        for (int off = LW; off < 32; off <<= 1) zz += __shfl_xor_sync(0xffffffffffffffffull, zz, off);
+                        float* pp = part + (size_t)u * PSTR;
+                        #pragma unroll
+                        for (int j = 0; j < LD; ++j) {
+                            float a_ = a16[j] * w;
+                            #pragma unroll
+                            for (int off = LW; off < 32; off <<= 1) a_ += __shfl_xor_sync(0xffffffffffffffffull, a_, off);
+                            if (pg == 0) pp[sl * LD + j] = a_;
+                        }
+                        if (lane == 0) { pp[MID_HDIM] = H; pp[MID_HDIM + 1] = zz; }
+                    }
+#if GEPA_ATTN_LASTMERGE
+                    arrive(u);
+#endif
+                } else
+#endif
                 for (int u = sg; u < MID_HEADS * n_split; u += groups) {
                     const int h = u / n_split, c = u % n_split;
                     const int kvh = h / (MID_HEADS / MID_NKV);
@@ -1579,26 +1738,14 @@ __device__ inline void mid_generate_impl(
                     for (int j = 0; j < 4; ++j) pp[lane * 4 + j] = acc[j];
                     if (lane == 0) { pp[MID_HDIM] = hi; pp[MID_HDIM + 1] = z; }
 #endif
+#if GEPA_ATTN_LASTMERGE
+                    arrive(u);
+#endif
                 }
+#if !GEPA_ATTN_LASTMERGE
                 SYNC_ALL();
-                for (int h = sg; h < MID_HEADS; h += groups) {  // merge: fold in the sink, normalise
-                    const float* ph = part + (size_t)h * n_split * PSTR;
-                    float H = tofloat(sinks[h]);
-                    for (int c = 0; c < n_split; ++c)
-                        if (ph[c * PSTR + MID_HDIM + 1] > 0.0f) H = fmaxf(H, ph[c * PSTR + MID_HDIM]);
-                    float Z = expf(tofloat(sinks[h]) - H), acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-                    for (int c = 0; c < n_split; ++c) {
-                        const float zc = ph[c * PSTR + MID_HDIM + 1];
-                        if (!(zc > 0.0f)) continue;
-                        const float w = expf(ph[c * PSTR + MID_HDIM] - H);
-                        Z += zc * w;
-                        #pragma unroll
-                        for (int j = 0; j < 4; ++j) acc[j] += ph[c * PSTR + lane * 4 + j] * w;
-                    }
-                    #pragma unroll
-                    for (int j = 0; j < 4; ++j)
-                        ws_attn[(size_t)h * MID_HDIM + lane * 4 + j] = acc[j] / Z;
-                }
+                for (int h = sg; h < MID_HEADS; h += groups) merge_head(h);
+#endif
             } else
 #endif
             for (int h = sg; h < MID_HEADS; h += groups) {
