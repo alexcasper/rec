@@ -1744,7 +1744,32 @@ __device__ inline void mid_generate_impl(
                 }
 #if !GEPA_ATTN_LASTMERGE
                 SYNC_ALL();
+#if GEPA_ATTN_NSPLIT || GEPA_ATTN_LDS
+                // lever paths: lambda merge (capture lifetimes differ; hot-loop RA handled separately)
                 for (int h = sg; h < MID_HEADS; h += groups) merge_head(h);
+#else
+                // rec-bhz: ORIGINAL iter-4 inline merge text — merge_head's captures extend value lifetimes across
+                // the u-loop and hipcc RA turns that into 24 extra scratch ops in the hot path (-12% ctx8192).
+                // Keep the lever-off SPLIT path textually identical to the measured 167.26 build.
+                for (int h = sg; h < MID_HEADS; h += groups) {  // merge: fold in the sink, normalise
+                    const float* ph = part + (size_t)h * n_split * PSTR;
+                    float H = tofloat(sinks[h]);
+                    for (int c = 0; c < n_split; ++c)
+                        if (ph[c * PSTR + MID_HDIM + 1] > 0.0f) H = fmaxf(H, ph[c * PSTR + MID_HDIM]);
+                    float Z = expf(tofloat(sinks[h]) - H), acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                    for (int c = 0; c < n_split; ++c) {
+                        const float zc = ph[c * PSTR + MID_HDIM + 1];
+                        if (!(zc > 0.0f)) continue;
+                        const float w = expf(ph[c * PSTR + MID_HDIM] - H);
+                        Z += zc * w;
+                        #pragma unroll
+                        for (int j = 0; j < 4; ++j) acc[j] += ph[c * PSTR + lane * 4 + j] * w;
+                    }
+                    #pragma unroll
+                    for (int j = 0; j < 4; ++j)
+                        ws_attn[(size_t)h * MID_HDIM + lane * 4 + j] = acc[j] / Z;
+                }
+#endif
 #endif
             } else
 #endif
