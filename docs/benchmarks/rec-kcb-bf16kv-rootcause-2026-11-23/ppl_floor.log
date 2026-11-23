@@ -1,0 +1,8 @@
+[bf16 KV] eps 1.19e-07 seed 1: ppl rel vs stock +3.895e-03, max|dlogp| 2.209e+00
+[bf16 KV] eps 1.19e-07 seed 2: ppl rel vs stock +5.766e-03, max|dlogp| 1.505e+00
+[bf16 KV] eps 2.38e-07 seed 1: ppl rel vs stock +8.410e-03, max|dlogp| 2.209e+00
+[bf16 KV] eps 2.38e-07 seed 2: ppl rel vs stock +5.919e-03, max|dlogp| 2.394e+00
+[fp32 KV] eps 1.19e-07 seed 1: ppl rel vs stock +3.903e-08, max|dlogp| 1.861e-04
+[fp32 KV] eps 1.19e-07 seed 2: ppl rel vs stock +2.384e-07, max|dlogp| 2.077e-04
+[fp32 KV] eps 2.38e-07 seed 1: ppl rel vs stock +6.745e-08, max|dlogp| 1.855e-04
+[fp32 KV] eps 2.38e-07 seed 2: ppl rel vs stock +1.821e-07, max|dlogp| 1.192e-04

@@ -1,0 +1,5 @@
+[bf16 KV] stock vs perturbed eps=1.19e-07: rel step0 2.140e-02 max 1.973e-01 | expert-set diffs 2777 (first pos 7, 2422 in prompt)
+[bf16 KV] stock vs perturbed eps=2.38e-07: rel step0 7.426e-03 max 7.701e-02 | expert-set diffs 2826 (first pos 5, 2586 in prompt)
+[bf16 KV] kernel vs ref: unforced step0 1.072e-02 max 4.725e-02 | forced step0 4.705e-04 max 3.340e-03 | 148 devs, gap quantiles [2.175569534301758e-06, 6.511807441711426e-05, 0.00012210756540298462, 0.00022464990615844727, 0.00038098394870758075, 0.001178741455078125]
+[fp32 KV] stock vs perturbed eps=1.19e-07: rel step0 6.906e-07 max 9.062e-07 | expert-set diffs 0 (first pos None, 0 in prompt)
+[fp32 KV] stock vs perturbed eps=2.38e-07: rel step0 5.524e-07 max 1.373e-06 | expert-set diffs 0 (first pos None, 0 in prompt)
