@@ -9382,7 +9382,8 @@
    },
    "window": "PAUSED 04:09:09Z -> run 04:09:30-04:23:14Z -> RESTARTED 04:23:46Z (14m37s down); on-box probe 30.16/30.10 tok/s, ops_flint in-band 29.63",
    "cotenants": "E4B 200, qwen3vl 200/200, llama-qwen inactive, display ACTIVE; per line in window.log",
-   "outcome": "FRONT-BEST CANDIDATE for the M3 depth build, pending Alex rec-kcb ruling (promotion parked). Only failing tier is the strict 8192 fp32-KV reading, which fails identically for every build"
+   "outcome": "FRONT-BEST CANDIDATE for the M3 depth build, pending Alex rec-kcb ruling (promotion parked). Only failing tier is the strict 8192 fp32-KV reading, which fails identically for every build",
+   "recipe_note": "PIN -DGEPA_SHRINK=0: measured lib 8816eebf was built when full config forced SHRINK=0. At gemini-kernels >= 98ce41d the full default is SHRINK=1+VMEM-fence (VGPR 256/private 288B vs 251/32B), a DIFFERENT unmeasured build - do NOT quote 32.73 against HEAD default builds. Instruction-identical rebuild of the measured build at HEAD: -DFLINT_CFG_FULL=1 -DGEPA_ATTN_SPLIT=1 -DGEPA_ATTN_LOP=8 -DGEPA_SHRINK=0 (ee04ff3 verification). SHRINK=1+fence lop8 row tracked as rec-04i."
   },
   {
    "id": "e5d-iter4-lop8pf-mid",
