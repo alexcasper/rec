@@ -9288,7 +9288,8 @@
    "ctx8192_mean": 166.82,
    "vs_lop4_154_60": 1.079,
    "optimizer": "external",
-   "outcome": "iter-3 front-best (+7.9%); mid gates ALL PASS (8192 fp32kv strict 1.25e-5, 0 devs); short 0.978/0.981 vs 2b98737 (SHRINK=0 pin, = def0); projected full 8192 ~33.0 (1.23x), unmeasured"
+   "outcome": "iter-3 front-best (+7.9%); mid gates ALL PASS (8192 fp32kv strict 1.25e-5, 0 devs); short 0.978/0.981 vs 2b98737 (SHRINK=0 pin, = def0); projected full 8192 ~33.0 (1.23x), unmeasured",
+   "full_config_measured": "32.73 tok/s @8192 (33a9d42)"
   },
   {
    "id": "e5d-iter3-lop4pf-mid",
@@ -9351,6 +9352,37 @@
    "vs_lop4_154_60": 0.9984,
    "optimizer": "external",
    "outcome": "equivalence control for the generic rewrite (-0.2%, noise)"
+  },
+  {
+   "id": "e5d-full8k-lop8",
+   "time": "2026-11-23T05:09:58Z",
+   "knobs": {
+    "FLINT_CFG_FULL": 1,
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8
+   },
+   "source_commit": "4ba4c94",
+   "record_commit": "33a9d42",
+   "lib_sha256_prefix": "8816eebf589b0ebf",
+   "config": "FULL Flint, dusk, depth8192 seeded prompt, prod bf16-KV ABBA 12 pairs (depth 8215..8265, k=3)",
+   "decode_tok_s_8192": 32.73,
+   "valid_pairs": "12/12",
+   "vs_incumbent_26_80": 1.221,
+   "vs_lop4_31_36": 1.044,
+   "vs_projection_33_0": 0.992,
+   "vs_solo_baseline_31_1": 1.052,
+   "gates_full_binding_interim": {
+    "fp32kv_wrap512": "PASS 7.64e-7 / 1.47e-6, 0 devs",
+    "fp32kv_8192_strict": "FAIL last 7.4115e-2 / step 0.2969 (3 k/k+1 ties: L3@3232 4.77e-7, L26@3255 4.47e-7, L38@6456 0.0); tokens exact; identical to lop4/default/split",
+    "fp32kv_8192_forced": "PASS 2.14e-5 (proposal, NOT enacted)",
+    "determinism": "PASS wrap512 fp32kv+bf16kv x2 fresh sessions; 8192 single session",
+    "ppl_eval_set_full_v1": "PASS fp32kv +1.20e-7, bf16kv +6.92e-3 (split-K +3.38e-3; margin 3.1e-3)",
+    "info_bf16kv_wrap512": 0.0548
+   },
+   "window": "PAUSED 04:09:09Z -> run 04:09:30-04:23:14Z -> RESTARTED 04:23:46Z (14m37s down); on-box probe 30.16/30.10 tok/s, ops_flint in-band 29.63",
+   "cotenants": "E4B 200, qwen3vl 200/200, llama-qwen inactive, display ACTIVE; per line in window.log",
+   "outcome": "FRONT-BEST CANDIDATE for the M3 depth build, pending Alex rec-kcb ruling (promotion parked). Only failing tier is the strict 8192 fp32-KV reading, which fails identically for every build"
   }
  ],
  "incumbent_history": [
