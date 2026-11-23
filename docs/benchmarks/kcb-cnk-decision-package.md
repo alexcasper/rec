@@ -125,3 +125,36 @@ projection and keeps 1.13× (gqa); nothing else in the matrix changes.
 Recommendation: **(ii) with (i) as fallback** — measure lop8 at full depth first (one ~12-min owner window, same shape as the last three); its strict-clean mid record makes it the only candidate that might need no relaxation at all, which is the strongest possible position for the decision matrix. If lop8 shows ties at depth, fall back to (i).
 
 Speed table update (full @8192, vs incumbent 26.80): measured lop4 **31.36 (1.17×)**, gqa 29.53 (1.10×); projected lop8 ~33.0 (1.23×, unmeasured). Mid ctx8192: lop8 166.82, lop4 154.6, split0 96.4, def0 30.09. All commits local (`4ba4c94` gemini-kernels; pool updated); push ledger unchanged.
+
+## Addendum 2 (2026-11-23 06:39Z — lop8 full-config @8192 CONFIRMED; gemini-kernels `33a9d42`, docs/benchmarks/e5d-lop8-full8k-dusk-2026-11-23/)
+
+**lop8 measured: 32.73 tok/s (12/12 stable ABBA pairs) = 1.221× vs incumbent 26.80** — the
+projection (~33.0) held within 0.8%. Window: 04:09:30–04:23:14Z, 4/4 rc 0, longest launch under
+cap, 14m37s downtime.
+
+Gates under the interim tiers: wrap512 fp32kv PASS 7.64e-7; fresh-session determinism PASS
+(wrap512 fp32kv+bf16kv ×2, identical md5s); ppl eval_set_full_v1 PASS (fp32kv +1.2e-7;
+bf16kv +6.92e-3 <1e-2, thinnest margin 3.1e-3). **8192 fp32kv strict still FAILs (7.4115e-2,
+tokens exact) via 3 k/k+1 ties — and all three fall WITHIN the drafted 2e-6 band:**
+L3@3232 4.77e-7, L26@3255 4.47e-7, L38@6456 exact 0.0-gap fp32 tie. Forced to kernel routing:
+2.14e-5 PASS. The tie population is identical to lop4/default/split — baseline, not build.
+
+**Consequence for the ruling: option (ii) is now executable AS DRAFTED — no band widening
+needed.** Ratify rec-kcb v1 + the Item-1 amendment (2e-6 forced-judging), and lop8's 8192 row
+is quotable at **1.22× gated** (7.41e-2 becomes informational under forced judging; the
+unforced number is recorded either way). Without ratification, the 8192 row stays unquotable
+and the depth front remains incumbent territory on paper despite the measured 1.22×.
+
+Full-config decision matrix after this window (vs incumbent 26.80 @8192 / 29.39 @512):
+| depth | build | tok/s | ratio | gating status |
+|---|---|---|---|---|
+| 512 | split-K + SHRINK=0 | 33.55 | **1.14×** | quotable under rec-kcb v1 |
+| 8192 | **lop8** | **32.73** | **1.22×** | needs ONLY the Item-1 amendment (all 3 ties ≤2e-6) |
+| 8192 | lop4 | 31.36 | 1.17× | needs amendment + band widened to 4e-6 (3 ties, 2 above 2e-6) |
+| 8192 | gqa | 29.53 | 1.10× | needs amendment (5 ties, 2 above 2e-6) |
+
+Mid front unchanged: 2b98737 214.27 short-ctx (byte-identical); lop8 mid ctx8192 166.82.
+Recommendation stands: ratify v1 + Item-1 amendment as drafted; ship lop8 as the M3 depth
+build. The megakernel then holds gated wins at BOTH decision depths — 1.14× @512 and 1.22×
+@8192 — with footprint 21.0 GiB vs 18.5 GB (bytes/token disclosed per row) and prefill
+remaining the known open gap (37 vs 450 pos/s serial; batched prefill queued).
