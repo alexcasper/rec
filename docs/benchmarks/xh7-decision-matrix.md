@@ -42,7 +42,7 @@ deltas = depth (2→49), experts (8→256), top-k (2→6).
 **Same-box pairs, dusk 890M, full Flint:**
 - M3 display-down window (SUPERSEDED rows, faulty split build): ~~@512 34.74 vs 29.39; @8192 21.35 vs 26.80~~ — unquotable (R11 invalidated).
 - Clean HEAD default (R11r, rec-3cr): @512 **24.75 vs llama.cpp 29.39 = 0.84×, MEGAKERNEL LOSES** — the superseded 1.18× win came entirely from the racy split-K attention path (active above 64 positions); without it, serial one-warp-per-head attention costs ~15 ms/token at depth 512 (40.4 vs 25.6 ms/token short) on 14 full-attention layers. Short-ctx: megakernel 39.06 (no incumbent row at that depth).
-- **@8192 with the lop8 remedy (Nov 23, full-config determinism gate PASS both KV tiers — the split-K class made deterministic per rec-3cr): 32.73 tok/s (12/12 stable pairs) vs incumbent 26.80 = 1.22× MEGAKERNEL WIN at depth.** Bytes: 21.02 GiB INT4-affine vs 18.49 GB UD-Q3_K_XL (1.22× bytes).
+- **@8192 with the lop8 remedy (Nov 23, full-config determinism gate PASS both KV tiers — the split-K class made deterministic per rec-3cr): 32.73 tok/s (12/12 stable pairs) vs incumbent 26.80 = 1.22× MEGAKERNEL WIN at depth.** ppl gate PASS: fp32kv 3.2803 vs bf16kv 3.2987, delta **0.5565% < 1%** (top1 agreement 98.43%; scoring + raw npz pair in docs/benchmarks/e5d-lop8-ppl-scoring.log). Bytes: 21.02 GiB INT4-affine vs 18.49 GB UD-Q3_K_XL (1.22× bytes).
 - Split verdict, clean builds only: incumbent holds @512 on dusk; **megakernel holds @8k depth with lop8**. On albion the incumbent leads at both depths (2.15×/2.33×) — host split remains.
 
 Cross-reads (with caveats): R1 vs R2 = **parity on the shipped mix**
