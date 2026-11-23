@@ -133,6 +133,54 @@
     "bf16kv": 0.00338391898799717,
     "fp32kv": 1.5368204353549686e-07
    }
+  },
+  {
+   "id": "e5d-iter4-mid/lop8pf/v1",
+   "dir": "docs/benchmarks/e5d-iter4-mid-dusk-2026-11-23/ppl/lop8pf/v1",
+   "ckpt": "mid",
+   "evalset": "eval_set_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": -3.4624960010276595e-08,
+    "bf16kv": -0.0006881016911870486
+   },
+   "note": "npz byte-identical to iter3 lop8"
+  },
+  {
+   "id": "e5d-iter4-mid/lop8pf/full",
+   "dir": "docs/benchmarks/e5d-iter4-mid-dusk-2026-11-23/ppl/lop8pf/full",
+   "ckpt": "mid",
+   "evalset": "eval_set_full_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": 1.3586312519464627e-08,
+    "bf16kv": 4.019856889359019e-05
+   },
+   "note": "npz byte-identical to iter3 lop8"
+  },
+  {
+   "id": "e5d-iter4-mid/lop8u2/v1",
+   "dir": "docs/benchmarks/e5d-iter4-mid-dusk-2026-11-23/ppl/lop8u2/v1",
+   "ckpt": "mid",
+   "evalset": "eval_set_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": -3.4624960010276595e-08,
+    "bf16kv": -0.0006881016911870486
+   },
+   "note": "npz byte-identical to iter3 lop8"
+  },
+  {
+   "id": "e5d-iter4-mid/lop8u2/full",
+   "dir": "docs/benchmarks/e5d-iter4-mid-dusk-2026-11-23/ppl/lop8u2/full",
+   "ckpt": "mid",
+   "evalset": "eval_set_full_v1.json",
+   "scorer": "score_e5d (Reference per KV)",
+   "expected": {
+    "fp32kv": 1.3586312519464627e-08,
+    "bf16kv": 4.019856889359019e-05
+   },
+   "note": "npz byte-identical to iter3 lop8"
   }
  ]
 }
