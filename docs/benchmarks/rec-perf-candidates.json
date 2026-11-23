@@ -9229,7 +9229,7 @@
     "forced_pass_1e-4": true,
     "note": "forced = rec-kcb proposal, NOT enacted"
    },
-   "determinism_full": "1 session only (mid: PASS suite x2, wrap512 x3, 8192 x2)",
+   "determinism_full": "PASS wrap512 fp32kv+bf16kv, 2 fresh sessions (window 02:25:40-02:34:00Z, 4ba4c94)",
    "outcome": "MEASURED M3 depth build: 1.170x incumbent @8192 ungated; strict fp32-KV fails only via 1-ulp router ties; promotion Alex-gated (rec-kcb)"
   },
   {
@@ -9252,9 +9252,105 @@
    "vs_incumbent": 1.102,
    "vs_split_k_21_55": 1.37,
    "prefill_8192_s": 294.9,
-   "fp32kv_8192": "not emitted at full config (mid strict PASS 1.24e-5)",
-   "determinism_full": "1 session only (mid PASS)",
+   "fp32kv_8192": {
+    "tokens_exact": true,
+    "strict": "FAIL last 1.215e-4 / step 5.24e-4 (5 routing devs)",
+    "forced_max": 9.54e-06,
+    "forced_pass_1e-4": true,
+    "tie_gaps": [
+     3.28e-06,
+     2.53e-06,
+     6.26e-07,
+     5.81e-07,
+     5.96e-08
+    ],
+    "note": "2 gaps exceed the draft rec-kcb 2e-6 tie band",
+    "record_commit": "4ba4c94"
+   },
+   "determinism_full": "PASS wrap512 fp32kv+bf16kv, 2 fresh sessions (window 02:25:40-02:34:00Z, 4ba4c94)",
    "outcome": "fallback depth build: 1.102x incumbent @8192 ungated; full-config fp32-KV unmeasured"
+  },
+  {
+   "id": "e5d-iter3-lop8-mid",
+   "time": "2026-11-23T03:20:33Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8
+   },
+   "source_commit": "4ba4c94",
+   "record_commit": "4ba4c94",
+   "config": "mid-8L ctx8192, dusk, :8080 up, ABBA 12/12",
+   "ctx8192_runs": [
+    166.87,
+    166.77
+   ],
+   "ctx8192_mean": 166.82,
+   "vs_lop4_154_60": 1.079,
+   "optimizer": "external",
+   "outcome": "iter-3 front-best (+7.9%); mid gates ALL PASS (8192 fp32kv strict 1.25e-5, 0 devs); short 0.978/0.981 vs 2b98737 (SHRINK=0 pin, = def0); projected full 8192 ~33.0 (1.23x), unmeasured"
+  },
+  {
+   "id": "e5d-iter3-lop4pf-mid",
+   "time": "2026-11-23T03:20:33Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 4,
+    "GEPA_ATTN_LOP_PF": 1
+   },
+   "source_commit": "4ba4c94",
+   "record_commit": "4ba4c94",
+   "config": "mid-8L ctx8192, dusk, :8080 up, ABBA 12/12",
+   "ctx8192_runs": [
+    158.96,
+    158.57
+   ],
+   "ctx8192_mean": 158.77,
+   "vs_lop4_154_60": 1.027,
+   "optimizer": "external",
+   "outcome": "+2.7% (clears 1.6%), not gated: dominated by lop8; VGPR 256"
+  },
+  {
+   "id": "e5d-iter3-lop4u2-mid",
+   "time": "2026-11-23T03:20:33Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 4,
+    "GEPA_ATTN_LOP_UNROLL": 2
+   },
+   "source_commit": "4ba4c94",
+   "record_commit": "4ba4c94",
+   "config": "mid-8L ctx8192, dusk, :8080 up, ABBA 12/12",
+   "ctx8192_runs": [
+    154.32,
+    154.25
+   ],
+   "ctx8192_mean": 154.29,
+   "vs_lop4_154_60": 0.998,
+   "optimizer": "external",
+   "outcome": "no gain (-0.2%), rejected"
+  },
+  {
+   "id": "e5d-iter3-lop4r-mid",
+   "time": "2026-11-23T03:20:33Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 4
+   },
+   "source_commit": "4ba4c94",
+   "record_commit": "4ba4c94",
+   "config": "mid-8L ctx8192, dusk, :8080 up, ABBA 12/12",
+   "ctx8192_runs": [
+    154.0,
+    154.71
+   ],
+   "ctx8192_mean": 154.36,
+   "vs_lop4_154_60": 0.9984,
+   "optimizer": "external",
+   "outcome": "equivalence control for the generic rewrite (-0.2%, noise)"
   }
  ],
  "incumbent_history": [
