@@ -39,3 +39,9 @@ measured full-config depth row. It passes every binding tier except the strict 8
 build tested (default, split-K, lop4) because of the same router ties, including one exact fp32 tie, so it isn't specific to lop8. Forced, lop8
 passes at 2.14e-5. Flag: the bf16-KV ppl spend (+6.9e-3 of the 1e-2 budget) is about twice split-K's; mid lop8 was +4.0e-5, so this looks like
 routing-flip noise, but it's the thinnest margin.
+
+## Build-recipe note after rec-11b (98ce41d, 2026-11-23)
+rec-11b re-enabled `GEPA_SHRINK=1` (plus the VMEM fence) as the full-config default. The row above was measured on the **SHRINK=0** build.
+At HEAD, `-DFLINT_CFG_FULL=1 -DGEPA_ATTN_SPLIT=1 -DGEPA_ATTN_LOP=8 -DGEPA_SHRINK=0` is instruction-identical to the measured `full_lop8.so`
+(0 differing lines). Without `-DGEPA_SHRINK=0`, HEAD's full lop8 is a different, unmeasured build that spills (VGPR 256, private 288 B vs
+251 / 32 B). **The lop8 promotion recipe must pin `GEPA_SHRINK=0`, or the SHRINK=1+fence lop8 variant needs its own full-config row and gates.**

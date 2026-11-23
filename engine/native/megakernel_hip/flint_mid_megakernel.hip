@@ -732,9 +732,11 @@ __device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict
             } else {
                 sum = load16_f(x + scalar, v);
             }
-#if GEPA_FENCE_TAIL
+#if GEPA_SHRINK
             if (first + 4 > n) {
-                gepa_vmem_fence();
+#if GEPA_FENCE_TAIL
+                gepa_vmem_fence();   // rec-11b: full config only (GEPA_FENCE_TAIL); mid keeps the c033 tail call unfenced
+#endif
                 q4_rows_tail<K, ROUND_BF16, XU, XPURE>(w, s, b, x, out_bf, out_f, first, n, lane GEPA_ACC_ARG);
                 continue;
             }
@@ -956,8 +958,10 @@ __device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict
         }
         // partial trailing quad (n % 4 != 0): unstaged, one row at a time, blocks in order (as before)
         for (; first < n; first += step) {
+#if GEPA_SHRINK
 #if GEPA_FENCE_TAIL
             gepa_vmem_fence();
+#endif
             q4_rows_tail<K, ROUND_BF16, XU, XPURE>(w, s, b, x, out_bf, out_f, first, first + 4 < n ? first + 4 : n, lane
                                                   GEPA_ACC_ARG);
             continue;
