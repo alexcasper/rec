@@ -1,0 +1,12 @@
+14:37:42Z +0s preflight rec-04j lop8f @512 re-baseline (waiting for :8080 pause, max 1800s) | 8080:200 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=16.4GiB vram_free=17.9GiB
+14:38:02Z +20s window open :8080 down | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=17.0GiB vram_free=38.7GiB
+ec34a71153bae74b0001be1ff9512f6943a9faa75a653622a6d6bfd2763fc338  /home/dusk/rec-ve/fut11b/lop8f/flint_mid.so
+14:38:05Z +23s START speed512 (short + ctx512, 12 ABBA pairs, mode 0; budget 200s, hard 360s) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=0 MemAvailable=16.9GiB vram_free=38.7GiB
+2026-11-23T14:38:46Z ROW short: decode 38.75 tok/s (12/12 stable pairs, depth 4..76); prefill 4 pos in 0.13 s | flint:down,e4b:idle,qwen:down,gpu_busy=18,MemAvailable=16.8GiB
+2026-11-23T14:39:31Z ROW ctx512: decode 37.69 tok/s (12/12 stable pairs, depth 512..572); prefill 512 pos in 13.39 s | flint:down,e4b:idle,qwen:down,gpu_busy=17,MemAvailable=16.8GiB
+2026-11-23T14:39:31Z window bench ok | max launch 0.16157 s | span 85.1 s
+14:39:31Z +109s END speed512 rc=0 (bench 89s after window open) | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=36 MemAvailable=16.9GiB vram_free=38.7GiB
+14:39:31Z +109s done -> signal ops_flint to restart :8080 | 8080:000 8090:200 qwen3vl:200/200 llama-qwen:inactive display:active busy=34 MemAvailable=17.0GiB vram_free=38.7GiB
+14:41:04Z health=200
+probe decode 30.23 tok/s (64 tok), prefill 86.5 tok/s
+probe decode 30.32 tok/s (64 tok), prefill 84.0 tok/s
