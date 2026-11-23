@@ -9383,6 +9383,81 @@
    "window": "PAUSED 04:09:09Z -> run 04:09:30-04:23:14Z -> RESTARTED 04:23:46Z (14m37s down); on-box probe 30.16/30.10 tok/s, ops_flint in-band 29.63",
    "cotenants": "E4B 200, qwen3vl 200/200, llama-qwen inactive, display ACTIVE; per line in window.log",
    "outcome": "FRONT-BEST CANDIDATE for the M3 depth build, pending Alex rec-kcb ruling (promotion parked). Only failing tier is the strict 8192 fp32-KV reading, which fails identically for every build"
+  },
+  {
+   "id": "e5d-iter4-lop8pf-mid",
+   "time": "2026-11-23T06:52:40Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8,
+    "GEPA_ATTN_LOP_PF": 1
+   },
+   "source_commit": "4ba4c94",
+   "record_commit": "c843794",
+   "config": "mid-8L ctx8192, dusk, :8080 up, ABBA 12/12; cotenants idle 287/287",
+   "ctx8192_runs": [
+    166.21,
+    166.33
+   ],
+   "ctx8192_mean": 166.27,
+   "vs_lop8_control": 0.9941,
+   "gates": "all emits byte-identical to iter-3 lop8 -> determinism PASS, wrap512 fp32kv 1.08e-6, fp32_bf16kv 1.80e-4, mid strict 8192 fp32kv PASS 1.25e-5 (0 devs), ppl PASS (rescore reproduces)",
+   "short4_chat_vs_2b98737": [
+    0.9729,
+    0.9701
+   ],
+   "optimizer": "external",
+   "outcome": "rejected: -0.6% ctx8192, short -2.8% (register spill: VGPR 256, private 240 B, 308 scratch ops)"
+  },
+  {
+   "id": "e5d-iter4-lop8u2-mid",
+   "time": "2026-11-23T06:52:40Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8,
+    "GEPA_ATTN_LOP_UNROLL": 2
+   },
+   "source_commit": "4ba4c94",
+   "record_commit": "c843794",
+   "config": "mid-8L ctx8192, dusk, :8080 up, ABBA 12/12; cotenants idle 287/287",
+   "ctx8192_runs": [
+    167.18,
+    167.55
+   ],
+   "ctx8192_mean": 167.37,
+   "vs_lop8_control": 1.0007,
+   "gates": "all emits byte-identical to iter-3 lop8 -> determinism PASS, wrap512 fp32kv 1.08e-6, fp32_bf16kv 1.80e-4, mid strict 8192 fp32kv PASS 1.25e-5 (0 devs), ppl PASS (rescore reproduces)",
+   "short4_chat_vs_2b98737": [
+    0.9734,
+    0.9735
+   ],
+   "optimizer": "external",
+   "outcome": "rejected: +0.07% (noise), below 1.6% bar"
+  },
+  {
+   "id": "e5d-iter4-lop8c-mid",
+   "time": "2026-11-23T06:52:40Z",
+   "knobs": {
+    "GEPA_SHRINK": 0,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8
+   },
+   "source_commit": "4ba4c94",
+   "record_commit": "c843794",
+   "config": "mid-8L ctx8192, dusk, :8080 up, ABBA 12/12; cotenants idle 287/287",
+   "ctx8192_runs": [
+    167.14,
+    167.53,
+    167.11
+   ],
+   "ctx8192_mean": 167.26,
+   "vs_lop8_control": 1.0,
+   "gates": "all emits byte-identical to iter-3 lop8 -> determinism PASS, wrap512 fp32kv 1.08e-6, fp32_bf16kv 1.80e-4, mid strict 8192 fp32kv PASS 1.25e-5 (0 devs), ppl PASS (rescore reproduces)",
+   "short4_chat_vs_2b98737": null,
+   "optimizer": "external",
+   "outcome": "control re-run of iter-3 lop8 (166.82 then): stays front-best"
   }
  ],
  "incumbent_history": [
