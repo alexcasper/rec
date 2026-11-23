@@ -9574,10 +9574,10 @@
     "ctx8192": 1.035,
     "short": 1.007
    },
-   "gates": "ALL GREEN: suite det 2 emits PASS G0 8/8 vs 24f167d; wrap512 det PASS x3 KV modes; depth8192 fp32kv 2 fresh sessions md5 14814c8311 BYTE-IDENTICAL to iter4 control (production numerics exact); ppl KV deltas +0.089%/+0.087% PASS; short4/chat ABBA vs promo 2b98737 0.9842/0.9875 (better than iter4 candidates)",
+   "gates": "ALL GREEN: suite det 2 emits PASS G0 8/8 vs 24f167d; wrap512 det PASS x3 KV modes; VALIDATION-mode emits byte-identical to ctl6 (wrap512 fp32kv/fp32_bf16kv + depth8192 fp32kv md5 14814c8311 x2 fresh) \u2014 CORRECTION (p1F): DOT2 deliberately touches ONLY the production bf16-KV mode (PURE_FP32=false); fp32kv/fp32_bf16kv are validation modes it leaves untouched, so those identities do NOT show production invariance. PRODUCTION emit DIFFERS: wrap512_bf16kv ctl6 7c6bc13b vs dot2 bc0423fa \u2014 DOT2 is a RELAXED change in production mode (q.k summation order + scale after reduction). Production evidence = bf16kv info tier + bf16kv ppl (kernels-lane scoring on gate-ctl6/gate-dot2, posted separately). Other gates: ppl KV deltas +0.089%/+0.087% PASS; short4/chat ABBA vs promo 2b98737 0.9842/0.9875.",
    "also_rejected": "smin16 +0.13% noise; LOP=16 compile-rejected (private 400 B, 710 scratch ops)",
-   "verdict": "PARETO JOINER, not self-promoted: dominates control on both axes but does not meet the +1.6%-both-cases promotion rule (short +0.7%). byte-identical depth output + all gates green make it a clean default-recipe candidate pending Alex ruling + owner-window full-config dot2 confirm (Pareto vs 33.42 @8192 / 37.69 @512 lop8f).",
-   "record_commit": "PENDING"
+   "verdict": "PARETO JOINER, not self-promoted: dominates control on both axes but does not meet the +1.6%-both-cases promotion rule (short +0.7%). A RELAXED production-mode change (bf16-KV q.k order) \u2014 promotion is additionally contingent on the bf16kv production evidence (info tier + ppl scoring, kernels lane) AND Alex ruling + owner-window full-config dot2 confirm (Pareto vs 33.42 @8192 / 37.69 @512 lop8f).",
+   "record_commit": "AMENDED"
   }
  ],
  "incumbent_history": [
