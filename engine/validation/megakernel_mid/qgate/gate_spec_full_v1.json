@@ -40,7 +40,8 @@
         "policy": "No further full-config bf16-KV attempts unless Alex reopens. informational bf16-KV readings may still be recorded per row, never binding"
     },
     "promoted_rows": {
-        "lop8f_SHRINK1_fence": {"lib_sha256_prefix": "ec34a71153bae74b", "rows_tok_s": {"depth8192": 33.42, "ctx512": 37.69}, "caveat": "measured in production bf16-KV mode BEFORE the rec-kcb ruling; fp32-KV production row pending the next Alex window (KV bytes double at depth: expect @8192 below 33.42, @512 moves less)"}
+        "lop8f_SHRINK1_fence": {"lib_sha256_prefix": "ec34a71153bae74b", "recipe": "-DFLINT_CFG_FULL=1 -DGEPA_ATTN_SPLIT=1 -DGEPA_ATTN_LOP=8 (SHRINK default 1 + rec-11b VMEM fence) - PROMOTED per Alex directive 2026-11-24: replicate-confirmed faster than SHRINK=0 with clean determinism (docs/benchmarks/rec04i-lop8-shrink1-fence-depth8192/README.md)", "rows_tok_s": {"depth8192": "33.42 / 33.38 (2 replicates, mean 33.40)", "ctx512": 37.69}, "caveat": "measured in production bf16-KV mode BEFORE the rec-kcb ruling; fp32-KV production row pending the next Alex window (KV bytes double at depth: expect @8192 below 33.4, @512 moves less)"},
+        "lop8f_SHRINK0_repro": {"lib_sha256_prefix": "8816eebf589b0ebf", "recipe": "-DFLINT_CFG_FULL=1 -DGEPA_SHRINK=0 -DGEPA_ATTN_SPLIT=1 -DGEPA_ATTN_LOP=8 - kept ONLY for instruction-identical reproduction of the 32.73 measurement row (rec-04i pin)"}
     },
     "open_questions": [
         "fp32-KV production re-measure of the promoted lop8f rows (next Alex window)"
