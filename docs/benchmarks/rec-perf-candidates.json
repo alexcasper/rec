@@ -9867,6 +9867,40 @@
     }
    },
    "verdict": "int8 does NOT dominate bf16 (best int8 KIVI: top-1 97.7% vs bf16 98.6%, expert diffs 11.2k vs 8.0k; ppl +0.10% vs -0.13% both inside the bf16-ref noise band); int8 passes a 1% ppl gate; int4 fails (|ppl|>=1.1%, top-1<=92.6%); static calibrated per-channel scales clip 2.5% of K -> +104% ppl. bf16 fixes: SR no (amp 5005 diffs, seed moves ppl 0.4pt), scaled store no (scale-invariant), router-decoupling oracle kills flips (0 diffs, top-1 99.93%) but amplification 6.1e-2 vs fp32 4.6e-5 and requires fp32 KV state -> no deployable fix, dusk rebench not run; fp32-KV stays run-of-record."
+  },
+  {
+   "id": "recywy-int8kv-v1-mid",
+   "time": "2026-11-24T13:27:02Z",
+   "source_commit": "f97c59c",
+   "record_commit": "31f4b6d",
+   "knobs": {
+    "mode": 3,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8,
+    "GEPA_SHRINK": 0,
+    "note": "int8 per-token-head KV, fp32 compute; SHRINK=0 recipe pin (SHRINK=1 nondeterministic, rec-0v1)"
+   },
+   "config": "mid-8L dusk ABBA 12/12 interleaved, per-row cotenant gate, ~/rec-ve/i8/bench-20261124T130217Z; row 5 ctx8192 void (cap abort 0.412 s), row 8 short void (p1E overlap)",
+   "rows": {
+    "fp32kv SHRINK=1 (record)": {
+     "ctx8192": 153.58,
+     "short": 204.19
+    },
+    "int8kv SHRINK=0": {
+     "ctx8192": 157.75,
+     "short": 202.67
+    },
+    "fp32kv SHRINK=0": {
+     "ctx8192": 150.78,
+     "short": 202.73
+    },
+    "bf16kv prod": {
+     "ctx8192": 163.32,
+     "short": 203.19
+    }
+   },
+   "gates": "determinism int8kv SHRINK=0 6/6 identical (4598318faded); kernel int8 vs torch int8 top-1 99.5-99.7%, ppl -1.4e-4; vs torch fp32 top-1 89.9% / ppl -0.11% (mid truncation: torch int8 itself 90.2%, gate not judgeable at mid); fp32kv byte-identical to ctl6 baseline",
+   "verdict": "v1 functional + deterministic at mid; +2.7% ctx8192 vs fp32kv record; binding quality gate + speed at full config pending owner window"
   }
  ],
  "incumbent_history": [
