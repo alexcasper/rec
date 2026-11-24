@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import math
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -255,6 +256,8 @@ class Model:
         # None = store in `dtype`. Used by engine/validation/megakernel_mid to
         # build an exact fp32-compute / bf16-KV reference (layout contract s4).
         self.kv_store_dtype: torch.dtype | None = None
+        # Optional (layer, k, v) -> (k, v) fake-quant applied at the KV store point (after norm+RoPE); None = off.
+        self.kv_quant: Callable[[int, torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]] | None = None
 
     # -- helpers -----------------------------------------------------------
     def _lin(self, name: str, x: torch.Tensor) -> torch.Tensor:
@@ -280,6 +283,8 @@ class Model:
         if self.kv_store_dtype is not None and self.kv_store_dtype != k.dtype:
             k = k.to(self.kv_store_dtype).to(k.dtype)
             v = v.to(self.kv_store_dtype).to(v.dtype)
+        if self.kv_quant is not None:  # validation-only fake-quant KV store (rec-hyf); k, v: [B, kv_heads, L, head_dim]
+            k, v = self.kv_quant(i, k, v)
         sliding = cfg.layer_types[i] == "sliding_attention"
         entry = cache.layers[i] if cache is not None else None
         if sliding and cache is not None:

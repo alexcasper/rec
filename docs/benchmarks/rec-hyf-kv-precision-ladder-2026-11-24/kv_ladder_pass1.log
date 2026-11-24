@@ -1,0 +1,25 @@
+00:34:00 calibrated on 40 eval_set_v1 sequences (566 tokens) in 476s
+00:37:01 fp32 stock done
+00:40:07 fp32 repeat vs fp32: rel_max 0.000e+00 (harness noise)
+00:43:36 AMP fp32_eps_s1: {"rel_max": 4.61810239059443e-05, "ppl_rel": 3.903185885612004e-08, "expert_set_diffs": 0}
+00:47:25 AMP fp32_eps_s2: {"rel_max": 6.520691390464795e-05, "ppl_rel": 2.383850272735799e-07, "expert_set_diffs": 0}
+00:50:36 bf16 vs fp32 (191s): {"rel_max": 0.5161023890377665, "rel_pos0": 0.0032677663604134934, "first_flip_pos_min": 1, "top1_agree": 0.986328125, "ppl_rel": -0.0013127617334353081, "expert_set_diffs": 7985}
+00:54:08 AMP bf16_eps_s1: {"rel_max": 0.392175721424691, "rel_pos0": 5.261607538408706e-05, "first_flip_pos_min": 29, "ppl_rel": 0.003895200839248325, "expert_set_diffs": 4687}
+00:57:52 AMP bf16_eps_s2: {"rel_max": 0.36863941221172486, "rel_pos0": 5.570306807285358e-05, "first_flip_pos_min": 15, "ppl_rel": 0.005766362720455387, "expert_set_diffs": 4882}
+01:00:54 bf16_sr_s1 vs fp32 (181s): {"rel_max": 0.5547657649173139, "rel_pos0": 0.001210242776134963, "first_flip_pos_min": 1, "top1_agree": 0.9778645833333333, "ppl_rel": -0.0003292328626007812, "expert_set_diffs": 9310}
+01:04:01 AMP bf16_sr_s1_eps_s1: {"rel_max": 0.23871113175841893, "rel_pos0": 2.9455835361517554e-05, "first_flip_pos_min": 14, "ppl_rel": -0.003483814281328601, "expert_set_diffs": 5005}
+01:07:31 bf16_sr_s2 vs fp32 (210s): {"rel_max": 0.5600093002009566, "rel_pos0": 0.0031111919600776763, "first_flip_pos_min": 1, "top1_agree": 0.9811197916666667, "ppl_rel": 0.0036394338867025144, "expert_set_diffs": 8912}
+01:10:05 bf16_sr_unseeded vs fp32 (154s): {"rel_max": 0.36765100325286837, "rel_pos0": 0.0011958451023035706, "first_flip_pos_min": 4, "top1_agree": 0.9856770833333333, "ppl_rel": -0.0006277077829837108, "expert_set_diffs": 8443}
+01:12:39 bf16_scaled vs fp32 (154s): {"rel_max": 0.7025192267428602, "rel_pos0": 0.0017407831468871614, "first_flip_pos_min": 4, "top1_agree": 0.9817708333333334, "ppl_rel": -0.0004940610773135345, "expert_set_diffs": 7689}
+01:16:01 AMP bf16_scaled_eps_s1: {"rel_max": 0.41265619506763507, "rel_pos0": 3.874101971163653e-05, "first_flip_pos_min": 85, "ppl_rel": 0.0027201578884383792, "expert_set_diffs": 5048}
+01:18:47 int8_pc vs fp32 (167s): {"rel_max": 0.7450091736382968, "rel_pos0": 0.00670999136317877, "first_flip_pos_min": 1, "top1_agree": 0.7428385416666666, "ppl_rel": 1.0447838537361887, "expert_set_diffs": 55442}
+01:24:04 AMP int8_pc_eps_s1: {"rel_max": 0.3707671027604434, "rel_pos0": 9.706339912439853e-07, "first_flip_pos_min": 3, "ppl_rel": 0.002962804040332223, "expert_set_diffs": 11182}
+01:27:37 int8_pt vs fp32 (213s): {"rel_max": 1.1108732098394478, "rel_pos0": 0.00912992295887678, "first_flip_pos_min": 0, "top1_agree": 0.9772135416666666, "ppl_rel": 0.006296375173933111, "expert_set_diffs": 14697}
+01:30:32 int8_g32 vs fp32 (175s): {"rel_max": 1.133549480593742, "rel_pos0": 0.033805318051890396, "first_flip_pos_min": 1, "top1_agree": 0.9733072916666667, "ppl_rel": 0.002573139113279055, "expert_set_diffs": 12162}
+01:33:41 AMP int8_g32_eps_s1: {"rel_max": 0.46758135443914306, "rel_pos0": 0.00020877575133559182, "first_flip_pos_min": 1, "ppl_rel": 0.0017417337080412043, "expert_set_diffs": 8224}
+01:36:22 int4_pc vs fp32 (161s): {"rel_max": 1.1274811109048415, "rel_pos0": 0.056075999356689624, "first_flip_pos_min": 0, "top1_agree": 0.7220052083333333, "ppl_rel": 1.0716976458927507, "expert_set_diffs": 61084}
+01:39:07 int4_pt vs fp32 (165s): {"rel_max": 0.7701760265196886, "rel_pos0": 0.05742697828686419, "first_flip_pos_min": 0, "top1_agree": 0.8548177083333334, "ppl_rel": 0.02451327410761439, "expert_set_diffs": 58382}
+01:41:46 int4_g32 vs fp32 (158s): {"rel_max": 0.7528194542209704, "rel_pos0": 0.029358551839461955, "first_flip_pos_min": 0, "top1_agree": 0.919921875, "ppl_rel": -0.015876197659604685, "expert_set_diffs": 45336}
+01:44:23 bf16_router_oracle vs fp32: {"rel_max": 0.07182463733410613, "rel_pos0": 0.00023827151511246803, "first_flip_pos_min": 149, "top1_agree": 0.9993489583333333, "ppl_rel": -0.0004617284091118501, "expert_set_diffs": 0}
+01:47:38 AMP bf16_router_oracle_eps_s1: {"rel_max": 0.06129160608953103, "rel_pos0": 4.7101345624761784e-05, "ppl_rel": 0.00023406561657979275, "expert_set_diffs": 0}
+01:47:38 done

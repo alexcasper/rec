@@ -1,0 +1,9 @@
+01:47:53 calibration skipped (no static-scale scheme selected)
+01:51:40 fp32 stock done
+01:54:50 fp32 repeat vs fp32: rel_max 0.000e+00 (harness noise)
+01:57:34 int8_pcseq vs fp32 (165s): {"rel_max": 0.5454071890709061, "rel_pos0": 0.007064208854533912, "first_flip_pos_min": 1, "top1_agree": 0.9778645833333334, "ppl_rel": 0.003778841605761807, "expert_set_diffs": 11653}
+02:00:12 int8_kivi vs fp32 (157s): {"rel_max": 0.7317427918838613, "rel_pos0": 0.02827997077666301, "first_flip_pos_min": 1, "top1_agree": 0.9765625, "ppl_rel": 0.0009625918929194732, "expert_set_diffs": 11228}
+02:03:10 AMP int8_kivi_eps_s1: {"rel_max": 0.3561031123425688, "rel_pos0": 0.007957761967494802, "first_flip_pos_min": 8, "ppl_rel": 0.002507431589458653, "expert_set_diffs": 9083}
+02:05:44 int4_pcseq vs fp32 (155s): {"rel_max": 0.743152845414885, "rel_pos0": 0.08572865461678643, "first_flip_pos_min": 0, "top1_agree": 0.9095052083333333, "ppl_rel": 0.011317017561622178, "expert_set_diffs": 45934}
+02:08:22 int4_kivi vs fp32 (158s): {"rel_max": 0.7479390983786921, "rel_pos0": 0.05061793113835288, "first_flip_pos_min": 0, "top1_agree": 0.9264322916666667, "ppl_rel": -0.017668885823427183, "expert_set_diffs": 42010}
+02:08:22 done
