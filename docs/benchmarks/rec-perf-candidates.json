@@ -9481,7 +9481,13 @@
    "determinism": "PASS wrap512 2x2 fresh sessions: fp32kv dabb2919bbc8 x2, bf16kv eec63518fa18 x2 \u2014 byte-identical to rec-3cr SHRINK=0 lop8 remedy md5s (dabb2919/eec63518); all e5d gates carry over",
    "ppl": "fp32kv 3.2803 / bf16kv 3.2987, delta 0.5609% < 1% PASS \u2014 bit-identical to SHRINK=0 lop8 (3.2803/3.2987), confirms output-equivalence",
    "verdict": "SHRINK=1+fence is output-identical to the pinned SHRINK=0 build at equal-or-better speed (+2.1%, within noise) and is the cleaner default recipe; the -DGEPA_SHRINK=0 pin remains for exact reproduction of the 8816eebf measurement row",
-   "record_commit": "PENDING"
+   "record_commit": "PENDING",
+   "replicate_20261124": {
+    "time": "2026-11-24T00:23:31Z",
+    "decode_tok_s_8192": 33.38,
+    "window": "rec04irep-20261124T001804Z",
+    "note": "Alex-directed replicate; mean 33.40 vs SHRINK=0 32.73 = +2.0%; promotion pinned: SHRINK=1+fence is the full-config lop8 recipe (gemini-kernels ad0244f)"
+   }
   },
   {
    "id": "rec04j-lop8f-512-full",
