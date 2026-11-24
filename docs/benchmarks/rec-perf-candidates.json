@@ -9901,6 +9901,34 @@
    },
    "gates": "determinism int8kv SHRINK=0 6/6 identical (4598318faded); kernel int8 vs torch int8 top-1 99.5-99.7%, ppl -1.4e-4; vs torch fp32 top-1 89.9% / ppl -0.11% (mid truncation: torch int8 itself 90.2%, gate not judgeable at mid); fp32kv byte-identical to ctl6 baseline",
    "verdict": "v1 functional + deterministic at mid; +2.7% ctx8192 vs fp32kv record; binding quality gate + speed at full config pending owner window"
+  },
+  {
+   "id": "recywy-int8kv-v11-mid",
+   "time": "2026-11-24T14:25:20Z",
+   "source_commit": "04e9d88",
+   "knobs": {
+    "mode": 3,
+    "GEPA_ATTN_SPLIT": 1,
+    "GEPA_ATTN_LOP": 8,
+    "GEPA_SHRINK": 0
+   },
+   "config": "mid-8L dusk ABBA 12/12 interleaved, per-row cotenant gate 14/14 OK, 0 cap aborts, ~/rec-ve/i8/bench-20261124T140700Z (post-reboot)",
+   "rows": {
+    "fp32kv SHRINK=1 (record)": {
+     "ctx8192": 151.14,
+     "short": 204.76
+    },
+    "int8kv v1": {
+     "ctx8192": 158.27,
+     "short": 202.54
+    },
+    "int8kv v1.1": {
+     "ctx8192": 162.26,
+     "short": 203.88
+    }
+   },
+   "gates": "det x2 fresh PASS (bb62f827); kernel int8 vs torch int8 top-1 99.6%, ppl -1.7e-4; lever-off identity 7 builds (only the int8 kernel differs)",
+   "verdict": "ACCEPT as int8 recipe (+7.4% ctx8192 vs fp32kv record at mid, +2.5% vs v1); binding quality gate + speed at full config pending owner window"
   }
  ],
  "incumbent_history": [
