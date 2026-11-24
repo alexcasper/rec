@@ -1,0 +1,49 @@
+[1 c6 m2] 13:02:20Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=0 8080=200 8090=200 llama-qwen=inactive MemAvail=3.6GiB
+[1 c6 m2] 2026-11-24T13:02:47Z ROW short: decode 207.26 tok/s (12/12 stable pairs, depth 4..328); prefill 4 pos in 0.03 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=3.4GiB
+[1 c6 m2] 2026-11-24T13:04:05Z ROW ctx8192: decode 153.92 tok/s (12/12 stable pairs, depth 8192..8468); prefill 8192 pos in 46.72 s | flint:idle,e4b:idle,qwen:down,gpu_busy=15,MemAvailable=3.4GiB
+[1 c6 m2] 2026-11-24T13:04:05Z window bench ok | max launch 0.20377 s | span 105.1 s
+[1 c6 m2] post GATE OK try=2 foreign_drivers=0 qwen3vl_estab=0 busy3s=7 8080=200 8090=200 llama-qwen=inactive MemAvail=3.0GiB
+[2 c6s0 m3] 13:04:45Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=7 8080=200 8090=200 llama-qwen=inactive MemAvail=3.0GiB
+[2 c6s0 m3] 2026-11-24T13:05:16Z ROW short: decode 201.08 tok/s (12/12 stable pairs, depth 4..316); prefill 4 pos in 0.03 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=3.0GiB
+[2 c6s0 m3] 2026-11-24T13:06:35Z ROW ctx8192: decode 157.63 tok/s (12/12 stable pairs, depth 8192..8480); prefill 8192 pos in 45.92 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=3.1GiB
+[2 c6s0 m3] 2026-11-24T13:06:35Z window bench ok | max launch 0.19473 s | span 110.2 s
+[2 c6s0 m3] post GATE OK try=2 foreign_drivers=0 qwen3vl_estab=0 busy3s=3 8080=200 8090=200 llama-qwen=inactive MemAvail=3.3GiB
+[3 c6 m0] 13:07:14Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=2 8080=200 8090=200 llama-qwen=inactive MemAvail=3.3GiB
+[3 c6 m0] 2026-11-24T13:07:45Z ROW short: decode 202.29 tok/s (12/12 stable pairs, depth 4..340); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=3.1GiB
+[3 c6 m0] 2026-11-24T13:09:04Z ROW ctx8192: decode 163.06 tok/s (12/12 stable pairs, depth 8192..8492); prefill 8192 pos in 45.46 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=3.2GiB
+[3 c6 m0] 2026-11-24T13:09:04Z window bench ok | max launch 0.19784 s | span 109.2 s
+[3 c6 m0] post GATE OK try=2 foreign_drivers=0 qwen3vl_estab=0 busy3s=3 8080=200 8090=200 llama-qwen=inactive MemAvail=3.4GiB
+[4 c6s0 m2] 13:09:43Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=3 8080=200 8090=200 llama-qwen=inactive MemAvail=3.4GiB
+[4 c6s0 m2] 2026-11-24T13:10:13Z ROW short: decode 202.09 tok/s (12/12 stable pairs, depth 4..316); prefill 4 pos in 0.03 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=3.2GiB
+[4 c6s0 m2] 2026-11-24T13:11:32Z ROW ctx8192: decode 150.67 tok/s (12/12 stable pairs, depth 8192..8456); prefill 8192 pos in 47.39 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=3.2GiB
+[4 c6s0 m2] 2026-11-24T13:11:32Z window bench ok | max launch 0.19663 s | span 108.7 s
+[4 c6s0 m2] post GATE OK try=2 foreign_drivers=0 qwen3vl_estab=0 busy3s=3 8080=200 8090=200 llama-qwen=inactive MemAvail=3.4GiB
+[5 c6s0 m3] 13:12:11Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=3 8080=200 8090=200 llama-qwen=inactive MemAvail=3.4GiB
+[5 c6s0 m3] 2026-11-24T13:12:40Z ROW short: decode 204.26 tok/s (12/12 stable pairs, depth 4..304); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=13,MemAvailable=3.3GiB
+[5 c6s0 m3] 2026-11-24T13:13:25Z ABORTED cap: ctx8192/prefill: 0.412 s > cap 0.25 s at start=7750
+[5 c6s0 m3] 2026-11-24T13:13:25Z window bench ABORTED cap: ctx8192/prefill: 0.412 s > cap 0.25 s at start=7750 | max launch 0.41196 s | span 72.8 s
+[5 c6s0 m3] post GATE OK try=2 foreign_drivers=0 qwen3vl_estab=0 busy3s=3 8080=200 8090=200 llama-qwen=inactive MemAvail=3.4GiB
+[6 c6 m2] 13:14:04Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=3 8080=200 8090=200 llama-qwen=inactive MemAvail=3.4GiB
+[6 c6 m2] 2026-11-24T13:14:47Z ROW short: decode 201.76 tok/s (12/12 stable pairs, depth 4..316); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=7.4GiB
+[6 c6 m2] 2026-11-24T13:16:07Z ROW ctx8192: decode 153.66 tok/s (12/12 stable pairs, depth 8192..8468); prefill 8192 pos in 46.81 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=7.5GiB
+[6 c6 m2] 2026-11-24T13:16:07Z window bench ok | max launch 0.19621 s | span 123.1 s
+[6 c6 m2] post GATE OK try=2 foreign_drivers=0 qwen3vl_estab=0 busy3s=0 8080=200 8090=200 llama-qwen=inactive MemAvail=7.6GiB
+[7 c6 m0] 13:16:47Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=0 8080=200 8090=200 llama-qwen=inactive MemAvail=7.6GiB
+[7 c6 m0] 2026-11-24T13:17:15Z ROW short: decode 204.08 tok/s (12/12 stable pairs, depth 4..328); prefill 4 pos in 0.03 s | flint:idle,e4b:idle,qwen:down,gpu_busy=14,MemAvailable=7.5GiB
+[7 c6 m0] 2026-11-24T13:18:34Z ROW ctx8192: decode 163.58 tok/s (12/12 stable pairs, depth 8192..8504); prefill 8192 pos in 45.08 s | flint:idle,e4b:idle,qwen:down,gpu_busy=17,MemAvailable=7.5GiB
+[7 c6 m0] 2026-11-24T13:18:34Z window bench ok | max launch 0.1949 s | span 107.1 s
+[7 c6 m0] post GATE OK try=2 foreign_drivers=0 qwen3vl_estab=0 busy3s=6 8080=200 8090=200 llama-qwen=inactive MemAvail=7.6GiB
+[8 c6s0 m3] 13:19:13Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=3 8080=200 8090=200 llama-qwen=inactive MemAvail=7.7GiB
+[8 c6s0 m3] 2026-11-24T13:20:38Z ROW short: decode 201.95 tok/s (12/12 stable pairs, depth 4..340); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=15,MemAvailable=6.3GiB
+[8 c6s0 m3] 2026-11-24T13:22:00Z ROW ctx8192: decode 157.87 tok/s (12/12 stable pairs, depth 8192..8480); prefill 8192 pos in 45.68 s | flint:idle,e4b:idle,qwen:down,gpu_busy=17,MemAvailable=6.0GiB
+[8 c6s0 m3] 2026-11-24T13:22:00Z window bench ok | max launch 0.19834 s | span 166.3 s
+[8 c6s0 m3] post GATE OK try=2 foreign_drivers=0 qwen3vl_estab=0 busy3s=6 8080=200 8090=200 llama-qwen=inactive MemAvail=6.3GiB
+[9 c6s0 m2] 13:22:39Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=7 8080=200 8090=200 llama-qwen=inactive MemAvail=6.3GiB
+[9 c6s0 m2] 2026-11-24T13:23:09Z ROW short: decode 203.36 tok/s (12/12 stable pairs, depth 4..352); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=15,MemAvailable=6.3GiB
+[9 c6s0 m2] 2026-11-24T13:24:29Z ROW ctx8192: decode 150.88 tok/s (12/12 stable pairs, depth 8192..8468); prefill 8192 pos in 47.25 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=6.3GiB
+[9 c6s0 m2] 2026-11-24T13:24:29Z window bench ok | max launch 0.19648 s | span 109.0 s
+[9 c6s0 m2] post GATE OK try=2 foreign_drivers=0 qwen3vl_estab=0 busy3s=2 8080=200 8090=200 llama-qwen=inactive MemAvail=6.4GiB
+[10 c6 m2] 13:25:08Z GATE OK try=1 foreign_drivers=0 qwen3vl_estab=0 busy3s=1 8080=200 8090=200 llama-qwen=inactive MemAvail=6.4GiB
+[10 c6 m2] 2026-11-24T13:25:38Z ROW short: decode 203.55 tok/s (12/12 stable pairs, depth 4..352); prefill 4 pos in 0.02 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=6.1GiB
+[10 c6 m2] 2026-11-24T13:27:02Z ROW ctx8192: decode 153.16 tok/s (12/12 stable pairs, depth 8192..8480); prefill 8192 pos in 47.11 s | flint:idle,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=5.8GiB
+[10 c6 m2] 2026-11-24T13:27:02Z window bench ok | max launch 0.20001 s | span 113.6 s

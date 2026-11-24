@@ -1,0 +1,63 @@
+{
+ "evalset_sha256": "1b06d9280fe6e1e9d56565b94117d2a329590c49e37d863d5577ba0ceec92893",
+ "ckpt": "/home/dawn/rec-data/mid-prod",
+ "torch": {
+  "int8_vs_fp32": {
+   "ppl_rel": -0.0009610459553299755,
+   "top1_agree": 0.9018324607329843
+  }
+ },
+ "kernel": {
+  "ppl_c6s0": {
+   "fp32kv_vs_torch_fp32": {
+    "max_abs_dlogp": 2.173016275364148e-06,
+    "ppl_rel": 1.3586312519464627e-08,
+    "top1_agree": 1.0
+   },
+   "int8kv_vs_torch_int8": {
+    "max_abs_dlogp": 0.09287783032440267,
+    "ppl_rel": -0.0001386381499429712,
+    "top1_agree": 0.9954188481675392
+   },
+   "gate_int8kv_vs_fp32_ref": {
+    "ppl_rel": -0.001099550867639687,
+    "top1_agree": 0.8985602094240838
+   },
+   "gate_pass": false
+  },
+  "ppl_d0": {
+   "fp32kv_vs_torch_fp32": {
+    "max_abs_dlogp": 2.173016275364148e-06,
+    "ppl_rel": 2.451354874644096e-08,
+    "top1_agree": 1.0
+   },
+   "int8kv_vs_torch_int8": {
+    "max_abs_dlogp": 0.09288012025565706,
+    "ppl_rel": -0.00017211847922626866,
+    "top1_agree": 0.9967277486910995
+   },
+   "gate_int8kv_vs_fp32_ref": {
+    "ppl_rel": -0.0011329990207880059,
+    "top1_agree": 0.899869109947644
+   },
+   "gate_pass": false
+  },
+  "ppl_s0": {
+   "fp32kv_vs_torch_fp32": {
+    "max_abs_dlogp": 2.173016275364148e-06,
+    "ppl_rel": 1.7556985421052218e-08,
+    "top1_agree": 1.0
+   },
+   "int8kv_vs_torch_int8": {
+    "max_abs_dlogp": 0.09289995272910012,
+    "ppl_rel": -0.00013948980682831902,
+    "top1_agree": 0.9954188481675392
+   },
+   "gate_int8kv_vs_fp32_ref": {
+    "ppl_rel": -0.00110040170604353,
+    "top1_agree": 0.8985602094240838
+   },
+   "gate_pass": false
+  }
+ }
+}

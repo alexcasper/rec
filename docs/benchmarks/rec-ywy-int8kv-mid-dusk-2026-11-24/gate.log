@@ -1,0 +1,14 @@
+12:58:04Z [c6s0] ppl start sha 4b476b3d0fcb9827 | busy=0 8080=200 8090=200 qwen3vl_estab=0 MemAvail=3.8GiB
+2026-11-24T12:58:23Z PPL fp32kv: (8, 191) nll 12.087135 ppl 177572.6230 longest 0.040 s, 18.6 s | flint:idle,e4b:idle,qwen:down,gpu_busy=89,MemAvailable=3.8GiB
+2026-11-24T12:58:42Z PPL int8kv: (8, 191) nll 12.086035 ppl 177377.3705 longest 0.022 s, 18.9 s | flint:idle,e4b:idle,qwen:down,gpu_busy=89,MemAvailable=3.4GiB
+12:58:42Z [d0] ppl start sha 59e4076c1879d8f0 | busy=87 8080=200 8090=200 qwen3vl_estab=0 MemAvail=3.5GiB
+2026-11-24T12:59:03Z PPL fp32kv: (8, 191) nll 12.087135 ppl 177572.6250 longest 0.036 s, 19.9 s | flint:idle,e4b:idle,qwen:down,gpu_busy=90,MemAvailable=3.4GiB
+2026-11-24T12:59:22Z PPL int8kv: (8, 191) nll 12.086001 ppl 177371.4310 longest 0.014 s, 19.1 s | flint:idle,e4b:idle,qwen:down,gpu_busy=90,MemAvailable=3.5GiB
+12:59:22Z [s0] ppl start sha ca3259022501f56f | busy=87 8080=200 8090=200 qwen3vl_estab=0 MemAvail=3.6GiB
+2026-11-24T12:59:41Z PPL fp32kv: (8, 191) nll 12.087135 ppl 177572.6237 longest 0.014 s, 19.0 s | flint:idle,e4b:idle,qwen:down,gpu_busy=90,MemAvailable=3.4GiB
+2026-11-24T13:00:00Z PPL int8kv: (8, 191) nll 12.086034 ppl 177377.2194 longest 0.014 s, 18.6 s | flint:idle,e4b:idle,qwen:down,gpu_busy=90,MemAvailable=3.5GiB
+13:00:00Z [c6s0] depth8192 int8kv x2 fresh | busy=87 8080=200 8090=200 qwen3vl_estab=0 MemAvail=3.6GiB
+2026-11-24T13:00:48Z GATE depth8192_int8kv.npz: tokens[:6]=[59404, 22877, 108034, 84348, 54518, 75350] md5 4598318faded launches 1644 longest 0.040 s, 30.0 ms/pos, 47.1 s
+2026-11-24T13:01:35Z GATE depth8192_int8kv_r1.npz: tokens[:6]=[59404, 22877, 108034, 84348, 54518, 75350] md5 4598318faded launches 1644 longest 0.037 s, 30.0 ms/pos, 46.
+2026-11-24T13:01:35Z DETERMINISM int8kv: PASS (2 fresh-session emits)
+13:01:35Z done /home/dusk/rec-ve/i8/gate-20261124T125804Z | busy=91 8080=200 8090=200 qwen3vl_estab=0 MemAvail=3.6GiB
