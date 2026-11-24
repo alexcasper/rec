@@ -46,6 +46,7 @@ BUILDS = {  # name -> (mode, kv_dtype, impl)
     "fp32kv": (2, "fp32", "flint_mid_megakernel.hip[FULL]:mid_generate_fp32kv (fp32-compute, fp32-KV)"),
     "fp32_bf16kv": (1, "bf16", "flint_mid_megakernel.hip[FULL]:mid_generate_fp32_bf16kv (fp32-compute, bf16-KV)"),
     "bf16kv": (0, "bf16", "flint_mid_megakernel.hip[FULL]:mid_generate (production bf16-KV build)"),
+    "int8kv": (3, "int8", "flint_mid_megakernel.hip[FULL]:mid_generate_fp32_int8kv (fp32-compute, per-row int8 KV; rec-ywy)"),
 }
 
 
@@ -207,7 +208,7 @@ def open_bank(bank_path: Path, cfg: dict, off_path: Path | None = None) -> tuple
 
 def session_bytes(bank_size: int, cfg: dict, max_total: int) -> int:
     n_sl = cfg["nl"] - cfg["n_full"]
-    kv = (n_sl * 2 * NKV * WIN * HDIM + cfg["n_full"] * 2 * NKV * max_total * HDIM) * (2 + 4)  # bf16 + fp32 copies
+    kv = int((n_sl * 2 * NKV * WIN * HDIM + cfg["n_full"] * 2 * NKV * max_total * HDIM) * (2 + 4 + 1 + 4 / HDIM))  # bf16 + fp32 copies + lazy int8 copy with fp32 row scales (rec-ywy)
     return bank_size + kv + 64 * VOCAB * 4 + 2 * (60000 + VOCAB) * 4 + max_total * cfg["nl"] * cfg["topk"] * 4
 
 

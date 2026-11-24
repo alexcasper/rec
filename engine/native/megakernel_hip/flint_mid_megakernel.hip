@@ -1238,6 +1238,10 @@ template <>
 __device__ inline float kv_load<float, false>(float v) { return v; }
 template <>
 __device__ inline float kv_load<float, true>(float v) { return v; }
+// rec-ywy: int8 KV (mode 3, fp32 compute). Values are symmetric per-row int8; the row's fp32 scale is applied by the read
+// path (K: on the loaded values or the reduced score, V: on the values or the softmax weight).
+template <>
+__device__ inline float kv_load<int8_t, true>(int8_t v) { return (float)v; }
 
 template <typename KVT>
 __device__ inline KVT kv_store(float v);
@@ -1279,7 +1283,9 @@ __device__ inline void mid_generate_impl(
     bf16* ws_bf, float* ws_f, int* ws_i,
     uint32_t* control, int workers,
     int* out_chosen_experts = nullptr,
-    int start_pos = 0) {   // Bedivere M3.1: absolute position of local step 0 (KV for [0, start_pos) already in the session)
+    int start_pos = 0,     // Bedivere M3.1: absolute position of local step 0 (KV for [0, start_pos) already in the session)
+    float* kv8s_sliding = nullptr,           // rec-ywy int8 KV row scales [N_SLIDING][2][4][513]
+    float* kv8s_full = nullptr) {            //                            [N_FULL][2][4][full_cap]
 
     const int tid = threadIdx.x;          // 0..255
     const int lane = tid & 31;            // 0..31
@@ -1289,6 +1295,12 @@ __device__ inline void mid_generate_impl(
     const int gtid = group * 256 + tid;
     const int gthreads = workers * 256;
     const int total = prompt_len + n_out;
+    constexpr bool KV8 = sizeof(KVT) == 1;
+    static_assert(!KV8 || (PURE_FP32 && !GEPA_ATTN_GQA && !GEPA_ATTN_LDS && !GEPA_ATTN_LOP_PF),
+                  "int8 KV: fp32 compute only; GQA / LDS / LOP_PF read paths not implemented");
+    // rec-ywy RECIPE PIN: build the int8-KV tier with -DGEPA_SHRINK=0. With SHRINK=1 the int8 instantiation is
+    // nondeterministic at mid (5 fresh sessions -> 5 md5s; the rec-11b tail fence does not cure it: 4 -> 4); SHRINK=0
+    // gives 4/4 identical. Same class as rec-3cr; the other instantiations in the same .so stay deterministic.
 
     // Partition device workspace pointers (float precision matching tiny_megakernel.hip)
     // Sequential layout (mid-8L offsets unchanged: act 23552, scores 25600, logits 25728).
@@ -1385,7 +1397,25 @@ __device__ inline void mid_generate_impl(
             KVT* l_kv    = is_sliding
                 ? (kv_sliding + (size_t)l_idx * 2 * MID_NKV * MID_WIN * MID_HDIM)
                 : (kv_full    + (size_t)l_idx * 2 * MID_NKV * (size_t)full_cap * MID_HDIM);
+            float* l_sc = nullptr;                   // int8 KV: row scales [2][NKV][l_cap], row r = kv * NKV + h
+            if constexpr (KV8)
+                l_sc = is_sliding ? kv8s_sliding + (size_t)l_idx * 2 * MID_NKV * MID_WIN
+                                  : kv8s_full + (size_t)l_idx * 2 * MID_NKV * (size_t)full_cap;
 
+            if constexpr (KV8) {                     // one warp per K or V row: absmax -> scale, RNE quantize
+                for (int r = sg; r < 2 * MID_NKV; r += groups) {
+                    const float* src = (r < MID_NKV ? ws_k : ws_v) + (size_t)(r % MID_NKV) * MID_HDIM + lane * 4;
+                    float x[4], m = 0.0f;
+                    #pragma unroll
+                    for (int j = 0; j < 4; ++j) { x[j] = src[j]; m = fmaxf(m, fabsf(x[j])); }
+                    m = simd_max(m);
+                    const float sc = fmaxf(m, 1e-30f) / 127.0f;
+                    KVT* dst = l_kv + ((size_t)r * l_cap + slot) * MID_HDIM + lane * 4;
+                    #pragma unroll
+                    for (int j = 0; j < 4; ++j) dst[j] = (KVT)fminf(fmaxf(rintf(x[j] / sc), -127.0f), 127.0f);
+                    if (lane == 0) l_sc[(size_t)r * l_cap + slot] = sc;
+                }
+            } else
             for (int i = gtid; i < MID_KVDIM; i += gthreads) {
                 int h = i / MID_HDIM;
                 int d = i % MID_HDIM;
@@ -1705,6 +1735,11 @@ __device__ inline void mid_generate_impl(
                                 kf[j] = kv_load<KVT, PURE_FP32>(kc[s0 * MID_HDIM + sl * LD + j]);
                                 vf[j] = kv_load<KVT, PURE_FP32>(vc[s0 * MID_HDIM + sl * LD + j]);
                             }
+                            if constexpr (KV8) {
+                                const float ks = l_sc[(size_t)kvh * l_cap + s0], vs = l_sc[(size_t)(MID_NKV + kvh) * l_cap + s0];
+                                #pragma unroll
+                                for (int j = 0; j < LD; ++j) { kf[j] *= ks; vf[j] *= vs; }
+                            }
                         }
 #endif
 #if GEPA_ATTN_DOT2
@@ -1798,16 +1833,21 @@ __device__ inline void mid_generate_impl(
                         #pragma unroll
                         for (int j = 0; j < 4; ++j) partial += qreg[j] * kv_load<KVT, PURE_FP32>(kt[j]);
                         float score = simd_sum(partial);
+                        float vs = 1.0f;
+                        if constexpr (KV8) {
+                            score *= l_sc[(size_t)kvh * l_cap + t_slot];
+                            vs = l_sc[(size_t)(MID_NKV + kvh) * l_cap + t_slot];
+                        }
                         if (score > hi) {                       // same online update as the 1-warp path, no sink
                             float f = expf(hi - score);         // hi = -inf -> 0
                             #pragma unroll
-                            for (int j = 0; j < 4; ++j) acc[j] = acc[j] * f + kv_load<KVT, PURE_FP32>(vt[j]);
+                            for (int j = 0; j < 4; ++j) acc[j] = acc[j] * f + vs * kv_load<KVT, PURE_FP32>(vt[j]);
                             z = z * f + 1.0f;
                             hi = score;
                         } else {
                             float f = expf(score - hi);
                             #pragma unroll
-                            for (int j = 0; j < 4; ++j) acc[j] = acc[j] + f * kv_load<KVT, PURE_FP32>(vt[j]);
+                            for (int j = 0; j < 4; ++j) acc[j] = acc[j] + (f * vs) * kv_load<KVT, PURE_FP32>(vt[j]);
                             z = z + f;
                         }
                     }
@@ -1897,6 +1937,11 @@ __device__ inline void mid_generate_impl(
                     for (int j = 0; j < 4; ++j) partial += qreg[j] * kv_load<KVT, PURE_FP32>(kt[j]);
                     float score = simd_sum(partial);
 #endif
+                    float add_vs = 1.0f;
+                    if constexpr (KV8) {
+                        score *= l_sc[(size_t)kvh * l_cap + t_slot];
+                        add_vs = l_sc[(size_t)(MID_NKV + kvh) * l_cap + t_slot];
+                    }
                     float next = fmaxf(hi, score);
                     float low = expf(-fabsf(score - hi));
                     bool wins = score > hi;
@@ -1904,7 +1949,7 @@ __device__ inline void mid_generate_impl(
                     float add_f = wins ? 1.0f : low;
                     #pragma unroll
                     for (int j = 0; j < 4; ++j)
-                        acc[j] = acc[j] * old_f + add_f * kv_load<KVT, PURE_FP32>(vt[j]);
+                        acc[j] = acc[j] * old_f + (add_f * add_vs) * kv_load<KVT, PURE_FP32>(vt[j]);
                     z = z * old_f + add_f;
                     hi = next;
                 }
@@ -2354,6 +2399,23 @@ extern "C" __global__ __launch_bounds__(256) void mid_generate_fp32kv(
         out_chosen_experts, start_pos);
 }
 
+// 4. Pure-fp32 compute + INT8-KV megakernel (rec-ywy; per-row symmetric int8, fp32 row scales)
+extern "C" __global__ __launch_bounds__(256) void mid_generate_fp32_int8kv(
+    const uint8_t* bank, const int64_t* off,
+    int8_t* kv_sliding, int8_t* kv_full, int full_cap,
+    const int* prompt, int prompt_len,
+    int* out_tokens, int n_out,
+    float* out_step_logits, float* out_last_logits,
+    bf16* ws_bf, float* ws_f, int* ws_i,
+    uint32_t* control, int workers,
+    int* out_chosen_experts, int start_pos, float* kv8s_sliding, float* kv8s_full) {
+    mid_generate_impl<int8_t, true>(
+        bank, off, kv_sliding, kv_full, full_cap,
+        prompt, prompt_len, out_tokens, n_out,
+        out_step_logits, out_last_logits, ws_bf, ws_f, ws_i, control, workers,
+        out_chosen_experts, start_pos, kv8s_sliding, kv8s_full);
+}
+
 // ---- Standalone Fused INT4 Dequant-Matmul Kernel (rec-aip) ----
 // Consumes the exact zero-copy checkpoint layout from docs/rocm-model-layer.md s2:
 //   w: uint8_t [N, K/2], s: bf16 [N, K/64], b: bf16 [N, K/64], x: bf16 [K] -> out: bf16 or fp32 [N]
@@ -2511,6 +2573,10 @@ struct MidSession {
     float*   d_logits;
     int*     d_chosen_experts;
     int      max_total;
+    int8_t*  d_kv_sliding_i8;   // rec-ywy: allocated lazily on the first mode-3 run (keeps fp32/bf16 sessions' VRAM unchanged)
+    int8_t*  d_kv_full_i8;
+    float*   d_kv8s_sliding;
+    float*   d_kv8s_full;
 };
 
 constexpr int MID_MAX_STEP_OUT = 64;
@@ -2521,7 +2587,8 @@ extern "C" int mid_query_occupancy(int mode, int* out_cus, int* out_max_blocks_p
     hipDeviceProp_t prop;
     if (hipGetDeviceProperties(&prop, 0) != hipSuccess) return -1;
     int blocks_per_cu = 0;
-    const void* fn = (mode == 2) ? (const void*)mid_generate_fp32kv
+    const void* fn = (mode == 3) ? (const void*)mid_generate_fp32_int8kv
+                   : (mode == 2) ? (const void*)mid_generate_fp32kv
                    : (mode == 1) ? (const void*)mid_generate_fp32_bf16kv
                                  : (const void*)mid_generate;
     if (hipOccupancyMaxActiveBlocksPerMultiprocessor(&blocks_per_cu, fn, 256, 0) != hipSuccess) return -2;
@@ -2625,6 +2692,7 @@ extern "C" void* mid_session_create2(const int64_t* h_off, int max_total) {
 //   0 = production bf16-KV build (`mid_generate`, KVT=bf16, PURE_FP32=false)
 //   1 = pure-fp32 compute + bf16-KV build (`mid_generate_fp32_bf16kv`, KVT=bf16, PURE_FP32=true)
 //   2 = pure-fp32 compute + fp32-KV validation build (`mid_generate_fp32kv`, KVT=float, PURE_FP32=true)
+//   3 = pure-fp32 compute + int8-KV build (`mid_generate_fp32_int8kv`, per-row symmetric int8 + fp32 row scales; rec-ywy)
 // h_out_chosen_experts (optional, default nullptr):
 //   int32 buffer of shape [prompt_len + n_out, MID_NL, MID_TOPK] (mid-8L: 8 x 2; full Flint: 49 x 6).
 //   When nullptr, costs zero device work (null pointer passed to kernel).
@@ -2669,7 +2737,19 @@ extern "C" int mid_session_run_ex3(void* handle, const int* h_prompt, int prompt
     const void* fn = nullptr;
     void* k_kv_s = nullptr;
     void* k_kv_f = nullptr;
-    if (mode == 2) {
+    if (mode == 3) {
+        if (!s->d_kv_full_i8) {
+            const size_t kvs = (size_t)MID_N_SLIDING * 2 * MID_NKV * MID_WIN, kvf = (size_t)MID_N_FULL * 2 * MID_NKV * (size_t)s->max_total;
+            if (hipMalloc(&s->d_kv_sliding_i8, kvs * MID_HDIM) != hipSuccess || hipMalloc(&s->d_kv_full_i8, kvf * MID_HDIM) != hipSuccess ||
+                hipMalloc(&s->d_kv8s_sliding, kvs * sizeof(float)) != hipSuccess || hipMalloc(&s->d_kv8s_full, kvf * sizeof(float)) != hipSuccess) {
+                fprintf(stderr, "flint_mid error: int8 KV allocation FAILED\n");
+                return -8;
+            }
+        }
+        fn = (const void*)mid_generate_fp32_int8kv;
+        k_kv_s = (void*)s->d_kv_sliding_i8;
+        k_kv_f = (void*)s->d_kv_full_i8;
+    } else if (mode == 2) {
         fn = (const void*)mid_generate_fp32kv;
         k_kv_s = (void*)s->d_kv_sliding_f32;
         k_kv_f = (void*)s->d_kv_full_f32;
@@ -2702,6 +2782,8 @@ extern "C" int mid_session_run_ex3(void* handle, const int* h_prompt, int prompt
         (void*)&workers,
         (void*)&d_exp,
         (void*)&start_pos,
+        (void*)&s->d_kv8s_sliding,           // rec-ywy: consumed only by mid_generate_fp32_int8kv; hipLaunchKernel reads
+        (void*)&s->d_kv8s_full,              //   exactly the callee's parameter count, so the other modes ignore these
     };
     hipError_t launch_err = hipLaunchKernel(fn, dim3(workers), dim3(256), kargs, 0, 0);
     hipError_t last_err   = hipGetLastError();
@@ -2808,5 +2890,9 @@ extern "C" void mid_session_free(void* handle) {
     chk_hip(hipFree(s->d_step_logits), "hipFree");
     chk_hip(hipFree(s->d_logits), "hipFree");
     chk_hip(hipFree(s->d_chosen_experts), "hipFree");
+    chk_hip(hipFree(s->d_kv_sliding_i8), "hipFree");
+    chk_hip(hipFree(s->d_kv_full_i8), "hipFree");
+    chk_hip(hipFree(s->d_kv8s_sliding), "hipFree");
+    chk_hip(hipFree(s->d_kv8s_full), "hipFree");
     delete s;
 }
