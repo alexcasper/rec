@@ -1,0 +1,29 @@
+{
+ "evalset_sha256": "1b06d9280fe6e1e9d56565b94117d2a329590c49e37d863d5577ba0ceec92893",
+ "ckpt": "/home/dawn/rec-data/mid-prod",
+ "torch": {
+  "int8_vs_fp32": {
+   "ppl_rel": -0.0009610459553299755,
+   "top1_agree": 0.9018324607329843
+  }
+ },
+ "kernel": {
+  "ppl_v11": {
+   "fp32kv_vs_torch_fp32": {
+    "max_abs_dlogp": 2.173016275364148e-06,
+    "ppl_rel": 1.3586312519464627e-08,
+    "top1_agree": 1.0
+   },
+   "int8kv_vs_torch_int8": {
+    "max_abs_dlogp": 0.09289006503547625,
+    "ppl_rel": -0.00017359302360364648,
+    "top1_agree": 0.9960732984293194
+   },
+   "gate_int8kv_vs_fp32_ref": {
+    "ppl_rel": -0.0011344721480603948,
+    "top1_agree": 0.8992146596858639
+   },
+   "gate_pass": false
+  }
+ }
+}

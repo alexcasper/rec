@@ -14,7 +14,7 @@ gate(){ for try in 1 2 3 4 5 6; do
     if [ $f -eq 0 ] && [ $q -eq 0 ] && [ $b -lt 15 ]; then echo "GATE OK try=$try $st"; return 0; fi
     echo "GATE WAIT try=$try $st"; sleep 30; done; return 1; }
 i=0
-for e in c6:2 c6s0:3 c6:0 c6s0:2 c6s0:3 c6:2 c6:0 c6s0:3 c6s0:2 c6:2; do
+for e in c6:2 v11:3 c6s0:3 c6:2 c6s0:3 v11:3 c6:2; do
   n=${e%%:*}; m=${e#*:}
   i=$((i+1))
   g=$(gate); echo "[$i $n m$m] $(date -u +%H:%M:%SZ) $g" | tee -a $OUT/summary.log

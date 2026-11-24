@@ -1,0 +1,7 @@
+14:04:54Z [v11] ppl start sha 3a95ee716a2cc6fc | busy=0 8080=200 8090=200 qwen3vl_estab=0 MemAvail=37.7GiB
+2026-11-24T14:05:14Z PPL int8kv: (8, 191) nll 12.086000 ppl 177371.1694 longest 0.014 s, 19.2 s | flint:idle,e4b:idle,qwen:down,gpu_busy=89,MemAvailable=37.6GiB
+14:05:14Z [v11] depth8192 int8kv x2 fresh | busy=86 8080=200 8090=200 qwen3vl_estab=0 MemAvail=37.7GiB
+2026-11-24T14:06:02Z GATE depth8192_int8kv.npz: tokens[:6]=[59404, 22877, 108034, 84348, 54518, 75350] md5 bb62f827cbfb launches 1644 longest 0.040 s, 30.0 ms/pos, 47.3 s
+2026-11-24T14:06:49Z GATE depth8192_int8kv_r1.npz: tokens[:6]=[59404, 22877, 108034, 84348, 54518, 75350] md5 bb62f827cbfb launches 1644 longest 0.038 s, 30.0 ms/pos, 47.
+2026-11-24T14:06:49Z DETERMINISM int8kv: PASS (2 fresh-session emits)
+14:06:49Z done /home/dusk/rec-ve/i8/gate-20261124T140454Z | busy=91 8080=200 8090=200 qwen3vl_estab=0 MemAvail=37.8GiB

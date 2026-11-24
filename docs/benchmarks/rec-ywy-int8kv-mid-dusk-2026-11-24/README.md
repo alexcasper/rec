@@ -55,3 +55,26 @@ Hygiene and excluded rows:
 Reading: int8 recovers ~5% at depth over fp32 KV at equal SHRINK, but stays ~3.5% under bf16. The LOP path pays 2×LD per-element scale
 multiplies. Folding the K scale after the reduction and the V scale into the weight (as the split paths already do) is the obvious v1.1.
 Full-config numbers (gate + speed) need an owner window.
+
+## v1.1 (2026-11-24, after the dusk reboot): scales folded out of the LOP inner loop
+The LOP path now multiplies the reduced per-lane dot by the K row scale (1 mul) and the V values by the V row scale inside the weight
+update, instead of 2×LD per-element multiplies. The softmax denominator is unscaled. (A first draft scaled `z` by the V scale too,
+which is wrong; that was fixed before any run.) DOT2 builds keep compiling: the int8 instantiation coexists, since D2 is false for int8
+and the K scale is folded in that branch too. Every function except `mid_generate_fp32_int8kv` is identical to 31f4b6d in 7 builds
+(default, split, ctl6, ctl6 SHRINK=0, DOT2, full lop8f, full default). The int8 kernel goes from 191 to 157 v_mul_f32 and has 0 scratch
+ops at SHRINK=0.
+
+- **Determinism:** int8kv depth8192, 2 fresh sessions, md5 bb62f827cbfb both times (v1.1 lib, SHRINK=0).
+- **Implementation check vs torch int8:** top-1 99.6%, ppl −1.7e-4, max|Δlogp| 0.093 (v1: 99.5%, −1.4e-4).
+
+| build (mid-8L, ABBA 12/12, interleaved c6:2 v11:3 c6s0:3 c6:2 c6s0:3 v11:3 c6:2) | ctx8192 tok/s | short tok/s |
+|---|---|---|
+| fp32kv, SHRINK=1 (record recipe) | 152.09 / 152.87 / 148.45 (151.14) | 204.25 / 205.24 / 204.79 |
+| int8kv v1, SHRINK=0 | 157.72 / 158.81 (158.27) | 203.29 / 201.79 |
+| **int8kv v1.1, SHRINK=0** | **161.73 / 162.78 (162.26): +7.4% vs fp32kv, +2.5% vs v1** | 203.66 / 204.09 |
+
+Both v1.1 rows sit above every v1 and fp32kv row, so the separation is clean. Short-context rows are flat within noise (int8 pays
+SHRINK=0 there). v1.1 is level with the bf16 production mode from the 13:02Z session (163.3). Hygiene: 14/14 cotenant gates OK, 0 cap
+aborts. After the reboot: qwen3vl :8990 down, display (kwin) up, host MemAvailable ~37.8 GiB.
+**v1.1 is the int8 recipe.** Next: the full-config owner window for the binding gate (ppl < 1% and top-1 ≥ 97% vs the fp32-KV ref on
+eval_set_full_v1, plus det ×2) and the @512/@8192 speed rows vs fp32-KV and the incumbent.

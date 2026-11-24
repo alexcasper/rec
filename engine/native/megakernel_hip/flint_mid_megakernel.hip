@@ -1715,6 +1715,7 @@ __device__ inline void mid_generate_impl(
 #endif
                     for (int t0 = ta; t0 <= tb; t0 += LP) {
                         const bool live = t0 + pg <= tb;
+                        float ks8 = 1.0f, vs8 = 1.0f;               // rec-ywy v1.1: per-position row scales (KV8 only)
                         float kf[LD], vf[LD];
 #if GEPA_ATTN_LOP_PF
                         #pragma unroll
@@ -1735,10 +1736,9 @@ __device__ inline void mid_generate_impl(
                                 kf[j] = kv_load<KVT, PURE_FP32>(kc[s0 * MID_HDIM + sl * LD + j]);
                                 vf[j] = kv_load<KVT, PURE_FP32>(vc[s0 * MID_HDIM + sl * LD + j]);
                             }
-                            if constexpr (KV8) {
-                                const float ks = l_sc[(size_t)kvh * l_cap + s0], vs = l_sc[(size_t)(MID_NKV + kvh) * l_cap + s0];
-                                #pragma unroll
-                                for (int j = 0; j < LD; ++j) { kf[j] *= ks; vf[j] *= vs; }
+                            if constexpr (KV8) {                    // rec-ywy v1.1: scales fold into partial/weights below
+                                ks8 = l_sc[(size_t)kvh * l_cap + s0];
+                                vs8 = l_sc[(size_t)(MID_NKV + kvh) * l_cap + s0];
                             }
                         }
 #endif
@@ -1753,6 +1753,7 @@ __device__ inline void mid_generate_impl(
                         } else {
                             #pragma unroll
                             for (int j = 0; j < LD; ++j) partial += q16[j] * kf[j];
+                            if constexpr (KV8) partial *= ks8;              // rec-ywy v1.1 (D2 is false for int8 KV)
                         }
                         #pragma unroll
                         for (int off = LW / 2; off >= 1; off >>= 1)
@@ -1766,6 +1767,7 @@ __device__ inline void mid_generate_impl(
                         float partial = 0.0f;
                         #pragma unroll
                         for (int j = 0; j < LD; ++j) partial += q16[j] * kf[j];
+                        if constexpr (KV8) partial *= ks8;              // rec-ywy v1.1: K row scale after the per-lane dot
                         #pragma unroll
                         for (int off = LW / 2; off >= 1; off >>= 1)
                             partial += __shfl_xor_sync(0xffffffffffffffffull, partial, off);
@@ -1775,12 +1777,13 @@ __device__ inline void mid_generate_impl(
                             if (partial > hi) {
                                 const float f = D2 ? exp2f(hi - partial) : expf(hi - partial);
                                 #pragma unroll
-                                for (int j = 0; j < LD; ++j) a16[j] = a16[j] * f + vf[j];
+                                for (int j = 0; j < LD; ++j) a16[j] = a16[j] * f + vs8 * vf[j];   // rec-ywy v1.1: V row scale
                                 z = z * f + 1.0f; hi = partial;
                             } else {
                                 const float f = D2 ? exp2f(partial - hi) : expf(partial - hi);
+                                const float fv = f * vs8;
                                 #pragma unroll
-                                for (int j = 0; j < LD; ++j) a16[j] += f * vf[j];
+                                for (int j = 0; j < LD; ++j) a16[j] += fv * vf[j];
                                 z += f;
                             }
                         }
@@ -1791,12 +1794,13 @@ __device__ inline void mid_generate_impl(
                             if (partial > hi) {
                                 const float f = expf(hi - partial);
                                 #pragma unroll
-                                for (int j = 0; j < LD; ++j) a16[j] = a16[j] * f + vf[j];
+                                for (int j = 0; j < LD; ++j) a16[j] = a16[j] * f + vs8 * vf[j];   // rec-ywy v1.1: V row scale
                                 z = z * f + 1.0f; hi = partial;
                             } else {
                                 const float f = expf(partial - hi);
+                                const float fv = f * vs8;
                                 #pragma unroll
-                                for (int j = 0; j < LD; ++j) a16[j] += f * vf[j];
+                                for (int j = 0; j < LD; ++j) a16[j] += fv * vf[j];
                                 z += f;
                             }
                         }
