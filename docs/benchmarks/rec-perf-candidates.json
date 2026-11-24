@@ -9648,6 +9648,225 @@
    "dot4_probe": "gfx1150 exposes only v_dot4_i32_iu8 (int8); fp8/bf8 dot4 needs dot11-insts -> no applicable float dot4 for bf16 K/V; not built",
    "gates": "not run: no candidate reached the +1.6% acceptance bar (stop rule); lever-off builds instruction-identical to 412c079 (0 lines, 6 builds)",
    "verdict": "REJECT ALL; plateau closes iter 7. d2s: short path is not attention-bound at depth<=340 (noise). d2e: exp2 path -1% (extra scale mul + max conversion, no exp savings: v_exp_f32 count unchanged 33). d2lm/d2ns8: -12-13% on BOTH rows incl. short, where neither lever is on the executed path -> register-allocation spill growth (+11/+26 scratch ops) in the hot kernel, same class as the iter-5 trap; NSPLIT/LASTMERGE do not combine with DOT2. DOT2 base remains front-best (Alex-gated)."
+  },
+  {
+   "id": "rechyf-kv-precision-ladder",
+   "time": "2026-11-24T02:08:22Z",
+   "source_commit": "1d84899",
+   "config": "torch fp32 CPU reference, full 49L flint-int4, eval_set_full_v1 teacher-forced, fake-quant at KV store point; record gemini-kernels docs/benchmarks/rec-hyf-kv-precision-ladder-2026-11-24/",
+   "bytes_per_elem": {
+    "fp32": 4,
+    "bf16": 2,
+    "int8_kivi": 1.016,
+    "int8_g32": 1.0625,
+    "int4_kivi": 0.516,
+    "int4_g32": 0.5625
+   },
+   "kv_MB_at_8192": {
+    "fp32": 543,
+    "bf16": 272,
+    "int8": 136,
+    "int4": 68
+   },
+   "vs_fp32": {
+    "bf16": {
+     "rel_max": 0.5161023890377665,
+     "rel_pos0": 0.0032677663604134934,
+     "first_flip_pos_min": 1,
+     "items_with_flip": 8,
+     "top1_agree": 0.986328125,
+     "ppl_rel": -0.0013127617334353081,
+     "expert_set_diffs": 7985
+    },
+    "bf16_sr_s1": {
+     "rel_max": 0.5547657649173139,
+     "rel_pos0": 0.001210242776134963,
+     "first_flip_pos_min": 1,
+     "items_with_flip": 7,
+     "top1_agree": 0.9778645833333333,
+     "ppl_rel": -0.0003292328626007812,
+     "expert_set_diffs": 9310
+    },
+    "bf16_sr_s2": {
+     "rel_max": 0.5600093002009566,
+     "rel_pos0": 0.0031111919600776763,
+     "first_flip_pos_min": 1,
+     "items_with_flip": 7,
+     "top1_agree": 0.9811197916666667,
+     "ppl_rel": 0.0036394338867025144,
+     "expert_set_diffs": 8912
+    },
+    "bf16_sr_unseeded": {
+     "rel_max": 0.36765100325286837,
+     "rel_pos0": 0.0011958451023035706,
+     "first_flip_pos_min": 4,
+     "items_with_flip": 6,
+     "top1_agree": 0.9856770833333333,
+     "ppl_rel": -0.0006277077829837108,
+     "expert_set_diffs": 8443
+    },
+    "bf16_scaled": {
+     "rel_max": 0.7025192267428602,
+     "rel_pos0": 0.0017407831468871614,
+     "first_flip_pos_min": 4,
+     "items_with_flip": 7,
+     "top1_agree": 0.9817708333333334,
+     "ppl_rel": -0.0004940610773135345,
+     "expert_set_diffs": 7689
+    },
+    "int8_pc": {
+     "rel_max": 0.7450091736382968,
+     "rel_pos0": 0.00670999136317877,
+     "first_flip_pos_min": 1,
+     "items_with_flip": 8,
+     "top1_agree": 0.7428385416666666,
+     "ppl_rel": 1.0447838537361887,
+     "expert_set_diffs": 55442
+    },
+    "int8_pt": {
+     "rel_max": 1.1108732098394478,
+     "rel_pos0": 0.00912992295887678,
+     "first_flip_pos_min": 0,
+     "items_with_flip": 8,
+     "top1_agree": 0.9772135416666666,
+     "ppl_rel": 0.006296375173933111,
+     "expert_set_diffs": 14697
+    },
+    "int8_g32": {
+     "rel_max": 1.133549480593742,
+     "rel_pos0": 0.033805318051890396,
+     "first_flip_pos_min": 1,
+     "items_with_flip": 7,
+     "top1_agree": 0.9733072916666667,
+     "ppl_rel": 0.002573139113279055,
+     "expert_set_diffs": 12162
+    },
+    "int4_pc": {
+     "rel_max": 1.1274811109048415,
+     "rel_pos0": 0.056075999356689624,
+     "first_flip_pos_min": 0,
+     "items_with_flip": 8,
+     "top1_agree": 0.7220052083333333,
+     "ppl_rel": 1.0716976458927507,
+     "expert_set_diffs": 61084
+    },
+    "int4_pt": {
+     "rel_max": 0.7701760265196886,
+     "rel_pos0": 0.05742697828686419,
+     "first_flip_pos_min": 0,
+     "items_with_flip": 8,
+     "top1_agree": 0.8548177083333334,
+     "ppl_rel": 0.02451327410761439,
+     "expert_set_diffs": 58382
+    },
+    "int4_g32": {
+     "rel_max": 0.7528194542209704,
+     "rel_pos0": 0.029358551839461955,
+     "first_flip_pos_min": 0,
+     "items_with_flip": 8,
+     "top1_agree": 0.919921875,
+     "ppl_rel": -0.015876197659604685,
+     "expert_set_diffs": 45336
+    },
+    "bf16_router_oracle": {
+     "rel_max": 0.07182463733410613,
+     "rel_pos0": 0.00023827151511246803,
+     "first_flip_pos_min": 149,
+     "items_with_flip": 1,
+     "top1_agree": 0.9993489583333333,
+     "ppl_rel": -0.0004617284091118501,
+     "expert_set_diffs": 0
+    },
+    "int8_pcseq": {
+     "rel_max": 0.5454071890709061,
+     "rel_pos0": 0.007064208854533912,
+     "first_flip_pos_min": 1,
+     "items_with_flip": 7,
+     "top1_agree": 0.9778645833333334,
+     "ppl_rel": 0.003778841605761807,
+     "expert_set_diffs": 11653
+    },
+    "int8_kivi": {
+     "rel_max": 0.7317427918838613,
+     "rel_pos0": 0.02827997077666301,
+     "first_flip_pos_min": 1,
+     "items_with_flip": 7,
+     "top1_agree": 0.9765625,
+     "ppl_rel": 0.0009625918929194732,
+     "expert_set_diffs": 11228
+    },
+    "int4_pcseq": {
+     "rel_max": 0.743152845414885,
+     "rel_pos0": 0.08572865461678643,
+     "first_flip_pos_min": 0,
+     "items_with_flip": 8,
+     "top1_agree": 0.9095052083333333,
+     "ppl_rel": 0.011317017561622178,
+     "expert_set_diffs": 45934
+    },
+    "int4_kivi": {
+     "rel_max": 0.7479390983786921,
+     "rel_pos0": 0.05061793113835288,
+     "first_flip_pos_min": 0,
+     "items_with_flip": 8,
+     "top1_agree": 0.9264322916666667,
+     "ppl_rel": -0.017668885823427183,
+     "expert_set_diffs": 42010
+    }
+   },
+   "amplification_1ulp": {
+    "fp32_eps_s1": {
+     "rel_max": 4.61810239059443e-05,
+     "ppl_rel": 3.903185885612004e-08,
+     "expert_set_diffs": 0
+    },
+    "fp32_eps_s2": {
+     "rel_max": 6.520691390464795e-05,
+     "ppl_rel": 2.383850272735799e-07,
+     "expert_set_diffs": 0
+    },
+    "bf16_eps_s1": {
+     "rel_max": 0.392175721424691,
+     "ppl_rel": 0.003895200839248325,
+     "expert_set_diffs": 4687
+    },
+    "bf16_eps_s2": {
+     "rel_max": 0.36863941221172486,
+     "ppl_rel": 0.005766362720455387,
+     "expert_set_diffs": 4882
+    },
+    "bf16_sr_s1_eps_s1": {
+     "rel_max": 0.23871113175841893,
+     "ppl_rel": -0.003483814281328601,
+     "expert_set_diffs": 5005
+    },
+    "bf16_scaled_eps_s1": {
+     "rel_max": 0.41265619506763507,
+     "ppl_rel": 0.0027201578884383792,
+     "expert_set_diffs": 5048
+    },
+    "int8_pc_eps_s1": {
+     "rel_max": 0.3707671027604434,
+     "ppl_rel": 0.002962804040332223,
+     "expert_set_diffs": 11182
+    },
+    "int8_g32_eps_s1": {
+     "rel_max": 0.46758135443914306,
+     "ppl_rel": 0.0017417337080412043,
+     "expert_set_diffs": 8224
+    },
+    "bf16_router_oracle_eps_s1": {
+     "rel_max": 0.06129160608953103,
+     "ppl_rel": 0.00023406561657979275,
+     "expert_set_diffs": 0
+    },
+    "int8_kivi_eps_s1": {
+     "rel_max": 0.3561031123425688,
+     "ppl_rel": 0.002507431589458653,
+     "expert_set_diffs": 9083
+    }
+   },
+   "verdict": "int8 does NOT dominate bf16 (best int8 KIVI: top-1 97.7% vs bf16 98.6%, expert diffs 11.2k vs 8.0k; ppl +0.10% vs -0.13% both inside the bf16-ref noise band); int8 passes a 1% ppl gate; int4 fails (|ppl|>=1.1%, top-1<=92.6%); static calibrated per-channel scales clip 2.5% of K -> +104% ppl. bf16 fixes: SR no (amp 5005 diffs, seed moves ppl 0.4pt), scaled store no (scale-invariant), router-decoupling oracle kills flips (0 diffs, top-1 99.93%) but amplification 6.1e-2 vs fp32 4.6e-5 and requires fp32 KV state -> no deployable fix, dusk rebench not run; fp32-KV stays run-of-record."
   }
  ],
  "incumbent_history": [
