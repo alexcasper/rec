@@ -1,0 +1,12 @@
+11:35:31 calibration skipped (no static-scale scheme selected)
+11:39:07 fp32 stock done
+11:42:49 fp32 repeat vs fp32: rel_max 0.000e+00 (harness noise)
+11:46:34 int8_pt vs fp32 (226s): {"rel_max": 1.1108732098394478, "rel_pos0": 0.00912992295887678, "first_flip_pos_min": 0, "top1_agree": 0.9772135416666666, "ppl_rel": 0.006296375173933111, "expert_set_diffs": 14697}
+11:49:15 AMP int8_pt_eps_s1: {"rel_max": 0.46825361566011425, "rel_pos0": 8.926047385313122e-05, "first_flip_pos_min": 3, "ppl_rel": -0.00309588901631197, "expert_set_diffs": 10191}
+11:51:56 fp8_e4m3 vs fp32 (161s): {"rel_max": 0.7061834401939742, "rel_pos0": 0.012905662067897028, "first_flip_pos_min": 0, "top1_agree": 0.9596354166666667, "ppl_rel": 0.0019433443267047323, "expert_set_diffs": 22513}
+11:54:47 AMP fp8_e4m3_eps_s1: {"rel_max": 0.40579684969935004, "rel_pos0": 7.029430916431085e-05, "first_flip_pos_min": 7, "ppl_rel": -0.0015450233735865293, "expert_set_diffs": 8824}
+11:57:26 fp8_e4m3_pt vs fp32 (159s): {"rel_max": 0.6186454067912568, "rel_pos0": 0.009167685538981899, "first_flip_pos_min": 0, "top1_agree": 0.9713541666666667, "ppl_rel": 0.020551284123468072, "expert_set_diffs": 20325}
+12:01:12 AMP fp8_e4m3_pt_eps_s1: {"rel_max": 0.44389523454052693, "rel_pos0": 0.020366104021390247, "first_flip_pos_min": 3, "ppl_rel": -0.003451026271259705, "expert_set_diffs": 14539}
+12:04:05 fp8_e5m2 vs fp32 (173s): {"rel_max": 1.111587073141324, "rel_pos0": 0.039448513132842714, "first_flip_pos_min": 1, "top1_agree": 0.9381510416666666, "ppl_rel": 0.03193589150700271, "expert_set_diffs": 32714}
+12:06:54 fp8_e5m2_pt vs fp32 (169s): {"rel_max": 1.1579930786944446, "rel_pos0": 0.028282853122375787, "first_flip_pos_min": 0, "top1_agree": 0.9485677083333333, "ppl_rel": 0.014747230186982652, "expert_set_diffs": 29502}
+12:06:54 done

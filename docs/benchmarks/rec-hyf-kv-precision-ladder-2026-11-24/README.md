@@ -89,3 +89,23 @@ any reduced format). For example: teacher-forced ppl |Δ| < 1% plus top-1 agreem
 
 KV memory at 8192 is only 0.54 GB fp32 vs the 18.5 GB weight bank, so at this context length the memory case for any reduced tier is
 weak. It strengthens only toward ~64k+ context, where fp32 KV reaches ~4 GB.
+
+## Addendum (2026-11-24): fp8 rows for RDNA4, and the int8 decision
+
+The user decided on int8 KV: it runs on both RDNA3.5 gfx1150 and RDNA4 gfx1201, since `v_dot4_i32_iu8` exists on both. They asked to
+also try fp8 for RDNA4. ISA probe (`scripts/bisect/fp8probe.hip`): gfx1201 has `v_cvt_pk_fp8_f32`, `v_cvt_f32_fp8` and
+`v_dot4_f32_fp8_fp8`; gfx1150 has none of them (they need fp8-conversion-insts and dot11-insts).
+
+| 1 B/elem tier | ppl Δ vs fp32 | top-1 | expert-set diffs | 1-ulp amplification max-rel / expert diffs |
+|---|---|---|---|---|
+| int8 per-token-head (kernel v1 scheme, rec-ywy) | +0.63% | **97.7%** | **14697** | 0.468 / 10191 |
+| int8 KIVI | +0.10% | 97.7% | 11228 | 0.356 / 9083 |
+| fp8 e4m3 (OCP, unscaled, saturating) | +0.19% | 96.0% | 22513 | 0.406 / 8824 |
+| fp8 e4m3, per-token-head scale | +2.06% | 97.1% | 20325 | 0.444 / 14539 |
+| fp8 e5m2, unscaled | +3.19% | 93.8% | 32714 | — |
+| fp8 e5m2, per-token-head scale | +1.47% | 94.9% | 29502 | — |
+
+**fp8 is dominated by int8 at identical bytes.** e4m3's 3-bit mantissa rounds with up to 6.25% relative error; scaled int8 has 127
+levels per row. The best fp8 (e4m3) is −1.7 pt top-1 with 1.5× the routing churn of int8, and e5m2 fails a 1% gate. fp8's only
+advantage would be RDNA4's fp8 dot4 compute, but depth attention is bandwidth-bound and the bytes are the same as int8. So an fp8
+kernel variant isn't worth building; rec-18h is deferred on this evidence.

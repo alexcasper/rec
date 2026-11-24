@@ -374,6 +374,98 @@
    "max_abs_dlogp": 19.302741583428638,
    "expert_set_diffs": 42010,
    "expert_diff_first_pos": 0
+  },
+  "fp8_e4m3": {
+   "rel_max": 0.7061834401939742,
+   "rel_pos0": 0.012905662067897028,
+   "rel_median": 0.04811228981493908,
+   "first_flip_pos_min": 0,
+   "first_flip_pos_per_item": [
+    1,
+    0,
+    2,
+    6,
+    51,
+    4,
+    7,
+    4
+   ],
+   "items_with_flip": 8,
+   "top1_agree": 0.9596354166666667,
+   "ppl": 3.286700019112921,
+   "ppl_rel": 0.0019433443267047323,
+   "max_abs_dlogp": 7.420519108517862,
+   "expert_set_diffs": 22513,
+   "expert_diff_first_pos": 0
+  },
+  "fp8_e4m3_pt": {
+   "rel_max": 0.6186454067912568,
+   "rel_pos0": 0.009167685538981899,
+   "rel_median": 0.04393660845319375,
+   "first_flip_pos_min": 0,
+   "first_flip_pos_per_item": [
+    132,
+    0,
+    75,
+    1,
+    null,
+    4,
+    3,
+    5
+   ],
+   "items_with_flip": 7,
+   "top1_agree": 0.9713541666666667,
+   "ppl": 3.3477401132778986,
+   "ppl_rel": 0.020551284123468072,
+   "max_abs_dlogp": 4.511617601492524,
+   "expert_set_diffs": 20325,
+   "expert_diff_first_pos": 0
+  },
+  "fp8_e5m2": {
+   "rel_max": 1.111587073141324,
+   "rel_pos0": 0.039448513132842714,
+   "rel_median": 0.07057944058915545,
+   "first_flip_pos_min": 1,
+   "first_flip_pos_per_item": [
+    1,
+    1,
+    8,
+    1,
+    7,
+    36,
+    3,
+    3
+   ],
+   "items_with_flip": 8,
+   "top1_agree": 0.9381510416666666,
+   "ppl": 3.38508532797185,
+   "ppl_rel": 0.03193589150700271,
+   "max_abs_dlogp": 8.331354728697203,
+   "expert_set_diffs": 32714,
+   "expert_diff_first_pos": 0
+  },
+  "fp8_e5m2_pt": {
+   "rel_max": 1.1579930786944446,
+   "rel_pos0": 0.028282853122375787,
+   "rel_median": 0.06440547640080252,
+   "first_flip_pos_min": 0,
+   "first_flip_pos_per_item": [
+    1,
+    0,
+    2,
+    29,
+    7,
+    29,
+    3,
+    4
+   ],
+   "items_with_flip": 8,
+   "top1_agree": 0.9485677083333333,
+   "ppl": 3.3287009287850884,
+   "ppl_rel": 0.014747230186982652,
+   "max_abs_dlogp": 6.466785853019859,
+   "expert_set_diffs": 29502,
+   "expert_diff_first_pos": 0
   }
  },
  "amplification": {
@@ -605,6 +697,75 @@
    "ppl_rel": 0.002507431589458653,
    "max_abs_dlogp": 1.4189393665228467,
    "expert_set_diffs": 9083,
+   "expert_diff_first_pos": 0
+  },
+  "int8_pt_eps_s1": {
+   "rel_max": 0.46825361566011425,
+   "rel_pos0": 8.926047385313122e-05,
+   "rel_median": 0.025970726848096648,
+   "first_flip_pos_min": 3,
+   "first_flip_pos_per_item": [
+    66,
+    67,
+    43,
+    85,
+    null,
+    59,
+    3,
+    11
+   ],
+   "items_with_flip": 7,
+   "top1_agree": 0.982421875,
+   "ppl": 3.290759910181408,
+   "ppl_rel": -0.00309588901631197,
+   "max_abs_dlogp": 4.215365141981201,
+   "expert_set_diffs": 10191,
+   "expert_diff_first_pos": 1
+  },
+  "fp8_e4m3_eps_s1": {
+   "rel_max": 0.40579684969935004,
+   "rel_pos0": 7.029430916431085e-05,
+   "rel_median": 0.025856027667927023,
+   "first_flip_pos_min": 7,
+   "first_flip_pos_per_item": [
+    68,
+    174,
+    56,
+    169,
+    15,
+    7,
+    33,
+    14
+   ],
+   "items_with_flip": 8,
+   "top1_agree": 0.9778645833333333,
+   "ppl": 3.2816219907614244,
+   "ppl_rel": -0.0015450233735865293,
+   "max_abs_dlogp": 2.549632064469222,
+   "expert_set_diffs": 8824,
+   "expert_diff_first_pos": 2
+  },
+  "fp8_e4m3_pt_eps_s1": {
+   "rel_max": 0.44389523454052693,
+   "rel_pos0": 0.020366104021390247,
+   "rel_median": 0.03783632213521204,
+   "first_flip_pos_min": 3,
+   "first_flip_pos_per_item": [
+    158,
+    21,
+    43,
+    64,
+    40,
+    20,
+    3,
+    4
+   ],
+   "items_with_flip": 8,
+   "top1_agree": 0.9674479166666666,
+   "ppl": 3.3361869741976267,
+   "ppl_rel": -0.003451026271259705,
+   "max_abs_dlogp": 4.741618730569153,
+   "expert_set_diffs": 14539,
    "expert_diff_first_pos": 0
   }
  },

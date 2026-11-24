@@ -108,6 +108,18 @@ def mk_kivi(Q, G=128):
     return lambda i, k, v: (kq(k), vq(i, k, v)[1])
 
 
+def mk_fp8(dt, scaled):
+    """OCP fp8 store (RDNA4 v_cvt_pk_fp8_f32 = e4m3fn/e5m2, RNE, saturating); scaled = per-token-head absmax -> format max."""
+    fmax = torch.finfo(dt).max
+
+    def one(t):
+        if scaled:
+            s = t.abs().amax(-1, keepdim=True).clamp_min(1e-30) / fmax
+            return (t / s).clamp(-fmax, fmax).to(dt).to(torch.float32) * s
+        return t.clamp(-fmax, fmax).to(dt).to(torch.float32)
+    return lambda i, k, v: (one(k), one(v))
+
+
 def bf16_rne(t):
     return t.to(torch.bfloat16).to(torch.float32)
 
@@ -249,11 +261,13 @@ for Q, nm in ((127, "int8"), (7, "int4")):
              (f"{nm}_pt", lambda Q=Q: mk_tok(Q, 128)), (f"{nm}_g32", lambda Q=Q: mk_tok(Q, 32)),
              (f"{nm}_pcseq", lambda Q=Q: mk_pc_seq(Q)), (f"{nm}_kivi", lambda Q=Q: mk_kivi(Q))]
 STATS = {}
+RUNS += [("fp8_e4m3", lambda: mk_fp8(torch.float8_e4m3fn, False)), ("fp8_e4m3_pt", lambda: mk_fp8(torch.float8_e4m3fn, True)),
+         ("fp8_e5m2", lambda: mk_fp8(torch.float8_e5m2, False)), ("fp8_e5m2_pt", lambda: mk_fp8(torch.float8_e5m2, True))]
 BF = [("bf16", lambda: (lambda i, k, v: (bf16_rne(k), bf16_rne(v)))),
       ("bf16_sr_s1", lambda: mk_sr(1)), ("bf16_sr_s2", lambda: mk_sr(2)),
       ("bf16_sr_unseeded", lambda: mk_sr(int.from_bytes(os.urandom(4), "little"))),
       ("bf16_scaled", lambda: mk_scaled(amax))]
-AMP = {"fp32": None, "bf16": None, "int8_pc": None, "int8_g32": None, "int8_kivi": None, "bf16_sr_s1": None, "bf16_scaled": None}
+AMP = {"fp32": None, "bf16": None, "int8_pt": None, "fp8_e4m3_pt": None, "fp8_e4m3": None, "int8_pc": None, "int8_g32": None, "int8_kivi": None, "bf16_sr_s1": None, "bf16_scaled": None}
 
 # 1) amplification control: fp32 under P(eps)
 for seed in (1, 2):
