@@ -19,8 +19,8 @@ __device__ __forceinline__ float bf(uint16_t h) {
     return __builtin_bit_cast(float, (uint32_t)h << 16);
 }
 __device__ __forceinline__ int dot4(int a, int b, int c) {
-    int d;  // V_DOT4_I32_IU8: A = 4x signed i8 (activations), B = 4x unsigned u8 (weight nibbles 0..15)
-    asm("v_dot4_i32_iu8 %0, %1, %2, %3" : "=v"(d) : "v"(a), "v"(b), "v"(c));
+    int d;  // V_DOT4_I32_I8: A = 4x signed i8 (activations -127..127), B = 4x signed i8 (weight nibbles 0..15,
+    asm("v_dot4_i32_i8 %0, %1, %2, %3" : "=v"(d) : "v"(a), "v"(b), "v"(c));  // identical under signed interp)
     return d;
 }
 
@@ -64,7 +64,7 @@ __global__ void k_p1_dot4_unpack(const uint8_t* __restrict__ w, const uint16_t* 
         #pragma unroll
         for (int u = 0; u < 4; ++u) {              // 4 dot4 ops of 4 elements each = one g16 group
             const int e0 = sg16 * 16 + u * 4;
-            const int Apack = qa4[e0 >> 2];
+            const int Apack = qa4[(g * 64 + e0) >> 2];  // GLOBAL dword index: lane g covers elements g*64..g*64+63
             int Bpack = 0;
             #pragma unroll
             for (int t = 0; t < 4; ++t) {
