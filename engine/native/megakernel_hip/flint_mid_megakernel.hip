@@ -380,7 +380,13 @@ __device__ inline float dot16v(uint32_t u01, uint32_t u23, const float* x, float
     return __builtin_fmaf(s, a, sum * b);
 }
 
-__device__ inline float dot16(const uint8_t* w, const float* x, float s, float b, float sum) {
+__device__ __forceinline__ int w4a8_dot4(int a, int b, int c) {
+    int d;  // rec-21a: V_DOT4_I32_I8 — signed i8 x signed i8 byte-dot (weights 0..15 sign-identical)
+    asm("v_dot4_i32_i8 %0, %1, %2, %3" : "=v"(d) : "v"(a), "v"(b), "v"(c));
+    return d;
+}
+
+__device__ inline float dot16(const uint8_t* __restrict__ w, const float* __restrict__ x, float s, float b, float sum) {
     const uint32_t* p32 = (const uint32_t*)w;
     return dot16v(p32[0], p32[1], x, s, b, sum);
 }
@@ -581,7 +587,13 @@ __device__ __attribute__((noinline)) void q4_rows_tail(const uint8_t* __restrict
 #else
 #define GEPA_GEMV_ATTR
 #endif
-template <int K, bool ROUND_BF16 = false, int GM = 0, int LDT = 1, int XU = 0, bool XPURE = false>
+// rec-21a: W4A8 — the routed-expert gate/up gemv consumes per-g16 s8 activations (quantized in
+// place in sh_xn) via v_dot4_i32_i8 instead of dequant-FMA; all other gemvs stay fp32-A.
+// Default 0: every existing code path compiles unchanged (rec-pp2 hard rule).
+#ifndef GEPA_W4A8
+#define GEPA_W4A8 0
+#endif
+template <int K, bool ROUND_BF16 = false, int GM = 0, int LDT = 1, int XU = 0, bool XPURE = false, bool WA8 = false>
 __device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict__ w,
                                         const bf16* __restrict__ s,
                                         const bf16* __restrict__ b,
@@ -671,14 +683,17 @@ __device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict
         int sc1 = 512 + sc0;
         int sc2 = 1024 + sc0;
         int sc3 = 1536 + sc0;
-        float sum0 = load16_f(x + sc0, v0);
-        float sum1 = load16_f(x + sc1, v1);
-        float sum2 = load16_f(x + sc2, v2);
-        float sum3 = load16_f(x + sc3, v3);
+        float sum0 = 0.0f, sum1 = 0.0f, sum2 = 0.0f, sum3 = 0.0f;
         int g0 = sc0 >> 6;
         int g1 = sc1 >> 6;
         int g2 = sc2 >> 6;
         int g3 = sc3 >> 6;
+        if constexpr (!WA8) {
+            sum0 = load16_f(x + sc0, v0);
+            sum1 = load16_f(x + sc1, v1);
+            sum2 = load16_f(x + sc2, v2);
+            sum3 = load16_f(x + sc3, v3);
+        }
 
         const int nsegs = segs ? nseg : 1;
         int base = 0;          // first global quad index of segment i
@@ -702,10 +717,44 @@ __device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict
                         const uint8_t* wr = W + (size_t)row * 1024 * LD;
                         const bf16*    sr = S + (size_t)row * 32 * LD;
                         const bf16*    br = Bq + (size_t)row * 32 * LD;
-                        a[r] += dot16(wr + (sc0 >> 1), v0, tofloat(sr[g0]), tofloat(br[g0]), sum0);
-                        a[r] += dot16(wr + (sc1 >> 1), v1, tofloat(sr[g1]), tofloat(br[g1]), sum1);
-                        a[r] += dot16(wr + (sc2 >> 1), v2, tofloat(sr[g2]), tofloat(br[g2]), sum2);
-                        a[r] += dot16(wr + (sc3 >> 1), v3, tofloat(sr[g3]), tofloat(br[g3]), sum3);
+                        if constexpr (WA8) {
+                            // rec-21a W4A8: per-g16 s8 activations (packed A-dwords + per-g16 sums staged in
+                            // x) x signed weight nibbles via v_dot4_i32_i8; per-(g64,g16) fp32 rescale, exact
+                            // i32 dot, bias from the quantize-pass per-g16 sums (no ones-dot4s).
+                            const int8_t* qav = reinterpret_cast<const int8_t*>(x);
+                            const float* savarr = reinterpret_cast<const float*>(qav + K);
+                            const int* sumarr = reinterpret_cast<const int*>(qav + K + (K >> 2));
+                            const int bases[4] = {sc0, sc1, sc2, sc3};
+                            const int g64s[4] = {g0, g1, g2, g3};
+                            float a8 = 0.0f;
+                            #pragma unroll
+                            for (int sl = 0; sl < 4; ++sl) {
+                                const int base = bases[sl];
+                                const int g16base = base >> 4;
+                                const uint16_t* wr16 = reinterpret_cast<const uint16_t*>(wr + (base >> 1));
+                                #pragma unroll
+                                for (int jg = 0; jg < 2; ++jg) {
+                                    int D = 0;
+                                    #pragma unroll
+                                    for (int u = 0; u < 4; ++u) {
+                                        const int e0 = base + jg * 16 + u * 4;
+                                        const int Apack = *(const int*)(qav + e0);
+                                        const uint16_t bb = wr16[jg * 4 + u];
+                                        const int Bpack = (bb & 0xF) | ((bb & 0xF0) << 4) | ((bb & 0xF00) << 8) | ((bb & 0xF000) << 12);
+                                        D = w4a8_dot4(Apack, Bpack, D);
+                                    }
+                                    const float savj = savarr[g16base + jg];
+                                    a8 = fmaf(tofloat(sr[g64s[sl]]) * savj, (float)D,
+                                              fmaf(tofloat(br[g64s[sl]]) * savj, (float)sumarr[g16base + jg], a8));
+                                }
+                            }
+                            a[r] += a8;
+                        } else {
+                            a[r] += dot16(wr + (sc0 >> 1), v0, tofloat(sr[g0]), tofloat(br[g0]), sum0);
+                            a[r] += dot16(wr + (sc1 >> 1), v1, tofloat(sr[g1]), tofloat(br[g1]), sum1);
+                            a[r] += dot16(wr + (sc2 >> 1), v2, tofloat(sr[g2]), tofloat(br[g2]), sum2);
+                            a[r] += dot16(wr + (sc3 >> 1), v3, tofloat(sr[g3]), tofloat(br[g3]), sum3);
+                        }
                     }
                 }
                 #pragma unroll
@@ -2152,8 +2201,46 @@ __device__ inline void mid_generate_impl(
                                                 ws_up + MOE_SH0, MID_SH_I};
                 }
                 __syncthreads();
+#if GEPA_W4A8
+                // rec-21a: quantize sh_xn in place for the W4A8 gate/up gemv — layout after:
+                // [0..MID_HID) packed s8 A-dwords, [MID_HID..MID_HID+MID_HID/4 bytes) per-g16 fp32 scales.
+                {
+                    int8_t* q8 = reinterpret_cast<int8_t*>(sh_xn);
+                    float* sc8 = reinterpret_cast<float*>(q8 + MID_HID);
+                    int* sum8 = reinterpret_cast<int*>(q8 + MID_HID + MID_HID / 4);
+                    // two-phase (read all, barrier, then write): scale/sum writes land inside the float
+                    // region other threads are still reading — no in-place overlap allowed pre-barrier.
+                    const int g16 = tid;
+                    float xv[16];
+                    if (g16 < MID_HID / 16) {
+                        #pragma unroll
+                        for (int j = 0; j < 16; ++j) xv[j] = sh_xn[g16 * 16 + j];
+                    }
+                    __syncthreads();
+                    if (g16 < MID_HID / 16) {
+                        float m = 0.0f;
+                        #pragma unroll
+                        for (int j = 0; j < 16; ++j) m = fmaxf(m, fabsf(xv[j]));
+                        const float sc = fmaxf(m, 1e-30f) / 127.0f;
+                        int pack = 0, sum = 0;
+                        #pragma unroll
+                        for (int j = 0; j < 16; ++j) {
+                            const int q = (int)fminf(fmaxf(rintf(xv[j] / sc), -127.0f), 127.0f);
+                            pack |= (q & 0xFF) << (8 * (j & 3));
+                            sum += q;
+                            if ((j & 3) == 3) { *reinterpret_cast<int*>(q8 + g16 * 16 + (j & ~3)) = pack; }
+                        }
+                        sc8[g16] = sc;
+                        sum8[g16] = sum;
+                    }
+                }
+                SYNC_ALL();
+                flint_q4_gemv_op<MID_HID, false, GEPA_S2_MOE, 1, 0, false, true>(nullptr, nullptr, nullptr, sh_xn, nullptr, nullptr, 0, lane, sg,
+                                          groups, sh_seg, 2 * MID_TOPK + 2);
+#else
                 flint_q4_gemv_op<MID_HID, false, GEPA_S2_MOE>(nullptr, nullptr, nullptr, sh_xn, nullptr, nullptr, 0, lane, sg,
                                           groups, sh_seg, 2 * MID_TOPK + 2);
+#endif
                 SYNC_ALL();
 #if GEPA_ACT_FOLD
                 static_assert(MOE_ACT_N <= MID_HID, "act fold reuses sh_xn[MID_HID]");
