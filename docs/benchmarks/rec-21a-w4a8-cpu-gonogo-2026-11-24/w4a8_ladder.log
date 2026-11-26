@@ -1,0 +1,7 @@
+14:38:31 fp32-activation base done (415s)
+14:42:34 a8_tok (243s): {"ppl_rel": 0.0013481271019724073, "top1_agree": 0.9528795811518325, "rel_pos0": 0.10045147314557834, "first_flip_pos_min": 0, "gate_pass": false}
+14:46:47 a8_g64 (253s): {"ppl_rel": 0.0034224608216146812, "top1_agree": 0.9653141361256545, "rel_pos0": 0.048913403831468485, "first_flip_pos_min": 0, "gate_pass": false}
+14:53:58 static scales calibrated on eval_set_v1 for 9 weight shapes
+14:57:45 a8_static (227s): {"ppl_rel": 3073688029790.974, "top1_agree": 0.0, "rel_pos0": 2.825273940061249, "first_flip_pos_min": 0, "gate_pass": false}
+15:01:21 a8_tok_nolm (216s): {"ppl_rel": -0.004877956565619179, "top1_agree": 0.9607329842931936, "rel_pos0": 0.08232360687532735, "first_flip_pos_min": 0, "gate_pass": false}
+15:01:21 done

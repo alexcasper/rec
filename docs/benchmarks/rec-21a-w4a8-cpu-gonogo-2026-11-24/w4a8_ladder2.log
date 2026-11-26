@@ -1,0 +1,8 @@
+15:09:44 fp32-activation base done (301s)
+15:13:36 a8_g32 (232s): {"ppl_rel": 0.0037062243761560865, "top1_agree": 0.9712041884816753, "rel_pos0": 0.04199063259534581, "first_flip_pos_min": 0, "gate_pass": true}
+15:17:18 a8_g16 (222s): {"ppl_rel": -0.0007298263926277526, "top1_agree": 0.9764397905759163, "rel_pos0": 0.030862807933032674, "first_flip_pos_min": 0, "gate_pass": true}
+15:21:09 a8_g64_attn_only (232s): {"ppl_rel": -0.0009386417464780639, "top1_agree": 0.9731675392670157, "rel_pos0": 0.027655961172541155, "first_flip_pos_min": 0, "gate_pass": true}
+15:24:56 a8_g64_moe_only (226s): {"ppl_rel": 0.004892424022993502, "top1_agree": 0.9790575916230367, "rel_pos0": 0.0369115381101561, "first_flip_pos_min": 0, "gate_pass": true}
+15:28:13 a8_g64_shared_only (197s): {"ppl_rel": 0.007210135284297037, "top1_agree": 0.9757853403141361, "rel_pos0": 0.03395483517506711, "first_flip_pos_min": 0, "gate_pass": true}
+15:31:51 a8_g64_lm_only (218s): {"ppl_rel": -0.00018794546566658354, "top1_agree": 0.9914921465968587, "rel_pos0": 0.015688704797068635, "first_flip_pos_min": 0, "gate_pass": true}
+15:31:51 done

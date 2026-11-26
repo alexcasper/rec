@@ -1,0 +1,140 @@
+{
+ "meta": {
+  "evalset_sha256": "1b06d9280fe6e1e9d56565b94117d2a329590c49e37d863d5577ba0ceec92893",
+  "calib_sha256": "72209796906e20dbbb7e69619f98f8b9fae0817b050d35d0f4f82e256915f464",
+  "threads": 8
+ },
+ "vs_fp32_act": {
+  "a8_tok": {
+   "rel_max": 0.6997744826665926,
+   "rel_pos0": 0.10045147314557834,
+   "rel_median": 0.047977453325227,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 8,
+   "top1_agree": 0.9528795811518325,
+   "ppl": 3.2847475130406156,
+   "ppl_rel": 0.0013481271019724073,
+   "max_abs_dlogp": 12.536321286014108,
+   "gate_pass": false,
+   "quantized_linear_calls": 222565
+  },
+  "a8_g64": {
+   "rel_max": 0.691175472237724,
+   "rel_pos0": 0.048913403831468485,
+   "rel_median": 0.03290781236372732,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 8,
+   "top1_agree": 0.9653141361256545,
+   "ppl": 3.2915520022511076,
+   "ppl_rel": 0.0034224608216146812,
+   "max_abs_dlogp": 4.42783764556227,
+   "gate_pass": false,
+   "quantized_linear_calls": 222784
+  },
+  "a8_static": {
+   "rel_max": 3.7885789274436297,
+   "rel_pos0": 2.825273940061249,
+   "rel_median": 1.2135389171741409,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 8,
+   "top1_agree": 0.0,
+   "ppl": 10082696355504.084,
+   "ppl_rel": 3073688029790.974,
+   "max_abs_dlogp": 138.04788926597783,
+   "gate_pass": false,
+   "quantized_linear_calls": 197356,
+   "clip_frac": 9.508359999883743e-07
+  },
+  "a8_tok_nolm": {
+   "rel_max": 0.70138753221321,
+   "rel_pos0": 0.08232360687532735,
+   "rel_median": 0.04258061078608569,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 8,
+   "top1_agree": 0.9607329842931936,
+   "ppl": 3.2643239337782344,
+   "ppl_rel": -0.004877956565619179,
+   "max_abs_dlogp": 12.472620701435108,
+   "gate_pass": false,
+   "quantized_linear_calls": 222557
+  },
+  "a8_g32": {
+   "rel_max": 0.5437217546609755,
+   "rel_pos0": 0.04199063259534581,
+   "rel_median": 0.031665121839391935,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 7,
+   "top1_agree": 0.9712041884816753,
+   "ppl": 3.2924828389949368,
+   "ppl_rel": 0.0037062243761560865,
+   "max_abs_dlogp": 2.2913097160873708,
+   "gate_pass": true,
+   "quantized_linear_calls": 222835
+  },
+  "a8_g16": {
+   "rel_max": 0.7093610232677122,
+   "rel_pos0": 0.030862807933032674,
+   "rel_median": 0.028743610576959296,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 8,
+   "top1_agree": 0.9764397905759163,
+   "ppl": 3.2779311497910473,
+   "ppl_rel": -0.0007298263926277526,
+   "max_abs_dlogp": 3.4707230487226077,
+   "gate_pass": true,
+   "quantized_linear_calls": 222820
+  },
+  "a8_g64_attn_only": {
+   "rel_max": 0.723354738324395,
+   "rel_pos0": 0.027655961172541155,
+   "rel_median": 0.02908454168309156,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 8,
+   "top1_agree": 0.9731675392670157,
+   "ppl": 3.277246167519967,
+   "ppl_rel": -0.0009386417464780639,
+   "max_abs_dlogp": 2.126914911506028,
+   "gate_pass": true,
+   "quantized_linear_calls": 222823
+  },
+  "a8_g64_moe_only": {
+   "rel_max": 1.141470556275373,
+   "rel_pos0": 0.0369115381101561,
+   "rel_median": 0.027100412986478216,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 7,
+   "top1_agree": 0.9790575916230367,
+   "ppl": 3.296373959609698,
+   "ppl_rel": 0.004892424022993502,
+   "max_abs_dlogp": 5.0152614515264204,
+   "gate_pass": true,
+   "quantized_linear_calls": 222865
+  },
+  "a8_g64_shared_only": {
+   "rel_max": 1.1822300881154413,
+   "rel_pos0": 0.03395483517506711,
+   "rel_median": 0.026333143606031326,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 7,
+   "top1_agree": 0.9757853403141361,
+   "ppl": 3.303976806307525,
+   "ppl_rel": 0.007210135284297037,
+   "max_abs_dlogp": 4.180188058243891,
+   "gate_pass": true,
+   "quantized_linear_calls": 222838
+  },
+  "a8_g64_lm_only": {
+   "rel_max": 0.017705157490552112,
+   "rel_pos0": 0.015688704797068635,
+   "rel_median": 0.006231508456934982,
+   "first_flip_pos_min": 0,
+   "items_with_flip": 6,
+   "top1_agree": 0.9914921465968587,
+   "ppl": 3.279708695460755,
+   "ppl_rel": -0.00018794546566658354,
+   "max_abs_dlogp": 0.24349644108044455,
+   "gate_pass": true,
+   "quantized_linear_calls": 222742
+  }
+ }
+}
