@@ -1,0 +1,48 @@
+2026-11-25T02:32:31Z offset table /home/dusk/xh7/flint-int4.off.npy
+2026-11-25T02:32:33Z VRAM preflight: need 21.96 GiB + 1.5 slack, sysfs free 43.93 GiB (waited 0.0 s) | flint:down,e4b:busy,qwen:down,gpu_busy=97,MemAvailable=35.9GiB
+2026-11-25T02:32:34Z bank stream   0.25/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:32:34Z bank stream   2.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:32:35Z bank stream   4.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:32:36Z bank stream   6.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:32:37Z bank stream   8.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:32:38Z bank stream  10.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:32:39Z bank stream  12.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.7GiB
+2026-11-25T02:32:40Z bank stream  14.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.7GiB
+2026-11-25T02:32:41Z bank stream  16.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.7GiB
+2026-11-25T02:32:42Z bank stream  18.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.7GiB
+2026-11-25T02:32:43Z bank stream  20.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.7GiB
+2026-11-25T02:32:43Z bank stream  21.02/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.7GiB
+2026-11-25T02:32:43Z session created in 9.8 s (bank 21.019 GiB streamed H2D, 2.14 GiB/s) | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.9GiB
+2026-11-25T02:36:41Z GATE depth8192_int8kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 b18fb5eb7aae launches 1644 longest 0.185 s, 33.2 ms/pos, 247.4 s | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.9GiB
+2026-11-25T02:36:41Z VRAM preflight: need 21.96 GiB + 1.5 slack, sysfs free 43.78 GiB (waited 0.5 s) | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.9GiB
+2026-11-25T02:36:42Z bank stream   0.25/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.6GiB
+2026-11-25T02:36:42Z bank stream   2.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=99,MemAvailable=35.6GiB
+2026-11-25T02:36:43Z bank stream   4.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:44Z bank stream   6.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:45Z bank stream   8.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:46Z bank stream  10.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:47Z bank stream  12.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:48Z bank stream  14.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:49Z bank stream  16.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:50Z bank stream  18.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:51Z bank stream  20.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:51Z bank stream  21.02/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:36:51Z session created in 9.8 s (bank 21.019 GiB streamed H2D, 2.14 GiB/s) | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.9GiB
+2026-11-25T02:40:50Z GATE depth8192_int8kv_r1.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 b18fb5eb7aae launches 1799 longest 0.167 s, 37.9 ms/pos, 249.1 s | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.9GiB
+2026-11-25T02:40:51Z VRAM preflight: need 21.96 GiB + 1.5 slack, sysfs free 43.78 GiB (waited 0.5 s) | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.9GiB
+2026-11-25T02:40:51Z bank stream   0.25/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.6GiB
+2026-11-25T02:40:52Z bank stream   2.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:40:52Z bank stream   4.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:40:53Z bank stream   6.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:40:54Z bank stream   8.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:40:55Z bank stream  10.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:40:56Z bank stream  12.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:40:57Z bank stream  14.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:40:58Z bank stream  16.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:40:59Z bank stream  18.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:41:00Z bank stream  20.00/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:41:00Z bank stream  21.02/21.02 GiB | host buffer 256 MiB | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.6GiB
+2026-11-25T02:41:00Z session created in 9.8 s (bank 21.019 GiB streamed H2D, 2.15 GiB/s) | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.9GiB
+2026-11-25T02:44:59Z GATE depth8192_int8kv_r2.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 b18fb5eb7aae launches 1722 longest 0.168 s, 39.3 ms/pos, 248.5 s | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.9GiB
+2026-11-25T02:44:59Z DETERMINISM int8kv: PASS (3 fresh-session emits)
+{"case": "depth8192", "positions": 8216, "lib": "/home/dusk/rec-ve/i8/fulls0/flint_mid.so", "builds": {"int8kv": {"md5": ["b18fb5eb7aaeb19bca2a336f97b2e3af", "b18fb5eb7aaeb19bca2a336f97b2e3af", "b18fb5eb7aaeb19bca2a336f97b2e3af"], "fresh_repeats": 3, "deterministic": true, "speed": null, "t_pos_s": [0.033231386200350245, 0.037908837250142824, 0.039346692499748315]}}}

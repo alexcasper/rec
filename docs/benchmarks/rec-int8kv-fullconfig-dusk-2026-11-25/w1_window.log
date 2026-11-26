@@ -1,0 +1,12 @@
+02:32:27Z +0s W1 preflight (w17:pQ) | 8080:200 busy=98 MemAvailable=34.0GiB vram_free=23.1GiB
+be2fa140e6060c07e33f9a29f9183066d5f916ec3c873b0794b46eb64b855bfa  /home/dusk/rec-ve/i8/fulls0/flint_mid.so
+02:32:27Z +0s STOP llama-flint for window | 8080:200 busy=98 MemAvailable=34.0GiB vram_free=23.1GiB
+02:32:30Z +3s flint stopped, 8080:000 | 8080:000 busy=98 MemAvailable=36.0GiB vram_free=43.9GiB
+02:32:30Z +3s START det3 (depth8192 int8kv x3 fresh, budget 1380s) | 8080:000 busy=98 MemAvailable=36.0GiB vram_free=43.9GiB
+2026-11-25T02:36:41Z GATE depth8192_int8kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 b18fb5eb7aae launches 1644 longest 0.185 s, 33.2 ms/pos, 247.4 s | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.9GiB
+2026-11-25T02:40:50Z GATE depth8192_int8kv_r1.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 b18fb5eb7aae launches 1799 longest 0.167 s, 37.9 ms/pos, 249.1 s | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.9G
+2026-11-25T02:44:59Z GATE depth8192_int8kv_r2.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 b18fb5eb7aae launches 1722 longest 0.168 s, 39.3 ms/pos, 248.5 s | flint:down,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.9G
+2026-11-25T02:44:59Z DETERMINISM int8kv: PASS (3 fresh-session emits)
+02:44:59Z +752s END det3 rc=0 | 8080:000 busy=100 MemAvailable=36.1GiB vram_free=21.8GiB
+02:44:59Z +752s done | 8080:000 busy=100 MemAvailable=36.1GiB vram_free=21.8GiB
+02:45:03Z flint-restart 8080=503

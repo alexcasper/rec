@@ -40,10 +40,63 @@
         "policy": "No further full-config bf16-KV attempts unless Alex reopens. informational bf16-KV readings may still be recorded per row, never binding"
     },
     "promoted_rows": {
-        "lop8f_SHRINK1_fence": {"lib_sha256_prefix": "ec34a71153bae74b", "recipe": "-DFLINT_CFG_FULL=1 -DGEPA_ATTN_SPLIT=1 -DGEPA_ATTN_LOP=8 (SHRINK default 1 + rec-11b VMEM fence) - PROMOTED per Alex directive 2026-11-24: replicate-confirmed faster than SHRINK=0 with clean determinism (docs/benchmarks/rec04i-lop8-shrink1-fence-depth8192/README.md)", "rows_tok_s": {"depth8192": "33.42 / 33.38 (2 replicates, mean 33.40)", "ctx512": 37.69}, "caveat": "measured in production bf16-KV mode BEFORE the rec-kcb ruling; fp32-KV production row pending the next Alex window (KV bytes double at depth: expect @8192 below 33.4, @512 moves less)"},
-        "lop8f_SHRINK0_repro": {"lib_sha256_prefix": "8816eebf589b0ebf", "recipe": "-DFLINT_CFG_FULL=1 -DGEPA_SHRINK=0 -DGEPA_ATTN_SPLIT=1 -DGEPA_ATTN_LOP=8 - kept ONLY for instruction-identical reproduction of the 32.73 measurement row (rec-04i pin)"}
+        "lop8f_SHRINK1_fence": {
+            "lib_sha256_prefix": "ec34a71153bae74b",
+            "recipe": "-DFLINT_CFG_FULL=1 -DGEPA_ATTN_SPLIT=1 -DGEPA_ATTN_LOP=8 (SHRINK default 1 + rec-11b VMEM fence) - PROMOTED per Alex directive 2026-11-24: replicate-confirmed faster than SHRINK=0 with clean determinism (docs/benchmarks/rec04i-lop8-shrink1-fence-depth8192/README.md)",
+            "rows_tok_s": {
+                "depth8192": "33.42 / 33.38 (2 replicates, mean 33.40)",
+                "ctx512": 37.69
+            },
+            "caveat": "measured in production bf16-KV mode BEFORE the rec-kcb ruling; fp32-KV production row pending the next Alex window (KV bytes double at depth: expect @8192 below 33.4, @512 moves less)"
+        },
+        "lop8f_SHRINK0_repro": {
+            "lib_sha256_prefix": "8816eebf589b0ebf",
+            "recipe": "-DFLINT_CFG_FULL=1 -DGEPA_SHRINK=0 -DGEPA_ATTN_SPLIT=1 -DGEPA_ATTN_LOP=8 - kept ONLY for instruction-identical reproduction of the 32.73 measurement row (rec-04i pin)"
+        }
     },
     "open_questions": [
         "fp32-KV production re-measure of the promoted lop8f rows (next Alex window)"
-    ]
+    ],
+    "int8kv_row": {
+        "kv_mode": "int8kv",
+        "status": "GATED-PASS 2026-11-25 (rec-3tv); informational - fp32kv remains run-of-record until Alex promotes",
+        "recipe": "dusk lib /home/dusk/rec-ve/i8/fulls0/flint_mid.so (int8 recipe = v1.1 + -DGEPA_SHRINK=0 per rec-ywy pin); KV8 via SPLIT+LOP8 path (static_assert line 1299: KV8 excludes GEPA_ATTN_GQA/LDS/LOP_PF)",
+        "evalset_sha256_prefix": "1b06d928",
+        "quality_gate": {
+            "rule": "rec-hyf tier: |ppl_rel| < 1% AND top1 >= 97% vs torch fp32 CPU reference (gate_pass in qgate/score_i8.py)",
+            "ppl_rel_vs_fp32_ref": 0.007760605508714935,
+            "top1_agree_vs_fp32_ref": 0.9757853403141361,
+            "kernel_int8kv_vs_torch_int8": {
+                "ppl_rel": 0.0014550686764909226,
+                "top1_agree": 0.987565445026178
+            },
+            "torch_int8_vs_torch_fp32_baseline": {
+                "ppl_rel": 0.006296375173933111,
+                "top1_agree": 0.9770942408376964
+            },
+            "result": "PASS (gate_pass=true); top-1 margin thin: +0.58pp over the 97% tier"
+        },
+        "determinism": {
+            "rule": ">=2 fresh-session emits byte-identical",
+            "result": "PASS: 3 fresh emits identical md5 b18fb5eb7aaeb19b (w1_det3.log, depth8192, flint:down window)"
+        },
+        "evidence": [
+            "docs/benchmarks/rec-int8kv-fullconfig-dusk-2026-11-25/",
+            "scorer out /home/dawn/rec-data/i8full_ppl/score_i8_full.json (npz md5 264915c6/8dc2c662 match worktree copies)"
+        ],
+        "caveats": [
+            "kernel-vs-torch int8 top-1 98.76% - below the 99% implementation-check aspiration, above the 97% binding tier",
+            "VRAM: v1 recipe does NOT save VRAM - int8kv session adds ~126 MiB over fp32kv at 8k cap (lazy int8+scales mirror is additive; measured probe 2026-11-26 00:45Z, vram_probe.json in the evidence dir); the expected 543->136-144 MB saving is not realized in v1"
+        ],
+        "speed_row": {
+            "rule": "ABBA differential 12/12 stable pairs, depth 8215-8265, k=3, quiet window (flint:down, e4b:idle, gpu_busy 2->17)",
+            "int8kv_tok_s": 32.55,
+            "bf16kv_tok_s": 32.62,
+            "fp32kv_tok_s": 30.77,
+            "int8kv_vs_fp32kv": "+5.8%",
+            "incumbent_llama_cpp_vulkan_2680": "int8kv +21.4%",
+            "source": "docs/benchmarks/rec-int8kv-fullconfig-dusk-2026-11-25/w3-20261125T033308Z/ (2026-11-25 04:20-04:30Z)",
+            "note": "supersedes the 33.40 rec-04i row for same-protocol comparison - that row was measured in bf16-KV mode before the rec-kcb ruling (see production_row caveat)"
+        }
+    }
 }

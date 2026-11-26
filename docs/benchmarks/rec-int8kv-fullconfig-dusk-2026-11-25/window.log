@@ -1,0 +1,23 @@
+03:33:08Z +0s W3 preflight — waiting for quiet iGPU (up to 3 h; flint stays UP until then) | busy=97 vram_free=23.1GiB
+04:16:10Z +2582s quiet box confirmed (2 consecutive probes) | busy=0 vram_free=23.1GiB
+04:16:10Z +2582s STOP llama-flint for window | busy=0 vram_free=23.1GiB
+04:16:13Z +2585s START bench_i8 (budget 460s) | busy=3 vram_free=43.9GiB
+2026-11-25T04:20:51Z ROW depth8192: decode 32.55 tok/s (12/12 stable pairs, depth 8215..8265, k=3, tA probe 61.3 ms) | flint:down,e4b:idle,qwen:down,gpu_busy=17,MemAvailable=35.1GiB
+2026-11-25T04:20:51Z GATE depth8192_int8kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 b18fb5eb7aae launches 1670 longest 0.187 s, 31.4 ms/pos, 275.4 s | flint:down,e4b:idle,qwen:down,gpu_busy=38,MemAvailable=35.1GiB
+2026-11-25T04:20:51Z DETERMINISM int8kv: not tested (1 emit) (1 fresh-session emits)
+{"case": "depth8192", "positions": 8216, "lib": "/home/dusk/rec-ve/i8/fulls0/flint_mid.so", "builds": {"int8kv": {"md5": ["b18fb5eb7aaeb19bca2a336f97b2e3af"], "fresh_repeats": 1, "deterministic": null, "speed": {"method"
+04:20:51Z +2863s END bench_i8 rc=0 | busy=37 vram_free=43.9GiB
+04:20:51Z +2863s START bench_b16 (budget 460s) | busy=37 vram_free=43.9GiB
+2026-11-25T04:25:28Z ROW depth8192: decode 32.62 tok/s (12/12 stable pairs, depth 8215..8265, k=3, tA probe 61.4 ms) | flint:down,e4b:idle,qwen:down,gpu_busy=16,MemAvailable=35.1GiB
+2026-11-25T04:25:29Z GATE depth8192_bf16kv.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 82c59b75995e launches 1670 longest 0.184 s, 31.3 ms/pos, 274.6 s | flint:down,e4b:idle,qwen:down,gpu_busy=38,MemAvailable=35.1GiB
+2026-11-25T04:25:29Z DETERMINISM bf16kv: not tested (1 emit) (1 fresh-session emits)
+{"case": "depth8192", "positions": 8216, "lib": "/home/dusk/rec-ve/i8/fulls0/flint_mid.so", "builds": {"bf16kv": {"md5": ["82c59b75995e614452b1ad09d81f2556"], "fresh_repeats": 1, "deterministic": null, "speed": {"method"
+04:25:29Z +3141s END bench_b16 rc=0 | busy=37 vram_free=43.9GiB
+04:25:29Z +3141s START bench_f32 (budget 460s) | busy=36 vram_free=43.9GiB
+2026-11-25T04:30:14Z ROW depth8192: decode 30.77 tok/s (12/12 stable pairs, depth 8215..8265, k=3, tA probe 64.4 ms) | flint:down,e4b:idle,qwen:down,gpu_busy=17,MemAvailable=35.1GiB
+2026-11-25T04:30:14Z GATE depth8192_fp32kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 c142fc5397fb launches 1717 longest 0.168 s, 33.5 ms/pos, 283.0 s | flint:down,e4b:idle,qwen:down,gpu_busy=38,MemAvailable=35.1GiB
+2026-11-25T04:30:14Z DETERMINISM fp32kv: not tested (1 emit) (1 fresh-session emits)
+{"case": "depth8192", "positions": 8216, "lib": "/home/dusk/rec-ve/i8/fulls0/flint_mid.so", "builds": {"fp32kv": {"md5": ["c142fc5397fbd41e5773b71c2db0d8b3"], "fresh_repeats": 1, "deterministic": null, "speed": {"method"
+04:30:14Z +3426s END bench_f32 rc=0 | busy=37 vram_free=43.9GiB
+04:30:14Z +3426s done | busy=37 vram_free=43.9GiB
+04:30:18Z flint-restart 8080=503

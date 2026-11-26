@@ -1,0 +1,49 @@
+{
+ "fp32kv": {
+  "mode": 2,
+  "bad": [],
+  "run_s": 0.24,
+  "baseline_GiB": 4.738,
+  "peak_incl_bank_GiB": 26.574,
+  "session_footprint_MiB": 22360.0,
+  "tokens": [
+   19629,
+   52387
+  ]
+ },
+ "bf16kv": {
+  "mode": 0,
+  "bad": [],
+  "run_s": 0.22,
+  "baseline_GiB": 4.746,
+  "peak_incl_bank_GiB": 26.574,
+  "session_footprint_MiB": 22352.0,
+  "tokens": [
+   19629,
+   52387
+  ]
+ },
+ "int8kv": {
+  "mode": 3,
+  "bad": [],
+  "run_s": 0.23,
+  "baseline_GiB": 4.746,
+  "peak_incl_bank_GiB": 26.705,
+  "session_footprint_MiB": 22486.0,
+  "tokens": [
+   19629,
+   52387
+  ]
+ },
+ "_meta": {
+  "card": "/sys/class/drm/card1/device",
+  "lib": "/home/dusk/rec-ve/i8/fulls0/flint_mid.so",
+  "session_bytes_8192_GiB": 21.955,
+  "session_bytes_nonkv_GiB": 21.177,
+  "kv_upper_bound_8192_MiB": 796.7,
+  "cotenants_end": "flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=20.8GiB",
+  "delta_fp32kv_minus_bf16kv_MiB": 8.0,
+  "delta_fp32kv_minus_int8kv_MiB": -126.0,
+  "delta_bf16kv_minus_int8kv_MiB": -134.0
+ }
+}

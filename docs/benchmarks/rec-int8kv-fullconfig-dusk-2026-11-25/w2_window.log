@@ -1,0 +1,23 @@
+02:48:29Z +0s W2 preflight (w17:pQ) | 8080:200 busy=98 MemAvailable=35.6GiB vram_free=23.1GiB
+be2fa140e6060c07e33f9a29f9183066d5f916ec3c873b0794b46eb64b855bfa  /home/dusk/rec-ve/i8/fulls0/flint_mid.so
+02:48:29Z +0s STOP llama-flint for window | 8080:200 busy=97 MemAvailable=35.6GiB vram_free=23.1GiB
+02:48:33Z +4s flint stopped, 8080:000 | 8080:000 busy=97 MemAvailable=36.1GiB vram_free=43.9GiB
+02:48:33Z +4s START bench_i8 (budget 430s) | 8080:000 busy=97 MemAvailable=36.1GiB vram_free=43.9GiB
+2026-11-25T02:53:43Z ROW depth8192: speed phase aborted: gate timeout: busy>=5
+2026-11-25T02:53:43Z GATE depth8192_int8kv.npz: tokens[:6]=[220, 16, 13, 20, 13, 16] md5 b18fb5eb7aae launches 1646 longest 0.188 s, 32.2 ms/pos, 307.2 s | flint:down,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.9GiB
+2026-11-25T02:53:43Z DETERMINISM int8kv: not tested (1 emit) (1 fresh-session emits)
+02:53:43Z +314s END bench_i8 rc=0 | 8080:000 busy=98 MemAvailable=36.1GiB vram_free=21.8GiB
+02:53:43Z +314s START bench_b16 (budget 430s) | 8080:000 busy=98 MemAvailable=36.1GiB vram_free=21.8GiB
+2026-11-25T02:58:53Z ROW depth8192: speed phase aborted: gate timeout: busy>=5
+2026-11-25T02:58:53Z GATE depth8192_bf16kv.npz: tokens[:6]=[220, 16, 13, 15, 13, 15] md5 82c59b75995e launches 1650 longest 0.172 s, 34.4 ms/pos, 307.0 s | flint:idle,e4b:busy,qwen:down,gpu_busy=98,MemAvailable=35.5GiB
+2026-11-25T02:58:53Z DETERMINISM bf16kv: not tested (1 emit) (1 fresh-session emits)
+02:58:53Z +624s END bench_b16 rc=0 | 8080:200 busy=98 MemAvailable=35.6GiB vram_free=1.1GiB
+02:58:53Z +624s START bench_f32 (budget 430s) | 8080:200 busy=98 MemAvailable=35.6GiB vram_free=1.1GiB
+REFUSING: session would spill past the VRAM carve-out into GTT/host RAM; another process holds VRAM (flint:idle,e4b:busy,qwen:down,gpu_busy=97,MemAvailable=35.5GiB; see rec-xh7 step 0)
+02:59:12Z +643s END bench_f32 rc=1 | 8080:200 busy=98 MemAvailable=35.6GiB vram_free=23.1GiB
+02:59:12Z +643s START ppl (budget 330s) | 8080:200 busy=98 MemAvailable=35.6GiB vram_free=23.1GiB
+2026-11-25T03:00:48Z PPL fp32kv: (8, 191) nll 1.187943 ppl 3.2803 longest 0.063 s, 95.4 s | flint:idle,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.5GiB
+2026-11-25T03:02:23Z PPL int8kv: (8, 191) nll 1.195673 ppl 3.3058 longest 0.063 s, 95.7 s | flint:idle,e4b:busy,qwen:down,gpu_busy=100,MemAvailable=35.5GiB
+03:02:23Z +834s END ppl rc=0 | 8080:200 busy=100 MemAvailable=35.6GiB vram_free=1.8GiB
+03:02:23Z +834s done | 8080:200 busy=100 MemAvailable=35.6GiB vram_free=1.8GiB
+03:02:27Z flint-restart 8080=200
