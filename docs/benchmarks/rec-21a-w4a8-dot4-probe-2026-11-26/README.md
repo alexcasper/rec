@@ -61,6 +61,23 @@ ABBA row before any promotion claim.
 - This clang (AMD 23.0) has no dot4 builtins — inline asm is the path; v_dot4_i32_iu8 NEG modifiers have no
   llvm-mc operand syntax on gfx1150, which settles the i8-mnemonic choice.
 
+## Step 3/4 megakernel integration status (2026-11-26, commits 96446ca + follow-up)
+
+GEPA_W4A8 knob integrated in the megakernel gate/up segmented gemv (in-place sh_xn quantize:
+packed A-dwords + per-g16 scales + per-g16 sums; two-phase LDS barrier; per-(g64,g16) rescale via
+v_dot4_i32_i8). Flag-off default build: wrap512 fp32kv md5 fd5d3a234976 = exact pre-patch-source
+match (hard rule), det x2.
+
+W4A8 lib (GEPA_W4A8=1, SHRINK=0) after fixes: det x2 (87f7514b62f2), 24/24 token agreement vs the
+INT4-fp32-A baseline, last-logit max|d| 0.014 (rel 0.0052) — activation-quantization-level noise.
+Launch 0.2486–0.2495 s vs cap 0.25 (W4A8 ≈ +6% per launch vs fp32-A baseline in-megakernel — the
+gate/up gemv context reverses the standalone probe's 1.12–1.17×; scalar unpack still the suspect).
+Bugs found: quantize pack accumulator not reset between dwords (garbage dwords 1–3 — first-port bug);
+A-dword g64-local index (step-3); mixed-scale across two g16 groups under one rescale (first draft).
+
+Remaining for rec-21a step 3/4 gates: ABBA 12/12 vs INT4-fp32-A (dusk window), ppl/top-1 via dawn
+scorer with the expert-only g16 fake-quant reference (top-1 ≥ 97%, |ppl| < 1%).
+
 ## Superseded / context
 
 - Coordinator's 20:12Z run (P0 137.07 µs, P1 90.77 µs = 1.51×, rel_err 3.918): numerics INVALID (the A-index bug

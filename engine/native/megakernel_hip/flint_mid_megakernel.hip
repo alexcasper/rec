@@ -721,6 +721,8 @@ __device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict
                             // rec-21a W4A8: per-g16 s8 activations (packed A-dwords + per-g16 sums staged in
                             // x) x signed weight nibbles via v_dot4_i32_i8; per-(g64,g16) fp32 rescale, exact
                             // i32 dot, bias from the quantize-pass per-g16 sums (no ones-dot4s).
+                            // Vectorized unpack: 2x uint32 weight loads per g16 group (shared nibble spreads),
+                            // one int4 A-dword load — halves the load count vs per-unit uint16 reads.
                             const int8_t* qav = reinterpret_cast<const int8_t*>(x);
                             const float* savarr = reinterpret_cast<const float*>(qav + K);
                             const int* sumarr = reinterpret_cast<const int*>(qav + K + (K >> 2));
@@ -731,22 +733,23 @@ __device__ inline GEPA_GEMV_ATTR void flint_q4_gemv_op(const uint8_t* __restrict
                             for (int sl = 0; sl < 4; ++sl) {
                                 const int base = bases[sl];
                                 const int g16base = base >> 4;
-                                const uint16_t* wr16 = reinterpret_cast<const uint16_t*>(wr + (base >> 1));
-                                #pragma unroll
-                                for (int jg = 0; jg < 2; ++jg) {
-                                    int D = 0;
-                                    #pragma unroll
-                                    for (int u = 0; u < 4; ++u) {
-                                        const int e0 = base + jg * 16 + u * 4;
-                                        const int Apack = *(const int*)(qav + e0);
-                                        const uint16_t bb = wr16[jg * 4 + u];
-                                        const int Bpack = (bb & 0xF) | ((bb & 0xF0) << 4) | ((bb & 0xF00) << 8) | ((bb & 0xF000) << 12);
-                                        D = w4a8_dot4(Apack, Bpack, D);
-                                    }
-                                    const float savj = savarr[g16base + jg];
-                                    a8 = fmaf(tofloat(sr[g64s[sl]]) * savj, (float)D,
-                                              fmaf(tofloat(br[g64s[sl]]) * savj, (float)sumarr[g16base + jg], a8));
-                                }
+                                const uint32_t* wr32 = reinterpret_cast<const uint32_t*>(wr + (base >> 1));
+                                const int4 A4 = *(const int4*)(qav + base);
+                                const uint32_t wlo = wr32[0], whi = wr32[1];
+                                const int B[4] = {
+                                    (int)((wlo & 0xF) | ((wlo & 0xF0) << 4) | ((wlo & 0xF00) << 8) | ((wlo & 0xF000) << 12)),
+                                    (int)(((wlo >> 16) & 0xF) | (((wlo >> 16) & 0xF0) << 4) | (((wlo >> 16) & 0xF00) << 8) | (((wlo >> 16) & 0xF000) << 12)),
+                                    (int)((whi & 0xF) | ((whi & 0xF0) << 4) | ((whi & 0xF00) << 8) | ((whi & 0xF000) << 12)),
+                                    (int)(((whi >> 16) & 0xF) | (((whi >> 16) & 0xF0) << 4) | (((whi >> 16) & 0xF00) << 8) | (((whi >> 16) & 0xF000) << 12))};
+                                int D = 0;
+                                D = w4a8_dot4(A4.x, B[0], D);
+                                D = w4a8_dot4(A4.y, B[1], D);
+                                D = w4a8_dot4(A4.z, B[2], D);
+                                D = w4a8_dot4(A4.w, B[3], D);
+                                const float savj = savarr[g16base];
+                                const float sumj = (float)sumarr[g16base];
+                                a8 = fmaf(tofloat(sr[g64s[sl]]) * savj, (float)D,
+                                          fmaf(tofloat(br[g64s[sl]]) * savj, sumj, a8));
                             }
                             a[r] += a8;
                         } else {
@@ -2226,6 +2229,7 @@ __device__ inline void mid_generate_impl(
                         #pragma unroll
                         for (int j = 0; j < 16; ++j) {
                             const int q = (int)fminf(fmaxf(rintf(xv[j] / sc), -127.0f), 127.0f);
+                            if ((j & 3) == 0) pack = 0;
                             pack |= (q & 0xFF) << (8 * (j & 3));
                             sum += q;
                             if ((j & 3) == 3) { *reinterpret_cast<int*>(q8 + g16 * 16 + (j & ~3)) = pack; }
