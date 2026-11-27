@@ -28,7 +28,9 @@ model = ref.model
 model.kv_store_dtype = None
 cfg = model.cfg
 NE, HID = cfg.num_experts, cfg.hidden
-INTER = json.loads((ckpt / "config.json").read_text())["moe_intermediate_size"]
+_c = json.loads((ckpt / "config.json").read_text())
+_hd, _nh, _nkv = _c.get("head_dim", 128), _c["num_attention_heads"], _c["num_key_value_heads"]
+INTER = _c["moe_intermediate_size"]
 
 
 def log(m):
@@ -44,17 +46,25 @@ def q_g16(x):
 
 class FProxy:
     on = False
+    router = False
 
     def __getattr__(self, k):
         return getattr(F_real, k)
 
     def linear(self, x, w, b=None):
-        if self.on and w.dim() == 3 and w.shape[1] == INTER and w.shape[2] == HID:
-            x = q_g16(x)
+        if self.on:
+            s = tuple(w.shape)
+            if s == (NE, HID):
+                self.router = True          # (32, 2048) router gate
+            elif s == (_nh * _hd, HID):
+                self.router = False         # next layer's q projection
+            elif s == (INTER, HID) and self.router:
+                x = q_g16(x)                # routed-expert gate/up input (k/v share this shape but precede the router)
         return F_real.linear(x, w, b)
 
 
 FP = FProxy()
+tr.F = FP
 
 
 def run():
@@ -126,9 +136,18 @@ if knpz.exists():
         for g in ("kernel_vs_R0",):
             res[g]["gate_pass"] = abs(res[g]["ppl_rel"]) < 0.01
         if "top1" in keys:
-            kt = np.asarray(z["top1"])
-            res["kernel_top1_raw"] = {"shape": list(kt.shape), "dtype": str(kt.dtype),
-                                      "mean_if_bool": float(kt.mean()) if kt.dtype == bool else None}
+            kt = np.asarray(z["top1"]).reshape(len(ev["ppl_items"]), -1)
+            a0 = np.stack([base[i].astype(np.float64)[:-1].argmax(-1) for i in range(len(ev["ppl_items"]))])
+            a1 = np.stack([r1[i].astype(np.float64)[:-1].argmax(-1) for i in range(len(ev["ppl_items"]))])
+            res["kernel_top1"] = {
+                "agree_vs_R0": float((kt == a0).mean()),
+                "agree_vs_R1": float((kt == a1).mean()),
+                "gate_pass_97": bool((kt == a0).mean() >= 0.97),
+                "n": int(kt.size)}
+            ff = np.nonzero((kt != a0).any(axis=0))[0]
+            res["kernel_top1"]["first_flip_pos_min"] = int(ff[0]) if len(ff) else None
+            ffd = np.nonzero((kt != a1).any(axis=0))[0]
+            res["kernel_top1"]["first_flip_vs_R1_pos_min"] = int(ffd[0]) if len(ffd) else None
     out.write_text(json.dumps(res, indent=1) + "\n")
     log("kernel section: " + json.dumps({k: res.get(k) for k in ("kernel_vs_R0", "kernel_vs_R1", "kernel_top1_raw")}))
 else:
